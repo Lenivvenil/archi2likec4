@@ -272,6 +272,39 @@ class TestGenerateSolutionViews:
         # Should NOT contain direct relationship (structural filtered)
         assert 'channels.efs -> products.abs' not in content
 
+    def test_integration_promoted_parent_fanout(self):
+        """P1-5: promoted parent archi_id should fan out in relationship endpoints."""
+        sv = SolutionView(
+            name='integration_architecture.Test',
+            view_type='integration',
+            solution='test',
+            element_archi_ids=['parent-1', 'sys-2'],
+            relationship_archi_ids=['rel-1'],
+        )
+        # parent-1 is a promoted parent — NOT in archi_to_c4, only in promoted map
+        archi_to_c4 = {
+            'child-a': 'channels.efs_card',
+            'child-b': 'channels.efs_loan',
+            'sys-2': 'products.abs',
+        }
+        promoted_archi_to_c4 = {
+            'parent-1': ['channels.efs_card', 'channels.efs_loan'],
+        }
+        rels = [
+            RawRelationship(
+                rel_id='rel-1', rel_type='FlowRelationship', name='pay',
+                source_type='ApplicationComponent', source_id='parent-1',
+                target_type='ApplicationComponent', target_id='sys-2',
+            ),
+        ]
+        files, _, _ = generate_solution_views(
+            [sv], archi_to_c4, {'efs_card': 'channels', 'efs_loan': 'channels', 'abs': 'products'},
+            rels, promoted_archi_to_c4)
+        content = files['test']
+        # Fan-out: promoted parent → both children create relationships
+        assert 'channels.efs_card -> products.abs' in content
+        assert 'channels.efs_loan -> products.abs' in content
+
     def test_empty_when_no_resolved_paths(self):
         sv = SolutionView(
             name='functional_architecture.Ghost',

@@ -45,7 +45,7 @@ def _detect_special_folder(xml_path: Path) -> str:
                 if folder_name.startswith('!'):
                     return folder_name
             except ET.ParseError:
-                pass
+                logger.debug('Failed to parse folder.xml: %s', folder_xml)
         current = current.parent
     return ''
 
@@ -62,7 +62,7 @@ def _is_in_trash(xml_path: Path, base_dir: Path) -> bool:
                 if name == 'trash':
                     return True
             except ET.ParseError:
-                pass
+                logger.debug('Failed to parse folder.xml: %s', folder_xml)
         current = current.parent
     return False
 

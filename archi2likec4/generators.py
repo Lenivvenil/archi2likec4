@@ -226,10 +226,6 @@ def generate_system_detail_c4(domain_c4_id: str, sys: System) -> str:
 
     for sub in sorted(sys.subsystems, key=lambda s: s.name):
         _render_subsystem(sub, lines, indent=4)
-        # Render functions inside subsystem
-        if sub.functions:
-            # We need to re-open subsystem to add functions — instead, include them in _render_subsystem
-            pass
         lines.append('')
 
     # Functions directly on system (no subsystem parent)
@@ -560,21 +556,35 @@ def generate_solution_views(
                     # Skip structural relationships (same filter as build_integrations)
                     if rtype in _structural_types or rtype == 'AccessRelationship':
                         continue
-                    src_c4 = archi_to_c4.get(src_aid, '')
-                    tgt_c4 = archi_to_c4.get(tgt_aid, '')
-                    if not src_c4 or not tgt_c4:
+                    # Resolve endpoints (fan out promoted parents)
+                    src_c4_list: list[str] = []
+                    if src_aid in archi_to_c4:
+                        src_c4_list = [archi_to_c4[src_aid]]
+                    elif promoted_archi_to_c4 and src_aid in promoted_archi_to_c4:
+                        src_c4_list = promoted_archi_to_c4[src_aid]
+
+                    tgt_c4_list: list[str] = []
+                    if tgt_aid in archi_to_c4:
+                        tgt_c4_list = [archi_to_c4[tgt_aid]]
+                    elif promoted_archi_to_c4 and tgt_aid in promoted_archi_to_c4:
+                        tgt_c4_list = promoted_archi_to_c4[tgt_aid]
+
+                    if not src_c4_list or not tgt_c4_list:
                         continue
-                    # Lift to system level (domain.system)
-                    src_parts = src_c4.split('.')
-                    tgt_parts = tgt_c4.split('.')
-                    src_sys = f'{src_parts[0]}.{src_parts[1]}' if len(src_parts) >= 2 else src_c4
-                    tgt_sys = f'{tgt_parts[0]}.{tgt_parts[1]}' if len(tgt_parts) >= 2 else tgt_c4
-                    if src_sys == tgt_sys:
-                        continue  # skip internal relationships
-                    pair = (src_sys, tgt_sys)
-                    if pair not in seen_pairs:
-                        seen_pairs.add(pair)
-                        rel_pairs.append(pair)
+
+                    # Cross-product, lifted to system level (domain.system)
+                    for src_c4 in src_c4_list:
+                        src_parts = src_c4.split('.')
+                        src_sys = f'{src_parts[0]}.{src_parts[1]}' if len(src_parts) >= 2 else src_c4
+                        for tgt_c4 in tgt_c4_list:
+                            tgt_parts = tgt_c4.split('.')
+                            tgt_sys = f'{tgt_parts[0]}.{tgt_parts[1]}' if len(tgt_parts) >= 2 else tgt_c4
+                            if src_sys == tgt_sys:
+                                continue
+                            pair = (src_sys, tgt_sys)
+                            if pair not in seen_pairs:
+                                seen_pairs.add(pair)
+                                rel_pairs.append(pair)
 
                 lines.append(f"  view {view_id} {{")
                 lines.append(f"    title '{escape_str(title)}'")

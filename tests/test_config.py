@@ -187,3 +187,60 @@ strict: true
         assert config.max_orphan_functions_warn == 2
         assert config.max_unassigned_systems_warn == 10
         assert config.strict is True
+
+
+class TestStrictBoolParsing:
+    """P1-3: bool('false') should not become True."""
+
+    def test_strict_string_false(self):
+        from archi2likec4.config import _apply_yaml, ConvertConfig
+        config = ConvertConfig()
+        _apply_yaml(config, {'strict': 'false'})
+        assert config.strict is False
+
+    def test_strict_string_true(self):
+        from archi2likec4.config import _apply_yaml, ConvertConfig
+        config = ConvertConfig()
+        _apply_yaml(config, {'strict': 'true'})
+        assert config.strict is True
+
+    def test_strict_bool_native(self):
+        from archi2likec4.config import _apply_yaml, ConvertConfig
+        config = ConvertConfig()
+        _apply_yaml(config, {'strict': False})
+        assert config.strict is False
+
+
+class TestExtraDomainPatternsValidation:
+    """P1-4: invalid extra_domain_patterns should raise ValueError."""
+
+    def test_missing_key(self):
+        from archi2likec4.config import _apply_yaml, ConvertConfig
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='missing required key'):
+            _apply_yaml(config, {'extra_domain_patterns': [{'foo': 'bar'}]})
+
+    def test_patterns_not_list(self):
+        from archi2likec4.config import _apply_yaml, ConvertConfig
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='expected list'):
+            _apply_yaml(config, {'extra_domain_patterns': [
+                {'c4_id': 'x', 'name': 'X', 'patterns': 'not-a-list'}
+            ]})
+
+    def test_entry_not_dict(self):
+        from archi2likec4.config import _apply_yaml, ConvertConfig
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='expected mapping'):
+            _apply_yaml(config, {'extra_domain_patterns': ['just-a-string']})
+
+
+class TestMutableDefaults:
+    """P2-8: mutable defaults should not leak between instances."""
+
+    def test_extra_domain_patterns_isolated(self):
+        from archi2likec4.config import ConvertConfig
+        c1 = ConvertConfig()
+        c2 = ConvertConfig()
+        c1.extra_domain_patterns[0]['patterns'].append('MUTATED')
+        assert 'MUTATED' not in c2.extra_domain_patterns[0]['patterns']

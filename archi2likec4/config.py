@@ -27,7 +27,8 @@ class ConvertConfig:
     domain_renames: dict[str, tuple[str, str]] = field(
         default_factory=lambda: dict(DOMAIN_RENAMES))
     extra_domain_patterns: list[dict] = field(
-        default_factory=lambda: list(EXTRA_DOMAIN_PATTERNS))
+        default_factory=lambda: [dict(d, patterns=list(d['patterns']))
+                                 for d in EXTRA_DOMAIN_PATTERNS])
 
     # Quality gates
     max_unresolved_ratio: float = 0.5
@@ -91,7 +92,21 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             renames[k] = tuple(v)
         config.domain_renames = renames
     if 'extra_domain_patterns' in data and isinstance(data['extra_domain_patterns'], list):
-        config.extra_domain_patterns = data['extra_domain_patterns']
+        validated: list[dict] = []
+        for i, entry in enumerate(data['extra_domain_patterns']):
+            if not isinstance(entry, dict):
+                raise ValueError(
+                    f"extra_domain_patterns[{i}]: expected mapping, got {type(entry).__name__}")
+            for key in ('c4_id', 'name', 'patterns'):
+                if key not in entry:
+                    raise ValueError(
+                        f"extra_domain_patterns[{i}]: missing required key '{key}'")
+            if not isinstance(entry['patterns'], list):
+                raise ValueError(
+                    f"extra_domain_patterns[{i}]['patterns']: expected list, "
+                    f"got {type(entry['patterns']).__name__}")
+            validated.append(entry)
+        config.extra_domain_patterns = validated
 
     # Quality gates (nested dict)
     gates = data.get('quality_gates')
@@ -104,4 +119,10 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             config.max_unassigned_systems_warn = int(gates['max_unassigned_systems_warn'])
 
     if 'strict' in data:
-        config.strict = bool(data['strict'])
+        val = data['strict']
+        if isinstance(val, bool):
+            config.strict = val
+        elif isinstance(val, str):
+            config.strict = val.lower() in ('true', '1', 'yes')
+        else:
+            config.strict = bool(val)
