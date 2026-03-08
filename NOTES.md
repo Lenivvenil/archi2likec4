@@ -1,0 +1,614 @@
+# archi2likec4 - Рабочие заметки
+
+## Итерация 1: ApplicationComponent -> LikeC4
+
+### Принцип работы с входными данными
+
+**ВАЖНО: Папки coArchi — шум. Истина — в типе объекта и его имени.**
+
+- Тип: `ApplicationComponent` (XML тег `archimate:ApplicationComponent`)
+- Иерархия определяется ТОЧЕЧНОЙ НОТАЦИЕЙ в name:
+  - `EFS` — система
+  - `EFS.Client_Service` — подсистема EFS
+  - Два уровня: Система и Система.Подсистема
+- Папки в coArchi-репозитории — служебная структура, НЕ бизнес-иерархия
+
+### Входные данные
+
+**Источник:** все файлы `ApplicationComponent_*.xml` рекурсивно из
+`architectural_repository/model/application/`
+
+**XML-формат:**
+```xml
+<archimate:ApplicationComponent name="AD" id="id-xxx" documentation="описание">
+  <properties key="CI" value="TBD"/>
+  <properties key="Full name" value="Active directory"/>
+  ...
+  <profiles href="folder.xml#id-xxx"/>     <!-- ИГНОРИРУЕМ -->
+</archimate:ApplicationComponent>
+```
+
+**Что берём:**
+- `name` — имя (определяет иерархию через точку)
+- `id` — идентификатор ArchiMate (сохраняем в metadata как archi_id)
+- `documentation` — описание (опционально)
+- `properties` — key/value пары → metadata блок (УНИФИЦИРОВАННЫЙ)
+
+**Что НЕ берём:**
+- `profiles` — специализации ArchiMate ("дурная иерархия, не тащи")
+- Структуру папок coArchi
+- Ключ `external` (мусор, 1 файл)
+- Ключ `Client` (мусор, 1 файл)
+
+**Статистика:** 397 файлов ApplicationComponent.
+92.7% (368) не имеют properties вообще — заполняем TBD.
+
+### Маппинг properties → metadata (УТВЕРЖДЁН)
+
+| # | ArchiMate key | LikeC4 metadata key | Если пусто |
+|---|---|---|---|
+| 1 | `CI` | `ci` | `'TBD'` |
+| 2 | `Full name` | `full_name` | = `name` элемента |
+| 3 | `LC stage` | `lc_stage` | `'TBD'` |
+| 4 | `Criticality` | `criticality` | `'TBD'` |
+| 5 | `Target` | `target_state` | `'TBD'` |
+| 6 | `Business owner dep` | `business_owner_dep` | `'TBD'` |
+| 7 | `Dev team` | `dev_team` | `'TBD'` |
+| 8 | `Architect full name` | `architect` | `'TBD'` |
+| 9 | `IS-officer full name` | `is_officer` | `'TBD'` |
+| 10 | `External/Internal` ИЛИ `placement` | `placement` | `'TBD'` |
+
+- `target` — зарезервированное слово LikeC4 → переименовали в `target_state`
+- `External/Internal` и `placement` — одно и то же, мержим в `placement`
+- ВСЕ 10 ключей ОБЯЗАТЕЛЬНЫ в каждом элементе
+
+### Особые папки внутри application_components
+
+- `!РАЗБОР` — обрабатываем как обычные системы + тег `#to_review`
+- `!External_services` — обрабатываем как обычные системы + тег `#external`
+- `trash` — пропускаем (единственное исключение)
+
+### LikeC4 DSL — синтаксис
+
+**Цвета:** кастомные через `color name #hex`
+- `archi-app #7EB8DA` — система (мягкий голубой ArchiMate)
+- `archi-app-light #BDE0F0` — подсистема (ещё светлее)
+
+**Element kinds:**
+- `system` — информационная система
+- `subsystem` — подсистема (вложена в system)
+
+**Metadata:** блок `metadata { key 'value' }` внутри элемента
+
+**Tags:** объявляются `tag name` в specification, используются как `#name`
+
+**Views:** `view name { include * }`, `view name of element { include * }`
+
+**Зарезервированные слова LikeC4 (нельзя в metadata/id):**
+`target`, `component`, `specification`, `model`, `views`, `deployment`,
+`extend`, `element`, `tag`, `include`, `exclude`, `style`, `color`,
+`shape`, `technology`, `description`, `title`, `it`, `this` и др.
+
+**Идентификаторы:** буквы, цифры, дефис, подчёркивание. БЕЗ точек.
+Не может начинаться с цифры.
+
+### Генерация идентификаторов (name → LikeC4 id)
+
+- Транслитерация кириллицы
+- Пробелы и спецсимволы → `_`
+- Lowercase
+- Точка разделяет систему и подсистему (не часть id)
+- Если начинается с цифры → префикс `n`
+- Коллизии → суффикс `_2`, `_3`
+
+### Прототип
+
+Рабочий прототип в `prototype/model.c4` — проверен через `likec4 serve`.
+
+---
+
+## Итерация 2: ApplicationInterface (API) → LikeC4
+
+### Анализ исходных данных
+
+**Источник:** 216 файлов `ApplicationInterface_*.xml` рекурсивно из
+`architectural_repository/model/application/`
+
+**Статистика:**
+- 216 файлов
+- 0% имеют properties (все пустые)
+- ~38% имеют `documentation` (82 из 216) — обычно URL на API-документацию
+- Именование через точку: `MLS.Backend.api`, `Confluence.API`, `AsiaExpress.soap_api`
+- Протокол часто в имени: `.api`, `.rest`, `.rest_api`, `.soap_api`
+- Есть русскоязычные имена-методы: «Загрузить файл», «Получить файл»
+
+### Решение: НЕ создаём элементы, а обогащаем системы
+
+**Обоснование (из AaC Book v3.0 и MVP Plan v3.0):**
+В проекте AaC (Architecture as Code) на GitLab банка принято:
+- API-контракты живут в YAML-спеках системы (`systems/{system}.yaml`, секция `api_contracts:`)
+- LikeC4-модель содержит системы/контейнеры/связи, но НЕ детали API
+- Дублирование API в C4-модели и YAML — антипаттерн
+
+**Что делаем:**
+1. Парсим ApplicationInterface → извлекаем name, documentation (URL), привязку к системе
+2. На системе/подсистеме добавляем `link` с URL из documentation (если есть)
+3. В metadata системы добавляем `api_interfaces` — перечень имён интерфейсов
+4. Генерируем скелетон YAML спеки `systems/{system-id}.yaml` с `api_contracts:`
+5. Переносим связи AppComponent↔AppInterface как интеграции C4-модели
+
+**Что НЕ делаем:**
+- Не создаём element kind `interface` в LikeC4
+- Не загромождаем модель сотнями API-элементов
+- Не дублируем данные между LikeC4 и YAML
+
+### Структура выходных файлов (по AaC)
+
+```
+output/
+  specification.c4      (element kinds, colors, tags)
+  views.c4              (landscape + per-system views)
+  relationships.c4      (интеграции между системами)
+  systems/
+    {system-id}.c4      (определение системы с подсистемами, links, metadata)
+    {system-id}.yaml    (скелетон спеки с api_contracts)
+```
+
+LikeC4 читает все .c4 рекурсивно и мержит в единую модель.
+
+### Формат link в LikeC4
+
+```
+system_name = system 'System Name' {
+  link https://swagger.bank.uz/efs 'EFS API Documentation'
+  link https://wsdl.bank.uz/efs/soap 'EFS SOAP WSDL'
+  ...
+}
+```
+
+### Привязка интерфейса к системе
+
+1. Через CompositionRelationship (107): AppComponent владеет AppInterface — НАДЁЖНО
+2. Через точечную нотацию в имени (fallback):
+   - `MLS.Backend.api` → система `MLS` (или подсистема `MLS.Backend` если есть)
+   - `Confluence.API` → система `Confluence`
+   - `WAF` — без точки = неизвестно → лог + пропуск
+
+### Интеграции (relationships → C4)
+
+**Источники:**
+- FlowRelationship: AppComponent → AppInterface (891) — потребитель → API провайдера
+- FlowRelationship: AppComponent → AppComponent (2,076) — прямые интеграции
+- ServingRelationship: AppComponent → AppInterface (52) — провайдер обслуживает через API
+
+**Логика:**
+- Source AppComponent → резолвим в систему/подсистему
+- Target AppInterface → резолвим в систему-владельца интерфейса
+- Если source_system ≠ target_system → интеграция: `source -> target 'name'`
+- Одинаковые пары группируем в один relationship с кол-вом потоков
+
+### Скелетон YAML системной спеки
+
+```yaml
+system:
+  name: EFS
+  id: efs
+  domain: TBD
+  team: TBD
+  status: active
+
+api_contracts:
+  - name: 'EFS.Backend.api'
+    type: rest
+    documentation: 'https://swagger...'
+    # TODO: fill method, path, auth, etc.
+```
+
+---
+
+## Итерация 3: DataObject → dataEntity + реструктуризация
+
+### Входные данные
+
+- **DataObject:** 309 файлов в `application/` — Kafka-топики, структуры данных
+- **AccessRelationship:** 316 — связи AppComponent → DataObject (кто обращается к данным)
+- Качество данных низкое, но при миграции коней не меняем
+
+### Решение
+
+- `DataObject` → `dataEntity` (shape: storage/Document, цвет мягкий зелёный)
+- `AccessRelationship` → `system -> dataEntity` (прямые стрелки, без именованного kind)
+- `dataStore` (shape: cylinder) — определён в spec, но пустой (контейнерный уровень не велся)
+- `persists` relationship kind — определён в spec для будущего использования
+
+### Задел под канонику
+
+Канонические сущности (Клиент, Счёт, Кредит...) не существуют в ArchiMate-модели.
+Комментарий в `entities.c4` — TODO для будущей работы.
+Паттерн: `dataStore -[persists]-> dataEntity` (когда появятся контейнеры).
+
+### Реструктуризация output
+
+```
+output/
+  spec.c4                 ← specification (корень)
+  landscape.c4            ← интеграции + landscape view (корень)
+  entities.c4             ← dataEntity + access relationships (корень)
+  systems/
+    {id}.c4 + {id}.yaml
+  views/
+    {id}_detail.c4        ← per-system detail views
+    persistence-map.c4    ← Persistence Map view
+```
+
+Принцип: spec и ландшафт в корне, остальное в дочерних каталогах.
+`domain/` не используется (занят под BIAN-нарезку сервисных доменов).
+
+### Теги
+
+- `#entity` — все dataEntity
+- `#store` — все dataStore (будущее)
+
+### Статистика
+
+- 309 data entities, 241 уникальных access-связей system→entity
+- Landscape view исключает dataEntity (`exclude element.kind = dataEntity`)
+- Persistence Map показывает системы + сущности + стрелки доступа
+
+---
+
+## Итерация 4: Домены + domain-grouped views
+
+### Домены из Archi view hierarchy
+
+**Источник:** `diagrams/functional_areas/{domain}/` — папки содержат
+ArchimateDiagramModel_*.xml, из которых извлекаем ссылки на ApplicationComponent.
+
+**Алгоритм присвоения:**
+1. Для каждого домена собираем все archi_id компонентов, упомянутых на его диаграммах
+2. Система получает домен, у которого максимум «попаданий» (system + subsystems + extra_archi_ids)
+3. Системы без попаданий идут в `unassigned`
+4. Второй проход: pattern-matching по имени → EXTRA_DOMAIN_PATTERNS (platform, external_exchange)
+
+**DOMAIN_RENAMES:** Переименование обнаруженных доменов:
+- `banking_operations` → `products` / "Products"
+- `customer_service_management` → `customer_service` / "Customer Service"
+
+### Реструктуризация output (финальная)
+
+```
+output/
+  specification.c4           — element kinds, colors, tags, relationship kinds
+  relationships.c4           — cross-domain integrations (model block)
+  entities.c4                — dataEntity + access relationships (model block)
+  domains/
+    {domain}.c4              — domain element with nested systems (model block)
+  systems/
+    {system}.c4              — extend block + detail view
+  views/
+    landscape.c4             — top-level landscape view
+    persistence-map.c4       — data entity persistence map view
+    domains/
+      {domain}/
+        functional.c4        — domain functional architecture view
+        integration.c4       — domain integration architecture view
+    solutions/
+      {solution}.c4          — solution-level views
+  scripts/
+    federate.py              — federation script
+    federation-registry.yaml — federation registry template
+```
+
+### Навигация (drill-down)
+
+- `view index` → клик по домену → `view {domain}_functional of {domain}`
+- Клик по системе → `view {sys}_detail of {domain}.{sys}`
+- Detail view показывает subsystems и appFunctions
+
+### LikeC4 predicate semantics (ВАЖНО)
+
+**`include * where kind is system` в scoped view — ГЛОБАЛЬНЫЙ фильтр!**
+
+В scoped view (`view X of element`) предикат `include * where kind is system`
+выбирает ВСЕ системы из ВСЕЙ модели, а не только внутри scope. Это приводит
+к отображению сотен элементов вместо ожидаемых десятков.
+
+**Правильный подход:** `include *` + exclude-предикаты:
+```
+view channels_functional of channels {
+  include *
+  exclude * where kind is subsystem
+  exclude * where kind is appFunction
+  exclude * where kind is dataEntity
+}
+```
+
+### Статистика
+
+- 7 доменов (channels, products, customer_service, enterprise_governance, external_exchange, platform, unassigned)
+- 243 системы, 142 подсистемы
+- 272 уникальных system-to-system интеграций
+
+---
+
+## Итерация 5: ApplicationFunction + Solution Views
+
+### ApplicationFunction → appFunction
+
+**Источник:** 1658 файлов `ApplicationFunction_*.xml` рекурсивно из `application/`
+
+**Привязка к родителю (P1 — relationship-first):**
+1. Ищем Composition/Assignment/Realization relationship → ApplicationComponent (ПРИОРИТЕТ)
+2. Fallback: filesystem hierarchy (ApplicationComponent_*.xml в том же каталоге)
+3. Если ничего не нашли → orphan (не отображается)
+
+**Почему relationship-first:**
+В файловой системе coArchi ApplicationFunction может лежать в неправильной папке,
+а ArchiMate-связи явно задают принадлежность. Relationship — source of truth.
+
+### Solution Views
+
+**Источник:** ArchimateDiagramModel_*.xml с именами:
+- `functional_architecture.{solution}` / `fucntional_architecture.{solution}` (typo в модели)
+- `integration_architecture.{solution}`
+- Русские варианты: `Функциональная архитектура.{solution}` и т.д.
+
+**Functional view:** показывает системы из диаграммы + children
+- Для одной системы: scoped view (`of domain.system`)
+- Для нескольких: explicit includes с `{path}.*`
+
+**Integration view:** показывает системы + связи между ними
+- Используются ФАКТИЧЕСКИЕ relationship из диаграммы (relationship_archi_ids)
+- Structural relationships (Composition, Realization, Assignment) и AccessRelationship фильтруются
+- Fallback: `-> * / * ->` если связи не резолвятся
+
+### P2 fixes
+
+**P2a: extra_archi_ids индексация**
+В `attach_interfaces` и `build_data_access` дубликаты archi_id (extra_archi_ids)
+не индексировались → интерфейсы и data access не резолвились для дублированных систем.
+Добавлена индексация `comp_index[eid] = (sys, None)` в оба метода.
+
+**P2b: TriggeringRelationship**
+Тип TriggeringRelationship не был в `relevant_types` → пропускался при парсинге.
+Добавлен в множество.
+
+### P3: Structural relationships в solution views
+
+`rel_lookup` хранил только `(source_id, target_id)` — тип терялся.
+Изменён на 3-tuple `(source_id, target_id, rel_type)`.
+В цикле integration view добавлен фильтр: `_structural_types` и `AccessRelationship`
+пропускаются (как в `build_integrations`).
+
+### Статистика
+
+- 1658 appFunctions, 0 orphans (после P1 fix)
+- 52 solution views (26 functional + 26 integration) → 36 файлов
+- 2262 элемента в archi→c4 map
+
+---
+
+## Рефакторинг: модуляризация проекта
+
+### Проблема
+
+Монолитный `convert.py` (2 204 строки) — трудно читать, невозможно тестировать
+отдельные части, нет инфраструктуры проекта.
+
+### Решение
+
+Разбит на 7 модулей в пакете `archi2likec4/`:
+
+| Модуль | Строк | Содержимое |
+|--------|-------|------------|
+| `models.py` | ~170 | 12 dataclasses + 7 групп констант |
+| `utils.py` | ~60 | transliterate, make_id, escape_str, build_metadata |
+| `parsers.py` | ~330 | 7 parse_* + 6 _helpers |
+| `builders.py` | ~440 | 9 build/attach/assign_* + _build_comp_index |
+| `generators.py` | ~380 | 10 generate_* + 3 _render_* |
+| `federation.py` | ~160 | 2 template-генератора |
+| `pipeline.py` | ~220 | main() оркестрация |
+
+**Граф зависимостей (без циклов):**
+```
+models.py  ← utils.py  ← parsers.py
+                         ← builders.py    ← pipeline.py ← convert.py
+                         ← generators.py
+federation.py (standalone) ←──────────┘
+```
+
+**Дедупликация:** Извлечён общий `_build_comp_index(systems)` —
+был дублирован в attach_interfaces, build_integrations, build_data_access.
+
+**Entry points:**
+- `python convert.py` — обёртка (4 строки)
+- `python -m archi2likec4` — через __main__.py
+- `archi2likec4` CLI — через pyproject.toml `[project.scripts]`
+
+### Тесты
+
+102 теста (pytest, stdlib-only, ~0.06s):
+- `test_utils.py` — transliterate, make_id, escape_str, build_metadata
+- `test_parsers.py` — XML parsing с tmp_path, trash filtering, parent resolution
+- `test_builders.py` — system hierarchy, attach_functions, domains, integrations
+- `test_generators.py` — spec, domain, detail, relationships, entities, views
+
+### Верификация
+
+- `diff -rq output/ output_backup/` → IDENTICAL (вывод побайтово совпал)
+- Все 3 entry points работают
+
+---
+
+## Итерация 6: Промоция подсистем (PROMOTE_CHILDREN)
+
+### Проблема
+
+Некорректное ведение ArchiMate-репозитория: компоненты, фактически являющиеся
+самостоятельными микросервисами, оформлены как подсистемы через dot-naming
+(`EFS.Card_Service`). Конвертер схлопывал все интеграции в один «комок» родителя:
+
+- `build_systems()`: `EFS.Card_Service` → Subsystem под EFS
+- `build_integrations()`: дедупликация `src.split('.')[0]` → все 33 подсистемы EFS
+  превращались в одну стрелку «EFS ↔ X»
+
+Пример: EFS (33 подсистемы) — фронтальная платформа, чьи дочерние компоненты
+давно стали самостоятельными микросервисами с собственными интеграциями.
+
+### Решение: гибрид (конфиг + автопредупреждения)
+
+**1. Конфиг `PROMOTE_CHILDREN`** (`models.py`):
+```python
+PROMOTE_CHILDREN: dict[str, str] = {'EFS': 'channels'}
+```
+Словарь `{parent_name: fallback_domain}`. Все `AppComponent` с именем
+`{parent}.X` перестают быть подсистемами и становятся самостоятельными системами.
+Компонент-родитель исчезает из результата.
+
+3-segment имена (`EFS.Collection_Service.ODS`) → subsystem под промоутированной
+системой (`EFS.Collection_Service`).
+
+**2. Автоматические предупреждения** (`PROMOTE_WARN_THRESHOLD = 10`):
+```
+WARN: System "AIM" has 48 subsystems — consider adding to PROMOTE_CHILDREN
+WARN: System "EFS_PLT" has 16 subsystems — consider adding to PROMOTE_CHILDREN
+WARN: System "IABS" has 15 subsystems — consider adding to PROMOTE_CHILDREN
+WARN: System "RAS" has 16 subsystems — consider adding to PROMOTE_CHILDREN
+```
+
+### Изменения
+
+| Файл | Что изменилось |
+|------|---------------|
+| `models.py` | +`PROMOTE_CHILDREN`, +`PROMOTE_WARN_THRESHOLD` |
+| `builders.py` | `build_systems()` → 4 фазы (promote + warn), `attach_interfaces()` → fallback для dot-имён |
+| `test_builders.py` | +10 тестов `TestPromoteChildren` (промоция, наследование archi_id, 3-segment, warn) |
+
+### Результат
+
+- EFS (1 система с 33 подсистемами) → 24 самостоятельные системы + 9 подсистем под ними
+- EFS_PLT (16 подсистем) → промоутирован аналогично
+- `efs.c4` → 24 файла `efs_*.c4`; `efs_plt.c4` → 16 файлов `efs_plt_*.c4`
+- Интеграции: вместо одной стрелки «EFS ↔ X» — детальные связи каждого микросервиса
+
+---
+
+## Итерация 7: Ревью и исправление 13 findings
+
+### P1 (критичный): parent archi_id misroutes to arbitrary child
+
+При промоции все дети наследовали `archi_id` родителя в `extra_archi_ids`.
+Downstream dict-индексы (`_build_comp_index`, `_build_comp_c4_path`) перезаписывались
+последним ребёнком → все связи/функции родителя EFS уходили в `efs_web_push_adapter`.
+
+**Фикс**: убрано наследование `parent_archi_id` → `extra_archi_ids`. Связи,
+ссылающиеся на удалённого родителя, становятся unresolved (честное поведение).
+
+### P2 (средние): 8 исправлений
+
+| # | Баг | Фикс |
+|---|-----|------|
+| 1 | Parent удалялся без детей | Удаление только при наличии promoted children |
+| 2 | `_find_parent_component` не доходил до `application/` | `while current != app_dir.parent` |
+| 3 | Коллизия view_id при одинаковых solution slug | Суффикс `_2`, `_3`... для дубликатов |
+| 4 | `parse_solution_views` молча дропал дубликаты | Добавлен `WARN` при пропуске |
+| 5 | `--help` падал как путь | `argparse` в `pipeline.main()` |
+| 6 | Federation: `KeyError` на malformed registry | `.get()` + валидация перед доступом |
+| 7 | Federation: `fetch`/`checkout` без `check=True` | Добавлен `check=True` |
+| 8 | Federation: stale файлы не удалялись | Cleanup после sync (если не `--repo`) |
+
+### P3 (низкие): 4 исправления
+
+| # | Баг | Фикс |
+|---|-----|------|
+| 1 | Data access dedup по `(sys, entity)` терял семантику | Dedup по `(sys, entity, name)` |
+| 2 | `pyproject.toml` «stdlib-only» vs PyYAML в federation | Комментарий о optional dep |
+| 3 | Парсеры молча проглатывали XML ошибки | Счётчик + `WARN` в 5 parse_* функциях |
+| 4 | Path traversal на Windows (`os.sep` split) | Split по обоим разделителям |
+
+### Статистика
+
+- 113 тестов, 0 failures, 0.07s
+- 289 систем, 94 подсистемы, 333 интеграции, 245 data access links
+
+---
+
+## Итерация 8: Ревью — 7 findings (1 P1, 4 P2, 2 P3)
+
+### P1 (критичный): parent archi_id не ремапился на promoted children
+
+Итерация 7 убрала наследование `parent_archi_id` → `extra_archi_ids` (чтобы избежать
+dict-overwrite). Но это привело к полной потере parent-level ссылок: функции и
+интеграции, привязанные к archi_id родителя, стали unresolved (2 orphan-функции,
++11 skipped интеграций).
+
+**Фикс**: parent archi_id теперь ремапится на **первого promoted ребёнка
+алфавитно** (детерминированно, одна запись в `extra_archi_ids`). Это устраняет
+dict-overwrite (один ребёнок — одна запись) и сохраняет parent-level связи.
+
+Результат: 0 orphan-функций (было 2), 6 skipped интеграций (было 17), 337 интеграций (было 333).
+
+### P2: 4 исправления
+
+| # | Баг | Фикс |
+|---|-----|------|
+| 1 | Federation cleanup удаляет не-федерированные файлы | Marker-based: удаляются только файлы с `// Federated from:` |
+| 2 | `attach_interfaces` игнорирует reverse structural direction | Добавлена обработка `Interface → Component` через `setdefault` |
+| 3 | Дубликаты solution diagrams дропались | Merge: элементы и связи второго дубликата добавляются в первый |
+| 4 | Высокий unresolved в solution views не останавливает pipeline | `generate_solution_views` возвращает `(files, unresolved, total)`, pipeline `sys.exit(1)` при >50% |
+
+### P3: 2 исправления
+
+| # | Баг | Фикс |
+|---|-----|------|
+| 1 | `PROMOTE_CHILDREN` value (fallback_domain) не использовался | `assign_domains()` применяет fallback для promoted children без domain-membership |
+| 2 | `parse_solution_views` молча глотал XML parse errors | Счётчик `parse_errors` + `WARN` вывод |
+
+### Статистика
+
+- 119 тестов (+6 новых), 0 failures, 0.07s
+- 289 систем, 94 подсистемы, 337 интеграций, 245 data access links
+- 0 orphan-функций, 6 skipped интеграций, 3 unresolved интерфейса
+- 21% unresolved в solution views (753/3557) — ниже порога 50%
+
+---
+
+## Итерация 9: Ревью — 4 findings (1 P1, 2 P2, 1 P3)
+
+### P1 (критичный): remap parent→first child искажает семантику
+
+Итерация 8 ремапила parent archi_id на **первого ребёнка алфавитно**. Это
+избегало orphan-функций, но **все** parent-level связи (интеграции, data access,
+functions) маршрутизировались на одного произвольного ребёнка — искажение модели.
+
+**Фикс: fan-out**:
+- `build_systems()` возвращает `(systems, promoted_parents)` где
+  `promoted_parents: dict[str, list[str]]` — parent_archi_id → все c4_ids детей.
+- Parent archi_id **НЕ** попадает в `extra_archi_ids` ни одного ребёнка.
+- `build_integrations()`: связь с promoted parent → cross-product со ВСЕМИ детьми.
+- `build_data_access()`: access от promoted parent → каждый ребёнок получает свой link.
+- `attach_functions()`: функция, привязанная к promoted parent → honest orphan
+  (parent больше не существует как single system).
+- `generate_solution_views()`: promoted parent на диаграмме → все дети включаются.
+
+Результат: 456 интеграций (было 337), 2 orphan-функции (honest orphans).
+
+### P2: 2 исправления
+
+| # | Баг | Фикс |
+|---|-----|------|
+| 1 | `.yaml` файлы в federation пишутся без marker → stale не удаляются | Добавлен `# Federated from:` marker в .yaml; cleanup проверяет оба маркера (`//` и `#`) |
+| 2 | >50% unresolved в solution views → CI exit 0 | Pipeline проверяет ratio и вызывает `sys.exit(1)` (уже было, проверено) |
+
+### P3: 1 исправление
+
+| # | Баг | Фикс |
+|---|-----|------|
+| 1 | README «Только stdlib» — но federation нужен PyYAML | Уточнено: «Только stdlib (конвертер); scripts/federate.py требует PyYAML» |
+
+### Статистика
+
+- 125 тестов (+6 новых: TestIntegrationFanOut ×4, TestDataAccessFanOut ×2), 0 failures
+- 289 систем, 94 подсистемы, 456 интеграций, 245 data access links
+- 2 orphan-функции (honest: promoted parent), 6 skipped интеграций
+- 21% unresolved в solution views (753/3557) — ниже порога 50%

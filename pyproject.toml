@@ -1,0 +1,11 @@
+[project]
+name = "archi2likec4"
+version = "0.5.0"
+description = "Convert coArchi XML (ArchiMate) to LikeC4 .c4 files"
+requires-python = ">=3.10"
+# Core converter is stdlib-only; optional federation script requires PyYAML:
+#   pip install pyyaml
+# dependencies = ["pyyaml"]  # uncomment if federation is used
+
+[project.scripts]
+archi2likec4 = "archi2likec4.pipeline:main"

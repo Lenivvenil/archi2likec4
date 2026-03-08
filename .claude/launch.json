@@ -1,0 +1,18 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "likec4",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": ["likec4", "serve", "--no-open"],
+      "port": 5173,
+      "cwd": "output"
+    },
+    {
+      "name": "likec4-asaka",
+      "runtimeExecutable": "python3",
+      "runtimeArgs": ["-m", "http.server", "5174", "-b", "0.0.0.0", "-d", "../asaka-architecture/dist"],
+      "port": 5174
+    }
+  ]
+}

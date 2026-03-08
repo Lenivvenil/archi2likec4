@@ -1,0 +1,23 @@
+# Output (generated)
+output/
+output_backup/
+dist/
+
+# Build / packaging
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+build/
+dist/
+
+# Federation cache
+.federation-cache/
+
+# IDE / OS
+.DS_Store
+.venv/
+.idea/
+.vscode/
+*.swp
+*.swo
