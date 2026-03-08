@@ -32,6 +32,7 @@ from .builders import (
     build_systems,
 )
 from .generators import (
+    generate_audit_md,
     generate_deployment_c4,
     generate_deployment_mapping_c4,
     generate_deployment_view,
@@ -291,6 +292,8 @@ def _generate(
     output_dir: Path,
     config: ConvertConfig,
     solution_view_files: dict[str, str],
+    sv_unresolved: int = 0,
+    sv_total: int = 0,
 ) -> None:
     """Phase 4: generate .c4 files."""
     logger.info('Generating files...')
@@ -422,6 +425,11 @@ def _generate(
         generate_federation_registry(), encoding='utf-8')
     file_count += 1
 
+    # Quality audit
+    audit = generate_audit_md(built, sv_unresolved, sv_total, config)
+    (output_dir / 'AUDIT.md').write_text(audit, encoding='utf-8')
+    file_count += 1
+
     logger.info('%d files written to %s/', file_count, output_dir)
     logger.info('  specification.c4, relationships.c4, entities.c4')
     logger.info('  domains/ (%d .c4 files)', domain_count)
@@ -498,7 +506,7 @@ def main():
             logger.info('Dry run complete — no files generated')
             sys.exit(0)
 
-        _generate(built, config.output_dir, config, sv_files)
+        _generate(built, config.output_dir, config, sv_files, sv_unresolved, sv_total)
 
     except FileNotFoundError as e:
         logger.error('Input not found: %s', e)

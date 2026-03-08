@@ -1,6 +1,10 @@
 """Generators: produce LikeC4 .c4 file content from the output model."""
 
+from __future__ import annotations
+
 import logging
+from datetime import datetime
+from typing import TYPE_CHECKING
 
 from .models import (
     AppFunction,
@@ -12,8 +16,12 @@ from .models import (
     SolutionView,
     Subsystem,
     System,
+    _STANDARD_KEYS,
 )
 from .utils import escape_str
+
+if TYPE_CHECKING:
+    from .config import ConvertConfig
 
 
 # ── Renderers (internal) ────────────────────────────────────────────────
@@ -691,3 +699,341 @@ views {
 
 }
 """
+
+
+# ── Audit report ──────────────────────────────────────────────────────────
+
+# Human-readable field labels for metadata completeness table
+_FIELD_LABELS: dict[str, str] = {
+    'ci': 'CI',
+    'full_name': 'Full name',
+    'lc_stage': 'LC stage',
+    'criticality': 'Criticality',
+    'target_state': 'Target state',
+    'business_owner_dep': 'Business owner',
+    'dev_team': 'Dev team',
+    'architect': 'Architect',
+    'is_officer': 'IS-officer',
+    'placement': 'Placement',
+}
+
+
+def generate_audit_md(
+    built: object,
+    sv_unresolved: int,
+    sv_total: int,
+    config: ConvertConfig,
+) -> str:
+    """Generate AUDIT.md — quality incident register for ArchiMate repository owners.
+
+    Each section is a discrete quality incident with:
+    - Problem description
+    - Impact assessment
+    - Step-by-step remediation in Archi
+    - Table of affected elements
+
+    Sections with 0 affected elements are omitted.
+    """
+    from . import __version__
+
+    systems: list[System] = built.systems  # type: ignore[attr-defined]
+    # Flat list of all systems + subsystems for metadata/doc checks
+    all_sys: list[System | Subsystem] = []
+    for s in systems:
+        all_sys.append(s)
+        all_sys.extend(s.subsystems)
+
+    total_sys = len(systems)
+    sections: list[str] = []
+    qa_num = 0
+
+    # ── Header ────────────────────────────────────────────────────────
+    now = datetime.now().strftime('%Y-%m-%d %H:%M')
+    header = (
+        '# Реестр инцидентов качества ArchiMate-модели\n\n'
+        f'> Автоматически сгенерировано archi2likec4 v{__version__}, {now}.\n'
+        '> Исправьте находки в ArchiMate-модели и перезапустите конвертер.\n'
+    )
+
+    # ── Summary ───────────────────────────────────────────────────────
+    unassigned: list[System] = built.domain_systems.get('unassigned', [])  # type: ignore[attr-defined]
+    unassigned_count = len(unassigned)
+    assigned_count = total_sys - unassigned_count
+
+    # Metadata completeness
+    meta_filled_total = 0
+    meta_check_keys = [k for k in _STANDARD_KEYS if k != 'full_name']  # full_name always set
+    meta_possible = len(all_sys) * len(meta_check_keys)
+    for s in all_sys:
+        for key in meta_check_keys:
+            if s.metadata.get(key, 'TBD') != 'TBD':
+                meta_filled_total += 1
+    meta_pct = round(meta_filled_total / meta_possible * 100) if meta_possible else 100
+
+    deployment_map: list = built.deployment_map  # type: ignore[attr-defined]
+    mapped_sys_paths = {pair[0] for pair in deployment_map}
+
+    summary = (
+        '## Сводка\n\n'
+        '| Метрика | Значение |\n'
+        '|---------|----------|\n'
+        f'| Систем | {total_sys} |\n'
+        f'| Подсистем | {sum(len(s.subsystems) for s in systems)} |\n'
+        f'| Заполненность карточек | {meta_pct}% |\n'
+        f'| Систем с доменом | {assigned_count} / {total_sys} ({round(assigned_count / total_sys * 100) if total_sys else 0}%) |\n'
+        f'| Интеграций | {len(built.integrations)} |\n'  # type: ignore[attr-defined]
+        f'| Data entities | {len(built.entities)} |\n'  # type: ignore[attr-defined]
+        f'| Deployment mappings | {len(deployment_map)} |\n'
+    )
+
+    # ── QA-1: Unassigned systems ──────────────────────────────────────
+    if unassigned_count > 0:
+        qa_num += 1
+        rows = []
+        for i, s in enumerate(sorted(unassigned, key=lambda x: x.name), 1):
+            tags = ', '.join(s.tags) if s.tags else ''
+            rows.append(f'| {i} | {s.name} | {tags} |')
+        table = '\n'.join(rows)
+        sections.append(
+            f'## QA-{qa_num}. Системы без домена ({unassigned_count})\n\n'
+            f'**Проблема:** {unassigned_count} систем не размещены ни на одной диаграмме '
+            'в `functional_areas/`. Конвертер помещает их в домен «unassigned».\n\n'
+            '**Влияние:** Системы не отображаются в доменных views, невозможно '
+            'понять их бизнес-принадлежность.\n\n'
+            '**Рекомендация:**\n'
+            '1. Откройте Archi → Views → functional_areas\n'
+            '2. Для каждой системы из таблицы определите целевой домен\n'
+            '3. Перетащите элемент на соответствующую диаграмму домена\n\n'
+            '| # | Система | Теги |\n'
+            '|---|---------|------|\n'
+            f'{table}\n'
+        )
+
+    # ── QA-2: Metadata gaps ───────────────────────────────────────────
+    # Per-field completeness
+    field_stats: list[tuple[str, int, int]] = []
+    for key in meta_check_keys:
+        filled = sum(1 for s in all_sys if s.metadata.get(key, 'TBD') != 'TBD')
+        field_stats.append((key, filled, len(all_sys)))
+
+    # Systems with most TBD fields
+    sys_tbd: list[tuple[str, str, int]] = []
+    for s in all_sys:
+        tbd_count = sum(1 for key in meta_check_keys if s.metadata.get(key, 'TBD') == 'TBD')
+        if tbd_count > 0:
+            domain = s.domain if hasattr(s, 'domain') and s.domain else ''
+            sys_tbd.append((s.name, domain, tbd_count))
+    sys_tbd.sort(key=lambda x: (-x[2], x[0]))
+
+    all_tbd_count = sum(1 for _, _, c in sys_tbd if c == len(meta_check_keys))
+
+    if all_tbd_count > 0:
+        qa_num += 1
+        field_rows = []
+        for key, filled, total in field_stats:
+            label = _FIELD_LABELS.get(key, key)
+            pct = round(filled / total * 100) if total else 0
+            field_rows.append(f'| {label} | {filled} / {total} | {pct}% |')
+        field_table = '\n'.join(field_rows)
+
+        top_n = min(20, len(sys_tbd))
+        top_rows = []
+        for i, (name, domain, tbd_cnt) in enumerate(sys_tbd[:top_n], 1):
+            top_rows.append(f'| {i} | {name} | {domain} | {tbd_cnt} / {len(meta_check_keys)} |')
+        top_table = '\n'.join(top_rows)
+
+        sections.append(
+            f'## QA-{qa_num}. Незаполненные карточки систем\n\n'
+            f'**Проблема:** {all_tbd_count} из {len(all_sys)} систем/подсистем не имеют '
+            'ни одного заполненного свойства (CI, Criticality, LC stage и др.).\n\n'
+            '**Влияние:** Метаданные в архитектурном портале отображаются как '
+            '«TBD» — невозможно оценить критичность, ответственных, стадию ЖЦ.\n\n'
+            '**Рекомендация:**\n'
+            '1. Откройте элемент в Archi → вкладка Properties\n'
+            '2. Заполните как минимум: CI, Criticality, Dev team\n'
+            '3. Приоритет — системы с наибольшим числом пустых полей (см. таблицу)\n\n'
+            '**Заполненность по полям:**\n\n'
+            '| Поле | Заполнено | % |\n'
+            '|------|-----------|---|\n'
+            f'{field_table}\n\n'
+            f'**Топ-{top_n} систем с максимальным числом пустых полей:**\n\n'
+            '| # | Система | Домен | Пустых полей |\n'
+            '|---|---------|-------|--------------|\n'
+            f'{top_table}\n'
+        )
+
+    # ── QA-3: To-review systems ───────────────────────────────────────
+    to_review = [s for s in systems if 'to_review' in s.tags]
+    if to_review:
+        qa_num += 1
+        rows = []
+        for i, s in enumerate(sorted(to_review, key=lambda x: x.name), 1):
+            domain = s.domain or 'unassigned'
+            rows.append(f'| {i} | {s.name} | {domain} |')
+        table = '\n'.join(rows)
+        sections.append(
+            f'## QA-{qa_num}. Системы на разборе ({len(to_review)})\n\n'
+            '**Проблема:** Эти системы находятся в папке `!РАЗБОР` — '
+            'их статус в модели не определён.\n\n'
+            '**Влияние:** Системы помечены тегом `#to_review` и требуют '
+            'решения: оставить в модели или удалить.\n\n'
+            '**Рекомендация:**\n'
+            '1. Для каждой системы определите, является ли она актуальной\n'
+            '2. Если актуальна — переместите из `!РАЗБОР` в правильную папку\n'
+            '3. Если не актуальна — удалите элемент из модели\n\n'
+            '| # | Система | Домен |\n'
+            '|---|---------|-------|\n'
+            f'{table}\n'
+        )
+
+    # ── QA-4: Promote candidates ──────────────────────────────────────
+    promote_threshold = getattr(config, 'promote_warn_threshold', 10)
+    already_promoted = set(getattr(config, 'promote_children', {}).keys())
+    candidates = [
+        (s.name, len(s.subsystems))
+        for s in systems
+        if len(s.subsystems) >= promote_threshold and s.name not in already_promoted
+    ]
+    candidates.sort(key=lambda x: (-x[1], x[0]))
+    if candidates:
+        qa_num += 1
+        rows = []
+        for i, (name, cnt) in enumerate(candidates, 1):
+            rows.append(f'| {i} | {name} | {cnt} |')
+        table = '\n'.join(rows)
+        sections.append(
+            f'## QA-{qa_num}. Кандидаты на декомпозицию ({len(candidates)})\n\n'
+            f'**Проблема:** {len(candidates)} систем имеют ≥{promote_threshold} '
+            'подсистем — вероятно, их дочерние компоненты являются самостоятельными '
+            'микросервисами.\n\n'
+            '**Влияние:** Интеграции всех подсистем схлопываются в одну стрелку '
+            'родителя, теряется детализация.\n\n'
+            '**Рекомендация:**\n'
+            '1. Добавьте систему в `promote_children` в `.archi2likec4.yaml`\n'
+            '2. Укажите целевой домен: `promote_children: { "Parent": "domain" }`\n'
+            '3. Перезапустите конвертер — подсистемы станут самостоятельными системами\n\n'
+            '| # | Система | Подсистем |\n'
+            '|---|---------|----------|\n'
+            f'{table}\n'
+        )
+
+    # ── QA-5: No documentation ────────────────────────────────────────
+    no_docs = [s for s in systems if not s.documentation]
+    if no_docs:
+        qa_num += 1
+        show = sorted(no_docs, key=lambda x: x.name)[:30]
+        rows = []
+        for i, s in enumerate(show, 1):
+            domain = s.domain or 'unassigned'
+            rows.append(f'| {i} | {s.name} | {domain} |')
+        table = '\n'.join(rows)
+        suffix = f' (показаны первые 30 из {len(no_docs)})' if len(no_docs) > 30 else ''
+        sections.append(
+            f'## QA-{qa_num}. Системы без документации ({len(no_docs)})\n\n'
+            '**Проблема:** Эти системы не имеют описания в поле `documentation`.\n\n'
+            '**Влияние:** В архитектурном портале отсутствует описание назначения '
+            'системы — затруднено понимание её роли.\n\n'
+            '**Рекомендация:**\n'
+            '1. Откройте элемент в Archi → поле Documentation\n'
+            '2. Добавьте краткое описание назначения системы (1-2 предложения)\n\n'
+            f'| # | Система | Домен |{suffix}\n'
+            '|---|---------|-------|\n'
+            f'{table}\n'
+        )
+
+    # ── QA-6: Orphan functions ────────────────────────────────────────
+    orphan_fns: int = built.orphan_fns  # type: ignore[attr-defined]
+    if orphan_fns > 0:
+        qa_num += 1
+        sections.append(
+            f'## QA-{qa_num}. Осиротевшие функции ({orphan_fns})\n\n'
+            f'**Проблема:** {orphan_fns} ApplicationFunction не имеют привязки '
+            'к родительскому ApplicationComponent.\n\n'
+            '**Влияние:** Функции не отображаются ни в одной системе — '
+            'потеряна часть функциональной архитектуры.\n\n'
+            '**Рекомендация:**\n'
+            '1. Найдите осиротевшие функции в Archi (проверьте лог конвертера с `--verbose`)\n'
+            '2. Для каждой добавьте CompositionRelationship к целевому ApplicationComponent\n'
+            '3. Или переместите XML-файл функции в папку целевого компонента\n'
+        )
+
+    # ── QA-7: Lost integrations ───────────────────────────────────────
+    total_flow_rels = sum(
+        1 for r in built.relationships  # type: ignore[attr-defined]
+        if r.rel_type in ('FlowRelationship', 'ServingRelationship', 'TriggeringRelationship')
+    )
+    resolved_intg = len(built.integrations)  # type: ignore[attr-defined]
+    skipped_intg = total_flow_rels - resolved_intg
+    if skipped_intg > 0:
+        qa_num += 1
+        pct = round(skipped_intg / total_flow_rels * 100) if total_flow_rels else 0
+        sections.append(
+            f'## QA-{qa_num}. Потерянные интеграции ({skipped_intg})\n\n'
+            f'**Проблема:** {skipped_intg} из {total_flow_rels} интеграционных связей '
+            f'({pct}%) не удалось разрешить — один или оба endpoint не найдены в модели.\n\n'
+            '**Влияние:** Часть интеграций между системами не отображается — '
+            'неполная картина взаимодействий.\n\n'
+            '**Рекомендация:**\n'
+            '1. Запустите конвертер с `--verbose` для детального лога\n'
+            '2. Проверьте, что source и target каждой связи — валидные ApplicationComponent\n'
+            '3. Убедитесь, что связи не ведут на удалённые или перемещённые элементы\n'
+        )
+
+    # ── QA-8: Solution view coverage ──────────────────────────────────
+    if sv_total > 0 and sv_unresolved > 0:
+        qa_num += 1
+        sv_resolved = sv_total - sv_unresolved
+        sv_pct = round(sv_resolved / sv_total * 100)
+        sections.append(
+            f'## QA-{qa_num}. Покрытие solution views ({sv_pct}%)\n\n'
+            f'**Проблема:** {sv_unresolved} из {sv_total} элементов на solution-диаграммах '
+            f'не удалось сопоставить с C4-моделью (разрешено {sv_resolved}, '
+            f'не разрешено {sv_unresolved}).\n\n'
+            '**Влияние:** Solution views могут отображать неполную картину — '
+            'часть элементов диаграмм теряется при конвертации.\n\n'
+            '**Рекомендация:**\n'
+            '1. Проверьте, что все элементы на solution-диаграммах — '
+            'валидные ApplicationComponent\n'
+            '2. Удалите с диаграмм элементы других типов (BusinessService, '
+            'TechnologyService и т.д.)\n'
+            '3. Убедитесь, что элементы не удалены из модели, '
+            'но остались на диаграммах как «призраки»\n'
+        )
+
+    # ── QA-9: No infrastructure mapping ───────────────────────────────
+    unmapped = [s for s in systems if f'{s.domain}.{s.c4_id}' not in mapped_sys_paths
+                and s.domain and s.domain != 'unassigned']
+    if unmapped:
+        qa_num += 1
+        show = sorted(unmapped, key=lambda x: x.name)[:30]
+        rows = []
+        for i, s in enumerate(show, 1):
+            rows.append(f'| {i} | {s.name} | {s.domain} |')
+        table = '\n'.join(rows)
+        suffix = f' (показаны первые 30 из {len(unmapped)})' if len(unmapped) > 30 else ''
+        sections.append(
+            f'## QA-{qa_num}. Системы без инфраструктурной привязки ({len(unmapped)})\n\n'
+            f'**Проблема:** {len(unmapped)} систем не имеют связи с инфраструктурными '
+            'нодами (Node, SystemSoftware).\n\n'
+            '**Влияние:** На deployment view не видно, где развёрнуты эти системы.\n\n'
+            '**Рекомендация:**\n'
+            '1. Откройте систему в Archi\n'
+            '2. Создайте RealizationRelationship к целевому Node '
+            '(серверу, кластеру, VM)\n'
+            '3. Или добавьте AssignmentRelationship, если используете этот тип\n\n'
+            f'| # | Система | Домен |{suffix}\n'
+            '|---|---------|-------|\n'
+            f'{table}\n'
+        )
+
+    # ── Assemble ──────────────────────────────────────────────────────
+    if not sections:
+        return (
+            header + '\n'
+            + summary + '\n'
+            + 'Инцидентов качества не обнаружено.\n'
+        )
+
+    body = '\n---\n\n'.join(sections)
+    footer = f'\n---\n\n*Всего инцидентов: {qa_num}. Сгенерировано archi2likec4 v{__version__}.*\n'
+    return header + '\n' + summary + '\n---\n\n' + body + footer

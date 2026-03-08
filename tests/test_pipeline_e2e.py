@@ -99,6 +99,7 @@ class TestPipelineE2E:
         assert (output / 'specification.c4').exists()
         assert (output / 'relationships.c4').exists()
         assert (output / 'entities.c4').exists()
+        assert (output / 'AUDIT.md').exists()
 
         # Verify spec content
         spec = (output / 'specification.c4').read_text()
