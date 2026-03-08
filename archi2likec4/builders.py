@@ -1,6 +1,9 @@
 """Builders: transform parsed elements into the output model."""
 
+import logging
 import re
+
+logger = logging.getLogger('archi2likec4')
 
 from .models import (
     EXTRA_DOMAIN_PATTERNS,
@@ -12,11 +15,13 @@ from .models import (
     DataAccess,
     DataEntity,
     DataObject,
+    DeploymentNode,
     DomainInfo,
     Integration,
     RawRelationship,
     Subsystem,
     System,
+    TechElement,
 )
 from .utils import build_metadata, make_id
 
@@ -69,9 +74,12 @@ def _extract_url(documentation: str) -> str | None:
 def build_systems(
     components: list[AppComponent],
     promote_children: dict[str, str] | None = None,
+    promote_warn_threshold: int | None = None,
 ) -> tuple[list[System], dict[str, list[str]]]:
     if promote_children is None:
         promote_children = PROMOTE_CHILDREN
+    if promote_warn_threshold is None:
+        promote_warn_threshold = PROMOTE_WARN_THRESHOLD
 
     # ── Phase 1: collect dot-free names as potential systems ──────────────
     system_acs: dict[str, AppComponent] = {}
@@ -127,8 +135,8 @@ def build_systems(
             child_count = sum(1 for a in dot_acs if a.name.split('.', 1)[0] == parent_name)
             if removed.archi_id:
                 parent_remap[parent_name] = removed.archi_id
-            print(f'  INFO: Promoted parent "{parent_name}" removed — '
-                  f'{child_count} children promoted')
+            logger.info('Promoted parent "%s" removed — %d children promoted',
+                        parent_name, child_count)
 
     # ── Phase 3: regular dot_acs — old subsystem-or-standalone logic ─────
     subsystem_acs: list[AppComponent] = []
@@ -184,8 +192,8 @@ def build_systems(
         )
         if children_c4_ids:
             promoted_parents[parent_aid] = children_c4_ids
-            print(f'  INFO: Parent "{parent_name}" archi_id fans out to '
-                  f'{len(children_c4_ids)} children')
+            logger.info('Parent "%s" archi_id fans out to %d children',
+                        parent_name, len(children_c4_ids))
 
     # ── Attach regular subsystems ────────────────────────────────────────
     for ac in subsystem_acs:
@@ -193,7 +201,8 @@ def build_systems(
         parent_name = parts[0]
         sub_name = parts[1] if len(parts) > 1 else ac.name
         if parent_name not in systems:
-            print(f'  WARN: Subsystem "{ac.name}" has no parent system "{parent_name}", skipping')
+            logger.warning('Subsystem "%s" has no parent system "%s", skipping',
+                           ac.name, parent_name)
             continue
 
         parent = systems[parent_name]
@@ -222,7 +231,8 @@ def build_systems(
         parent_name = f'{parts[0]}.{parts[1]}'
         sub_name = parts[2]
         if parent_name not in systems:
-            print(f'  WARN: Promoted subsystem "{ac.name}" has no parent system "{parent_name}", skipping')
+            logger.warning('Promoted subsystem "%s" has no parent system "%s", skipping',
+                           ac.name, parent_name)
             continue
 
         parent = systems[parent_name]
@@ -251,9 +261,10 @@ def build_systems(
         parent_name = ac.name.split('.', 1)[0]
         parent_sub_count[parent_name] = parent_sub_count.get(parent_name, 0) + 1
     for parent_name, count in sorted(parent_sub_count.items()):
-        if count >= PROMOTE_WARN_THRESHOLD and parent_name not in promote_children:
-            print(f'  WARN: System "{parent_name}" has {count} subsystems — '
-                  f'consider adding to PROMOTE_CHILDREN')
+        if count >= promote_warn_threshold and parent_name not in promote_children:
+            logger.warning('System "%s" has %d subsystems — '
+                           'consider adding to PROMOTE_CHILDREN',
+                           parent_name, count)
 
     return sorted(systems.values(), key=lambda s: s.name), promoted_parents
 
@@ -406,7 +417,7 @@ def attach_interfaces(
         unresolved += 1
 
     if unresolved:
-        print(f'  WARN: {unresolved} ApplicationInterface(s) could not be resolved to a system')
+        logger.warning('%d ApplicationInterface(s) could not be resolved to a system', unresolved)
 
     for iface_id, (owner_sys, owner_sub) in iface_owner.items():
         iface = iface_index.get(iface_id)
@@ -490,7 +501,7 @@ def build_integrations(
                 ))
 
     if skipped:
-        print(f'  INFO: Skipped {skipped} integration(s) with unresolvable endpoints')
+        logger.info('Skipped %d integration(s) with unresolvable endpoints', skipped)
 
     # Deduplicate at system level
     pair_flows: dict[tuple[str, str], list[str]] = {}
@@ -593,7 +604,7 @@ def build_data_access(
             ))
 
     if skipped:
-        print(f'  INFO: Skipped {skipped} data access(es) with unresolvable endpoints')
+        logger.info('Skipped %d data access(es) with unresolvable endpoints', skipped)
 
     return sorted(results, key=lambda d: (d.system_path, d.entity_id))
 
@@ -602,6 +613,7 @@ def assign_domains(
     systems: list[System],
     domains: list[DomainInfo],
     promote_children: dict[str, str] | None = None,
+    extra_domain_patterns: list[dict] | None = None,
 ) -> dict[str, list[System]]:
     """Assign each system to a primary domain based on view membership."""
     # Reverse map: archi_id → [(domain_c4_id, ...)]
@@ -655,7 +667,9 @@ def assign_domains(
     result['unassigned'] = still_unassigned
 
     # Third pass: assign unassigned systems to extra domains via pattern matching
-    for extra in EXTRA_DOMAIN_PATTERNS:
+    if extra_domain_patterns is None:
+        extra_domain_patterns = EXTRA_DOMAIN_PATTERNS
+    for extra in extra_domain_patterns:
         extra_id = extra['c4_id']
         patterns_lower = [p.lower() for p in extra['patterns']]
         if extra_id not in result:
@@ -731,4 +745,167 @@ def build_archi_to_c4_map(
                 sys_c4_id = iface_path.split('.')[0]
                 domain = sys_domain.get(sys_c4_id, 'unassigned')
                 result[iface_id] = f'{domain}.{iface_path}'
+    return result
+
+
+# ── Deployment topology ─────────────────────────────────────────────────
+
+_INFRA_NODE_TYPES = frozenset({
+    'Node', 'Device', 'TechnologyCollaboration', 'CommunicationNetwork', 'Path',
+})
+_INFRA_SW_TYPES = frozenset({
+    'SystemSoftware', 'TechnologyService', 'Artifact',
+})
+
+
+def build_deployment_topology(
+    tech_elements: list[TechElement],
+    relationships: list[RawRelationship],
+) -> list[DeploymentNode]:
+    """Build deployment hierarchy from tech elements and AggregationRelationship.
+
+    AggregationRelationship source contains target:
+    - TechnologyCollaboration → Node (cluster contains servers)
+    - Node → SystemSoftware (server contains software)
+    - Device → SystemSoftware (device contains software)
+
+    Returns only root nodes (elements not contained by anything).
+    """
+    if not tech_elements:
+        return []
+
+    # 1. Create DeploymentNode for each TechElement with unique c4_ids
+    used_ids: set[str] = set()
+    node_by_archi: dict[str, DeploymentNode] = {}
+
+    for te in tech_elements:
+        c4_id = make_id(te.name)
+        if c4_id in used_ids:
+            suffix = 2
+            while f'{c4_id}_{suffix}' in used_ids:
+                suffix += 1
+            c4_id = f'{c4_id}_{suffix}'
+        used_ids.add(c4_id)
+
+        kind = 'infraNode' if te.tech_type in _INFRA_NODE_TYPES else 'infraSoftware'
+
+        dn = DeploymentNode(
+            c4_id=c4_id,
+            name=te.name,
+            archi_id=te.archi_id,
+            tech_type=te.tech_type,
+            kind=kind,
+            documentation=te.documentation,
+        )
+        node_by_archi[te.archi_id] = dn
+
+    # 2. Resolve AggregationRelationship → parent contains children
+    children_set: set[str] = set()  # archi_ids that are children
+
+    for rel in relationships:
+        if rel.rel_type != 'AggregationRelationship':
+            continue
+        parent = node_by_archi.get(rel.source_id)
+        child = node_by_archi.get(rel.target_id)
+        if parent and child:
+            parent.children.append(child)
+            children_set.add(rel.target_id)
+
+    # 3. Return only root nodes (not children of anything)
+    roots = [dn for aid, dn in node_by_archi.items() if aid not in children_set]
+    roots.sort(key=lambda n: n.name)
+
+    logger.debug('%d tech elements → %d root deployment nodes',
+                 len(tech_elements), len(roots))
+    return roots
+
+
+def _flatten_deployment_nodes(nodes: list[DeploymentNode]) -> list[DeploymentNode]:
+    """Recursively flatten a tree of DeploymentNodes into a flat list."""
+    result: list[DeploymentNode] = []
+    for node in nodes:
+        result.append(node)
+        result.extend(_flatten_deployment_nodes(node.children))
+    return result
+
+
+def _build_deployment_path_index(
+    nodes: list[DeploymentNode],
+    prefix: str = '',
+) -> dict[str, str]:
+    """Build archi_id → qualified c4 path for all nodes in the tree.
+
+    Root nodes get their c4_id as path; nested nodes get parent.child paths.
+    """
+    result: dict[str, str] = {}
+    for node in nodes:
+        path = f'{prefix}{node.c4_id}' if not prefix else f'{prefix}.{node.c4_id}'
+        result[node.archi_id] = path
+        result.update(_build_deployment_path_index(node.children, path))
+    return result
+
+
+def build_deployment_map(
+    systems: list[System],
+    deployment_nodes: list[DeploymentNode],
+    relationships: list[RawRelationship],
+    sys_domain: dict[str, str],
+) -> list[tuple[str, str]]:
+    """Build (app_c4_path, node_c4_id) pairs from cross-layer RealizationRelationship.
+
+    Resolves ApplicationComponent ↔ Node/SystemSoftware/Device via RealizationRelationship.
+    """
+    if not deployment_nodes or not systems:
+        return []
+
+    # Build app index: archi_id → full c4 path (domain.system)
+    app_path: dict[str, str] = {}
+    for sys in systems:
+        domain = sys_domain.get(sys.c4_id, 'unassigned')
+        full = f'{domain}.{sys.c4_id}'
+        if sys.archi_id:
+            app_path[sys.archi_id] = full
+        for eid in sys.extra_archi_ids:
+            app_path[eid] = full
+        for sub in sys.subsystems:
+            if sub.archi_id:
+                app_path[sub.archi_id] = f'{full}.{sub.c4_id}'
+
+    # Build tech index: archi_id → qualified c4 path (parent.child for nested)
+    tech_path = _build_deployment_path_index(deployment_nodes)
+
+    _app_types = {'ApplicationComponent', 'ApplicationInterface',
+                  'ApplicationFunction', 'ApplicationService'}
+    _tech_types = {'Node', 'SystemSoftware', 'Device', 'TechnologyCollaboration',
+                   'TechnologyService', 'Artifact', 'CommunicationNetwork', 'Path'}
+
+    seen: set[tuple[str, str]] = set()
+    result: list[tuple[str, str]] = []
+
+    for rel in relationships:
+        if rel.rel_type != 'RealizationRelationship':
+            continue
+
+        app_id: str | None = None
+        tech_id: str | None = None
+
+        if rel.source_type in _app_types and rel.target_type in _tech_types:
+            app_id, tech_id = rel.source_id, rel.target_id
+        elif rel.source_type in _tech_types and rel.target_type in _app_types:
+            app_id, tech_id = rel.target_id, rel.source_id
+        else:
+            continue
+
+        a = app_path.get(app_id)
+        t = tech_path.get(tech_id)
+        if not a or not t:
+            continue
+
+        pair = (a, t)
+        if pair in seen:
+            continue
+        seen.add(pair)
+        result.append(pair)
+
+    result.sort()
     return result

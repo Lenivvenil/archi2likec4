@@ -1,9 +1,12 @@
 """Generators: produce LikeC4 .c4 file content from the output model."""
 
+import logging
+
 from .models import (
     AppFunction,
     DataAccess,
     DataEntity,
+    DeploymentNode,
     Integration,
     RawRelationship,
     SolutionView,
@@ -144,9 +147,32 @@ specification {
     }
   }
 
+  // ── Infrastructure / Deployment ──────────────────────
+  color archi-tech #93D275
+  color archi-tech-light #C5E6B8
+
+  element infraNode {
+    style {
+      shape rectangle
+      color archi-tech
+    }
+  }
+
+  element infraSoftware {
+    style {
+      shape cylinder
+      color archi-tech-light
+    }
+  }
+
   // ── Relationship kinds ─────────────────────────────────
   relationship persists {
     color archi-store
+    line dashed
+  }
+
+  relationship deployedOn {
+    color archi-tech
     line dashed
   }
 
@@ -155,6 +181,10 @@ specification {
   tag external
   tag entity
   tag store
+  tag infrastructure
+  tag cluster
+  tag device
+  tag network
 }
 """
 
@@ -575,8 +605,79 @@ def generate_solution_views(
             files[solution_slug] = content
 
     if total_unresolved:
+        _logger = logging.getLogger('archi2likec4')
         resolved = total_elements - total_unresolved
         ratio = total_unresolved / total_elements if total_elements else 0
-        print(f'  WARN: {total_unresolved}/{total_elements} diagram element(s) could not be resolved '
-              f'({ratio:.0%} unresolved, {resolved} resolved)')
+        _logger.warning('%d/%d diagram element(s) could not be resolved '
+                        '(%.0f%% unresolved, %d resolved)',
+                        total_unresolved, total_elements, ratio * 100, resolved)
     return files, total_unresolved, total_elements
+
+
+# ── Deployment generators ───────────────────────────────────────────────
+
+def _render_deployment_node(node: DeploymentNode, lines: list[str], indent: int) -> None:
+    """Recursively render a DeploymentNode and its children."""
+    pad = ' ' * indent
+    title = escape_str(node.name)
+    lines.append(f"{pad}{node.c4_id} = {node.kind} '{title}' {{")
+    if node.documentation:
+        desc = escape_str(node.documentation)
+        if len(desc) > 500:
+            desc = desc[:497] + '...'
+        lines.append(f"{pad}  description '{desc}'")
+    lines.append(f'{pad}  metadata {{')
+    lines.append(f"{pad}    archi_id '{node.archi_id}'")
+    lines.append(f"{pad}    tech_type '{node.tech_type}'")
+    lines.append(f'{pad}  }}')
+    for child in sorted(node.children, key=lambda c: c.name):
+        lines.append('')
+        _render_deployment_node(child, lines, indent + 2)
+    lines.append(f'{pad}}}')
+
+
+def generate_deployment_c4(nodes: list[DeploymentNode]) -> str:
+    """Generate deployment/topology.c4 with infrastructure nodes and containers."""
+    lines = [
+        '// ── Deployment Topology ──────────────────────────────────',
+        'model {',
+        '',
+    ]
+    for node in sorted(nodes, key=lambda n: n.name):
+        _render_deployment_node(node, lines, indent=2)
+        lines.append('')
+    lines.append('}')
+    lines.append('')
+    return '\n'.join(lines)
+
+
+def generate_deployment_mapping_c4(mapping: list[tuple[str, str]]) -> str:
+    """Generate deployment/mapping.c4 with app→infrastructure relationships."""
+    lines = [
+        '// ── Deployment Mapping (App → Infrastructure) ────────────',
+        'model {',
+        '',
+    ]
+    for app_path, node_id in sorted(mapping):
+        lines.append(f'  {app_path} -[deployedOn]-> {node_id}')
+    lines.append('')
+    lines.append('}')
+    lines.append('')
+    return '\n'.join(lines)
+
+
+def generate_deployment_view() -> str:
+    """Generate views/deployment-architecture.c4."""
+    return """\
+views {
+
+  view deployment_architecture {
+    title 'Deployment Architecture'
+
+    include
+      element.kind = infraNode,
+      element.kind = infraSoftware
+  }
+
+}
+"""

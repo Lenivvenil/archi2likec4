@@ -17,6 +17,7 @@ from archi2likec4.parsers import (
     parse_application_interfaces,
     parse_data_objects,
     parse_relationships,
+    parse_technology_elements,
 )
 
 # Namespace used in coArchi XML (must be declared for valid XML)
@@ -242,8 +243,8 @@ class TestParseRelationships:
         rel_dir = tmp_path / 'relations'
         rel_dir.mkdir()
         _write_relationship(
-            rel_dir / 'AggregationRelationship_r1.xml',
-            rel_type='AggregationRelationship', rel_id='r-1', name='',
+            rel_dir / 'SpecializationRelationship_r1.xml',
+            rel_type='SpecializationRelationship', rel_id='r-1', name='',
             source_id='src-1', source_type='archimate:ApplicationComponent',
             target_id='tgt-1', target_type='archimate:ApplicationComponent',
         )
@@ -266,3 +267,111 @@ class TestParseRelationships:
         result = parse_relationships(tmp_path)
         assert len(result) == 1
         assert result[0].rel_type == 'TriggeringRelationship'
+
+
+# ── parse_technology_elements ────────────────────────────────────────────
+
+def _write_tech_element(path: Path, tag: str, archi_id: str, name: str,
+                        documentation: str = ''):
+    """Write a Technology layer XML file."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    doc_attr = f' documentation="{documentation}"' if documentation else ''
+    path.write_text(
+        f'<archimate:{tag} xmlns:archimate="http://www.archimatetool.com/archimate"'
+        f' name="{name}" id="{archi_id}"{doc_attr}/>',
+        encoding='utf-8',
+    )
+
+
+class TestParseTechnologyElements:
+    def test_parse_node(self, tmp_path):
+        tech_dir = tmp_path / 'technology' / 'sub'
+        _write_tech_element(
+            tech_dir / 'Node_n1.xml',
+            tag='Node', archi_id='n-1', name='Server 1',
+            documentation='vCPU: 8',
+        )
+        result = parse_technology_elements(tmp_path)
+        assert len(result) == 1
+        assert result[0].archi_id == 'n-1'
+        assert result[0].name == 'Server 1'
+        assert result[0].tech_type == 'Node'
+        assert result[0].documentation == 'vCPU: 8'
+
+    def test_parse_system_software(self, tmp_path):
+        tech_dir = tmp_path / 'technology' / 'sub'
+        _write_tech_element(
+            tech_dir / 'SystemSoftware_sw1.xml',
+            tag='SystemSoftware', archi_id='sw-1', name='PostgreSQL',
+        )
+        result = parse_technology_elements(tmp_path)
+        assert len(result) == 1
+        assert result[0].tech_type == 'SystemSoftware'
+
+    def test_empty_tech_dir(self, tmp_path):
+        """Missing technology/ dir → empty list, no error."""
+        result = parse_technology_elements(tmp_path)
+        assert result == []
+
+    def test_folder_xml_skipped(self, tmp_path):
+        tech_dir = tmp_path / 'technology'
+        tech_dir.mkdir()
+        (tech_dir / 'folder.xml').write_text('<folder name="tech"/>')
+        result = parse_technology_elements(tmp_path)
+        assert result == []
+
+    def test_multiple_types(self, tmp_path):
+        tech_dir = tmp_path / 'technology' / 'sub'
+        _write_tech_element(tech_dir / 'Node_n1.xml', 'Node', 'n-1', 'Srv1')
+        _write_tech_element(tech_dir / 'Device_d1.xml', 'Device', 'd-1', 'IBM Power')
+        _write_tech_element(tech_dir / 'Artifact_a1.xml', 'Artifact', 'a-1', 'app.war')
+        result = parse_technology_elements(tmp_path)
+        assert len(result) == 3
+        types = {r.tech_type for r in result}
+        assert types == {'Node', 'Device', 'Artifact'}
+
+
+class TestRelationshipsExpanded:
+    def test_aggregation_relationship_captured(self, tmp_path):
+        """AggregationRelationship is now in relevant_types."""
+        rel_dir = tmp_path / 'relations'
+        rel_dir.mkdir()
+        _write_relationship(
+            rel_dir / 'AggregationRelationship_r1.xml',
+            rel_type='AggregationRelationship', rel_id='r-1', name='contains',
+            source_id='n-1', source_type='archimate:Node',
+            target_id='sw-1', target_type='archimate:SystemSoftware',
+        )
+        result = parse_relationships(tmp_path)
+        assert len(result) == 1
+        assert result[0].rel_type == 'AggregationRelationship'
+        assert result[0].source_type == 'Node'
+        assert result[0].target_type == 'SystemSoftware'
+
+    def test_cross_layer_realization_captured(self, tmp_path):
+        """RealizationRelationship Node→ApplicationComponent is now captured."""
+        rel_dir = tmp_path / 'relations'
+        rel_dir.mkdir()
+        _write_relationship(
+            rel_dir / 'RealizationRelationship_r1.xml',
+            rel_type='RealizationRelationship', rel_id='r-1', name='',
+            source_id='n-1', source_type='archimate:Node',
+            target_id='ac-1', target_type='archimate:ApplicationComponent',
+        )
+        result = parse_relationships(tmp_path)
+        assert len(result) == 1
+        assert result[0].source_type == 'Node'
+        assert result[0].target_type == 'ApplicationComponent'
+
+    def test_irrelevant_element_type_still_skipped(self, tmp_path):
+        """BusinessService endpoints are still filtered out."""
+        rel_dir = tmp_path / 'relations'
+        rel_dir.mkdir()
+        _write_relationship(
+            rel_dir / 'FlowRelationship_r1.xml',
+            rel_type='FlowRelationship', rel_id='r-1', name='',
+            source_id='bs-1', source_type='archimate:BusinessService',
+            target_id='ac-1', target_type='archimate:ApplicationComponent',
+        )
+        result = parse_relationships(tmp_path)
+        assert len(result) == 0

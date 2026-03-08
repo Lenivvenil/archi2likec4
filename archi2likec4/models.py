@@ -208,3 +208,26 @@ class SolutionView:
     solution: str          # solution slug for c4_id
     element_archi_ids: list[str] = field(default_factory=list)
     relationship_archi_ids: list[str] = field(default_factory=list)
+
+
+# ── Technology / Deployment ─────────────────────────────────────────────
+
+@dataclass
+class TechElement:
+    """Parsed ArchiMate technology element (Node, SystemSoftware, Device, etc.)."""
+    archi_id: str
+    name: str
+    tech_type: str          # 'Node', 'SystemSoftware', 'Device', etc.
+    documentation: str = ''
+
+
+@dataclass
+class DeploymentNode:
+    """A node in the deployment topology tree."""
+    c4_id: str
+    name: str
+    archi_id: str
+    tech_type: str          # ArchiMate type
+    kind: str = 'infraNode' # LikeC4 element kind: infraNode | infraSoftware
+    documentation: str = ''
+    children: list['DeploymentNode'] = field(default_factory=list)

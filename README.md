@@ -53,6 +53,21 @@ python -m archi2likec4
 cd output && npx likec4 serve
 ```
 
+### CLI-флаги
+
+| Флаг | Описание |
+|------|----------|
+| `--config PATH` | YAML-файл конфигурации (по умолчанию: `.archi2likec4.yaml` если есть) |
+| `--strict` | Качественные пороги (quality gates) как ошибки, а не предупреждения |
+| `--verbose` | Подробный вывод (уровень DEBUG) |
+| `--dry-run` | Только парсинг и валидация, без генерации файлов |
+
+Пример:
+
+```bash
+python -m archi2likec4 --config my-config.yaml --strict --verbose
+```
+
 ## Структура вывода
 
 ```
@@ -86,5 +101,6 @@ python -m pytest tests/ -v
 ## Требования
 
 - Python ≥ 3.10
-- Только stdlib (конвертер); сгенерированный `scripts/federate.py` требует PyYAML
+- Конвертер использует только stdlib
+- PyYAML (`pip install pyyaml`) — для `--config` и сгенерированного `scripts/federate.py`
 - pytest для тестов (`pip install pytest`)

@@ -6,6 +6,7 @@ from archi2likec4.models import (
     AppFunction,
     DataAccess,
     DataEntity,
+    DeploymentNode,
     Integration,
     RawRelationship,
     SolutionView,
@@ -13,6 +14,9 @@ from archi2likec4.models import (
     System,
 )
 from archi2likec4.generators import (
+    generate_deployment_c4,
+    generate_deployment_mapping_c4,
+    generate_deployment_view,
     generate_domain_c4,
     generate_domain_functional_view,
     generate_domain_integration_view,
@@ -279,3 +283,75 @@ class TestGenerateSolutionViews:
         assert 'ghost' not in files
         assert unresolved == 1
         assert total == 1
+
+
+# ── Deployment generators ───────────────────────────────────────────────
+
+class TestGenerateSpec_InfraKinds:
+    def test_spec_includes_infra_node(self):
+        spec = generate_spec()
+        assert 'element infraNode' in spec
+        assert 'element infraSoftware' in spec
+        assert 'archi-tech' in spec
+
+    def test_spec_includes_deployed_on(self):
+        spec = generate_spec()
+        assert 'relationship deployedOn' in spec
+
+    def test_spec_includes_infra_tags(self):
+        spec = generate_spec()
+        assert 'tag infrastructure' in spec
+        assert 'tag cluster' in spec
+
+
+class TestGenerateDeploymentC4:
+    def test_basic_node(self):
+        nodes = [
+            DeploymentNode(
+                c4_id='srv_1', name='Server 1', archi_id='n-1',
+                tech_type='Node', kind='infraNode',
+                documentation='vCPU: 8',
+            ),
+        ]
+        content = generate_deployment_c4(nodes)
+        assert "srv_1 = infraNode 'Server 1'" in content
+        assert "archi_id 'n-1'" in content
+        assert "tech_type 'Node'" in content
+        assert "description 'vCPU: 8'" in content
+        assert 'model {' in content
+
+    def test_nested_nodes(self):
+        child = DeploymentNode(
+            c4_id='pg', name='PostgreSQL', archi_id='sw-1',
+            tech_type='SystemSoftware', kind='infraSoftware',
+        )
+        parent = DeploymentNode(
+            c4_id='srv_1', name='Server 1', archi_id='n-1',
+            tech_type='Node', kind='infraNode',
+            children=[child],
+        )
+        content = generate_deployment_c4([parent])
+        assert "srv_1 = infraNode 'Server 1'" in content
+        assert "pg = infraSoftware 'PostgreSQL'" in content
+        # Child should be indented more than parent
+        lines = content.split('\n')
+        parent_line = next(l for l in lines if 'srv_1 = infraNode' in l)
+        child_line = next(l for l in lines if 'pg = infraSoftware' in l)
+        assert len(child_line) - len(child_line.lstrip()) > len(parent_line) - len(parent_line.lstrip())
+
+
+class TestGenerateDeploymentMapping:
+    def test_mapping(self):
+        mapping = [('channels.efs', 'server_1'), ('products.mls', 'db_cluster')]
+        content = generate_deployment_mapping_c4(mapping)
+        assert 'channels.efs -[deployedOn]-> server_1' in content
+        assert 'products.mls -[deployedOn]-> db_cluster' in content
+        assert 'model {' in content
+
+
+class TestGenerateDeploymentView:
+    def test_view_content(self):
+        content = generate_deployment_view()
+        assert 'view deployment_architecture' in content
+        assert 'infraNode' in content
+        assert 'infraSoftware' in content

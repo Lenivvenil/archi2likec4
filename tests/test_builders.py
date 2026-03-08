@@ -9,11 +9,13 @@ from archi2likec4.models import (
     DataAccess,
     DataEntity,
     DataObject,
+    DeploymentNode,
     DomainInfo,
     Integration,
     RawRelationship,
     Subsystem,
     System,
+    TechElement,
 )
 from archi2likec4.builders import (
     apply_domain_prefix,
@@ -23,6 +25,8 @@ from archi2likec4.builders import (
     build_archi_to_c4_map,
     build_data_access,
     build_data_entities,
+    build_deployment_map,
+    build_deployment_topology,
     build_integrations,
     build_systems,
 )
@@ -377,20 +381,19 @@ class TestPromoteChildren:
         names = sorted(s.name for s in systems)
         assert names == ['Platform.A', 'Platform.B', 'Platform.C']
 
-    def test_warn_threshold(self, capsys):
+    def test_warn_threshold(self, caplog):
         """Parent with ≥ threshold subsystems triggers a warning."""
         comps = [AppComponent(archi_id='id-p', name='BigSys')]
         comps += [
             AppComponent(archi_id=f'id-{i}', name=f'BigSys.Sub{i}')
             for i in range(12)
         ]
-        systems, _ = build_systems(comps, promote_children={})
-        captured = capsys.readouterr()
-        assert 'WARN' in captured.out
-        assert 'BigSys' in captured.out
-        assert 'PROMOTE_CHILDREN' in captured.out
+        with caplog.at_level('WARNING', logger='archi2likec4'):
+            systems, _ = build_systems(comps, promote_children={})
+        assert any('BigSys' in msg and 'PROMOTE_CHILDREN' in msg
+                    for msg in caplog.messages)
 
-    def test_no_warn_below_threshold(self, capsys):
+    def test_no_warn_below_threshold(self, caplog):
         """Parent with < threshold subsystems does not trigger a warning."""
         comps = [
             AppComponent(archi_id='id-p', name='SmallSys'),
@@ -398,9 +401,9 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-2', name='SmallSys.B'),
             AppComponent(archi_id='id-3', name='SmallSys.C'),
         ]
-        systems, _ = build_systems(comps, promote_children={})
-        captured = capsys.readouterr()
-        assert 'SmallSys' not in captured.out
+        with caplog.at_level('WARNING', logger='archi2likec4'):
+            systems, _ = build_systems(comps, promote_children={})
+        assert not any('SmallSys' in msg for msg in caplog.messages)
 
     def test_parent_kept_when_no_children(self):
         """Parent in promote_children is kept if no dot-children exist (P2 fix)."""
@@ -504,6 +507,30 @@ class TestAssignDomainsFallback:
         result = assign_domains([sys], domains, promote_children={'EFS': 'channels'})
         # View membership (products) takes priority over fallback (channels)
         assert sys.domain == 'products'
+
+    def test_custom_extra_domain_patterns(self):
+        """Custom extra_domain_patterns override hardcoded EXTRA_DOMAIN_PATTERNS."""
+        domains = [DomainInfo(c4_id='core', name='Core', archi_ids=set())]
+        sys = System(c4_id='my_grafana', name='Grafana', archi_id='s-1')
+        custom_patterns = [
+            {'c4_id': 'monitoring', 'name': 'Monitoring', 'patterns': ['Grafana', 'ELK']},
+        ]
+        result = assign_domains(
+            [sys], domains, promote_children={},
+            extra_domain_patterns=custom_patterns)
+        assert sys.domain == 'monitoring'
+        assert sys in result['monitoring']
+
+    def test_empty_extra_domain_patterns(self):
+        """Empty extra_domain_patterns means no third-pass assignment."""
+        domains = [DomainInfo(c4_id='core', name='Core', archi_ids=set())]
+        sys = System(c4_id='my_grafana', name='Grafana', archi_id='s-1')
+        result = assign_domains(
+            [sys], domains, promote_children={},
+            extra_domain_patterns=[])
+        # With no patterns, system stays unassigned
+        assert sys.domain == 'unassigned'
+        assert sys in result['unassigned']
 
 
 # ── integration fan-out ──────────────────────────────────────────────────
@@ -614,3 +641,163 @@ class TestDataAccessFanOut:
         ]
         accesses = build_data_access([], [entity], rels)
         assert len(accesses) == 0
+
+
+# ── Deployment topology ─────────────────────────────────────────────────
+
+class TestDeploymentTopology:
+    def test_basic_node_with_software(self):
+        """AggregationRelationship Node→SystemSoftware creates nesting."""
+        elems = [
+            TechElement(archi_id='n-1', name='Server 1', tech_type='Node'),
+            TechElement(archi_id='sw-1', name='PostgreSQL', tech_type='SystemSoftware'),
+        ]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AggregationRelationship', name='',
+                source_type='Node', source_id='n-1',
+                target_type='SystemSoftware', target_id='sw-1',
+            ),
+        ]
+        roots = build_deployment_topology(elems, rels)
+        assert len(roots) == 1
+        assert roots[0].name == 'Server 1'
+        assert roots[0].kind == 'infraNode'
+        assert len(roots[0].children) == 1
+        assert roots[0].children[0].name == 'PostgreSQL'
+        assert roots[0].children[0].kind == 'infraSoftware'
+
+    def test_cluster_node_software_chain(self):
+        """TechnologyCollaboration→Node→SystemSoftware: 2-level tree."""
+        elems = [
+            TechElement(archi_id='tc-1', name='K8s Cluster', tech_type='TechnologyCollaboration'),
+            TechElement(archi_id='n-1', name='Worker 1', tech_type='Node'),
+            TechElement(archi_id='sw-1', name='Redis', tech_type='SystemSoftware'),
+        ]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AggregationRelationship', name='',
+                source_type='TechnologyCollaboration', source_id='tc-1',
+                target_type='Node', target_id='n-1',
+            ),
+            RawRelationship(
+                rel_id='r-2', rel_type='AggregationRelationship', name='',
+                source_type='Node', source_id='n-1',
+                target_type='SystemSoftware', target_id='sw-1',
+            ),
+        ]
+        roots = build_deployment_topology(elems, rels)
+        assert len(roots) == 1
+        assert roots[0].name == 'K8s Cluster'
+        assert len(roots[0].children) == 1
+        node = roots[0].children[0]
+        assert node.name == 'Worker 1'
+        assert len(node.children) == 1
+        assert node.children[0].name == 'Redis'
+
+    def test_standalone_nodes(self):
+        """Nodes without parent remain at top level."""
+        elems = [
+            TechElement(archi_id='n-1', name='Server A', tech_type='Node'),
+            TechElement(archi_id='n-2', name='Server B', tech_type='Node'),
+        ]
+        roots = build_deployment_topology(elems, [])
+        assert len(roots) == 2
+
+    def test_kind_assignment(self):
+        """Node→infraNode, SystemSoftware→infraSoftware, Device→infraNode."""
+        elems = [
+            TechElement(archi_id='n-1', name='Srv', tech_type='Node'),
+            TechElement(archi_id='d-1', name='Power', tech_type='Device'),
+            TechElement(archi_id='sw-1', name='PG', tech_type='SystemSoftware'),
+            TechElement(archi_id='ts-1', name='Eureka', tech_type='TechnologyService'),
+            TechElement(archi_id='a-1', name='app.war', tech_type='Artifact'),
+        ]
+        roots = build_deployment_topology(elems, [])
+        by_name = {r.name: r for r in roots}
+        assert by_name['Srv'].kind == 'infraNode'
+        assert by_name['Power'].kind == 'infraNode'
+        assert by_name['PG'].kind == 'infraSoftware'
+        assert by_name['Eureka'].kind == 'infraSoftware'
+        assert by_name['app.war'].kind == 'infraSoftware'
+
+    def test_id_collision_resolved(self):
+        """Two elements with same name get unique c4_ids."""
+        elems = [
+            TechElement(archi_id='n-1', name='postgresql', tech_type='SystemSoftware'),
+            TechElement(archi_id='n-2', name='postgresql', tech_type='SystemSoftware'),
+        ]
+        roots = build_deployment_topology(elems, [])
+        ids = [r.c4_id for r in roots]
+        assert len(set(ids)) == 2  # unique
+
+    def test_empty_input(self):
+        """Empty tech_elements → empty result."""
+        assert build_deployment_topology([], []) == []
+
+
+class TestDeploymentMap:
+    def test_realization_app_to_node(self):
+        """RealizationRelationship App→Node creates mapping."""
+        systems = [
+            System(c4_id='efs', name='EFS', archi_id='ac-1'),
+        ]
+        nodes = [
+            DeploymentNode(c4_id='server_1', name='Server 1', archi_id='n-1',
+                           tech_type='Node'),
+        ]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='RealizationRelationship', name='',
+                source_type='Node', source_id='n-1',
+                target_type='ApplicationComponent', target_id='ac-1',
+            ),
+        ]
+        result = build_deployment_map(systems, nodes, rels, {'efs': 'channels'})
+        assert len(result) == 1
+        assert result[0] == ('channels.efs', 'server_1')
+
+    def test_no_tech_elements(self):
+        """Empty deployment_nodes → empty mapping."""
+        systems = [System(c4_id='efs', name='EFS', archi_id='ac-1')]
+        result = build_deployment_map(systems, [], [], {'efs': 'channels'})
+        assert result == []
+
+    def test_dedup_pairs(self):
+        """Same (app, node) pair from multiple rels → only one mapping."""
+        systems = [System(c4_id='efs', name='EFS', archi_id='ac-1')]
+        nodes = [
+            DeploymentNode(c4_id='srv', name='Srv', archi_id='n-1', tech_type='Node'),
+        ]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='RealizationRelationship', name='',
+                source_type='Node', source_id='n-1',
+                target_type='ApplicationComponent', target_id='ac-1',
+            ),
+            RawRelationship(
+                rel_id='r-2', rel_type='RealizationRelationship', name='',
+                source_type='ApplicationComponent', source_id='ac-1',
+                target_type='Node', target_id='n-1',
+            ),
+        ]
+        result = build_deployment_map(systems, nodes, rels, {'efs': 'channels'})
+        assert len(result) == 1
+
+    def test_nested_node_qualified_path(self):
+        """Nested deployment node gets parent.child path in mapping."""
+        systems = [System(c4_id='efs', name='EFS', archi_id='ac-1')]
+        child = DeploymentNode(c4_id='pg', name='PostgreSQL', archi_id='sw-1',
+                               tech_type='SystemSoftware', kind='infraSoftware')
+        parent = DeploymentNode(c4_id='srv', name='Server', archi_id='n-1',
+                                tech_type='Node', children=[child])
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='RealizationRelationship', name='',
+                source_type='ApplicationComponent', source_id='ac-1',
+                target_type='SystemSoftware', target_id='sw-1',
+            ),
+        ]
+        result = build_deployment_map(systems, [parent], rels, {'efs': 'channels'})
+        assert len(result) == 1
+        assert result[0] == ('channels.efs', 'srv.pg')

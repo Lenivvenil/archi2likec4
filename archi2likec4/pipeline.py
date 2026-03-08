@@ -1,10 +1,13 @@
-"""Pipeline: main() orchestration — parse, map, generate."""
+"""Pipeline: main() orchestration — parse, build, validate, generate."""
 
+import logging
 import shutil
 import sys
 from pathlib import Path
+from typing import NamedTuple
 
-from .models import EXTRA_DOMAIN_PATTERNS, PROMOTE_CHILDREN, DomainInfo
+from .config import ConvertConfig, load_config
+from .models import DomainInfo
 from .parsers import (
     parse_application_components,
     parse_application_functions,
@@ -13,6 +16,7 @@ from .parsers import (
     parse_domain_mapping,
     parse_relationships,
     parse_solution_views,
+    parse_technology_elements,
 )
 from .builders import (
     apply_domain_prefix,
@@ -22,10 +26,15 @@ from .builders import (
     build_archi_to_c4_map,
     build_data_access,
     build_data_entities,
+    build_deployment_map,
+    build_deployment_topology,
     build_integrations,
     build_systems,
 )
 from .generators import (
+    generate_deployment_c4,
+    generate_deployment_mapping_c4,
+    generate_deployment_view,
     generate_domain_c4,
     generate_domain_functional_view,
     generate_domain_integration_view,
@@ -39,71 +48,112 @@ from .generators import (
 )
 from .federation import generate_federate_script, generate_federation_registry
 
+logger = logging.getLogger('archi2likec4')
 
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(
-        prog='archi2likec4',
-        description='Convert coArchi XML repository to LikeC4 .c4 files',
-    )
-    parser.add_argument('model_root', nargs='?', default='architectural_repository/model',
-                        help='Path to coArchi model directory (default: architectural_repository/model)')
-    parser.add_argument('output_dir', nargs='?', default='output',
-                        help='Output directory for .c4 files (default: output)')
-    args = parser.parse_args()
-    model_root = Path(args.model_root)
-    output_dir = Path(args.output_dir)
 
-    print('archi2likec4 — Iteration 5: appFunction + solution views')
-    print(f'  Input:  {model_root}')
-    print(f'  Output: {output_dir}')
-    print()
+# ── Phase result containers ──────────────────────────────────────────────
 
-    # ── Parse ──────────────────────────────────────────────
-    print('Parsing ApplicationComponents...')
+class ParseResult(NamedTuple):
+    components: list
+    functions: list
+    interfaces: list
+    data_objects: list
+    relationships: list
+    domains_info: list
+    solution_views: list
+    tech_elements: list
+
+
+class BuildResult(NamedTuple):
+    systems: list
+    integrations: list
+    data_access: list
+    entities: list
+    domain_systems: dict
+    sys_domain: dict
+    archi_to_c4: dict
+    promoted_archi_to_c4: dict
+    promoted_parents: dict
+    iface_c4_path: dict
+    orphan_fns: int
+    solution_views: list
+    relationships: list
+    domains_info: list  # original parsed DomainInfo list
+    deployment_nodes: list
+    deployment_map: list
+
+
+# ── Phases ───────────────────────────────────────────────────────────────
+
+def _parse(model_root: Path, config: ConvertConfig) -> ParseResult:
+    """Phase 1: parse all XML sources."""
+    logger.info('Parsing ApplicationComponents...')
     components = parse_application_components(model_root)
-    print(f'  Found {len(components)} ApplicationComponent elements')
+    logger.info('Found %d ApplicationComponent elements', len(components))
 
-    print('Parsing ApplicationFunctions...')
+    logger.info('Parsing ApplicationFunctions...')
     functions = parse_application_functions(model_root)
-    print(f'  Found {len(functions)} ApplicationFunction elements')
+    logger.info('Found %d ApplicationFunction elements', len(functions))
 
-    print('Parsing ApplicationInterfaces...')
+    logger.info('Parsing ApplicationInterfaces...')
     interfaces = parse_application_interfaces(model_root)
-    print(f'  Found {len(interfaces)} ApplicationInterface elements')
+    logger.info('Found %d ApplicationInterface elements', len(interfaces))
 
-    print('Parsing DataObjects...')
+    logger.info('Parsing DataObjects...')
     data_objects = parse_data_objects(model_root)
-    print(f'  Found {len(data_objects)} DataObject elements')
+    logger.info('Found %d DataObject elements', len(data_objects))
 
-    print('Parsing relationships...')
+    logger.info('Parsing relationships...')
     relationships = parse_relationships(model_root)
-    print(f'  Found {len(relationships)} relevant relationships')
+    logger.info('Found %d relevant relationships', len(relationships))
 
-    print('Parsing domain mapping from views...')
-    domains_info = parse_domain_mapping(model_root)
+    logger.info('Parsing domain mapping from views...')
+    domains_info = parse_domain_mapping(model_root, config.domain_renames)
     for d in domains_info:
-        print(f'  {d.name}: {len(d.archi_ids)} AppComponent refs on views')
+        logger.info('%s: %d AppComponent refs on views', d.name, len(d.archi_ids))
 
-    print('Parsing solution views...')
+    logger.info('Parsing solution views...')
     solution_views = parse_solution_views(model_root)
     func_views = sum(1 for v in solution_views if v.view_type == 'functional')
     integ_views = sum(1 for v in solution_views if v.view_type == 'integration')
-    print(f'  Found {len(solution_views)} solution views ({func_views} functional, {integ_views} integration)')
+    logger.info('Found %d solution views (%d functional, %d integration)',
+                len(solution_views), func_views, integ_views)
 
-    # ── Map ────────────────────────────────────────────────
-    print('Building system hierarchy...')
-    systems, promoted_parents = build_systems(components)
+    logger.info('Parsing Technology layer...')
+    tech_elements = parse_technology_elements(model_root)
+    logger.info('Found %d technology elements', len(tech_elements))
+
+    return ParseResult(
+        components=components,
+        functions=functions,
+        interfaces=interfaces,
+        data_objects=data_objects,
+        relationships=relationships,
+        domains_info=domains_info,
+        solution_views=solution_views,
+        tech_elements=tech_elements,
+    )
+
+
+def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
+    """Phase 2: transform parsed elements into the output model."""
+    logger.info('Building system hierarchy...')
+    systems, promoted_parents = build_systems(
+        parsed.components,
+        promote_children=config.promote_children,
+        promote_warn_threshold=config.promote_warn_threshold,
+    )
     total_subsystems = sum(len(s.subsystems) for s in systems)
-    print(f'  {len(systems)} systems, {total_subsystems} subsystems')
+    logger.info('%d systems, %d subsystems', len(systems), total_subsystems)
 
-    print('Attaching functions to systems/subsystems...')
-    orphan_fns = attach_functions(systems, functions, relationships, promoted_parents)
+    logger.info('Attaching functions to systems/subsystems...')
+    orphan_fns = attach_functions(
+        systems, parsed.functions, parsed.relationships, promoted_parents)
     total_attached = sum(
         len(s.functions) + sum(len(sub.functions) for sub in s.subsystems)
         for s in systems
     )
-    print(f'  {total_attached} functions attached, {orphan_fns} orphans')
+    logger.info('%d functions attached, %d orphans', total_attached, orphan_fns)
 
     # Collect all used IDs (to avoid collisions with data entities)
     all_ids: set[str] = set()
@@ -112,28 +162,32 @@ def main():
         for sub in s.subsystems:
             all_ids.add(f'{s.c4_id}.{sub.c4_id}')
 
-    print('Building data entities...')
-    entities = build_data_entities(data_objects, all_ids)
-    print(f'  {len(entities)} data entities')
+    logger.info('Building data entities...')
+    entities = build_data_entities(parsed.data_objects, all_ids)
+    logger.info('%d data entities', len(entities))
 
-    print('Attaching interfaces...')
-    iface_c4_path = attach_interfaces(systems, interfaces, relationships)
+    logger.info('Attaching interfaces...')
+    iface_c4_path = attach_interfaces(systems, parsed.interfaces, parsed.relationships)
     linked = sum(1 for s in systems if s.api_interfaces)
-    print(f'  {len(iface_c4_path)} interfaces attached to {linked} systems')
+    logger.info('%d interfaces attached to %d systems', len(iface_c4_path), linked)
 
-    print('Building integrations...')
-    integrations = build_integrations(systems, relationships, iface_c4_path, promoted_parents)
-    print(f'  {len(integrations)} unique system-to-system integrations')
+    logger.info('Building integrations...')
+    integrations = build_integrations(
+        systems, parsed.relationships, iface_c4_path, promoted_parents)
+    logger.info('%d unique system-to-system integrations', len(integrations))
 
-    print('Building data access relationships...')
-    data_access = build_data_access(systems, entities, relationships, promoted_parents)
-    print(f'  {len(data_access)} system-to-entity access links')
+    logger.info('Building data access relationships...')
+    data_access = build_data_access(
+        systems, entities, parsed.relationships, promoted_parents)
+    logger.info('%d system-to-entity access links', len(data_access))
 
-    print('Assigning systems to domains...')
-    domain_systems = assign_domains(systems, domains_info, PROMOTE_CHILDREN)
+    logger.info('Assigning systems to domains...')
+    domain_systems = assign_domains(
+        systems, parsed.domains_info, config.promote_children,
+        config.extra_domain_patterns)
     for d_id, d_sys_list in domain_systems.items():
         if d_sys_list:
-            print(f'  {d_id}: {len(d_sys_list)} systems')
+            logger.info('%s: %d systems', d_id, len(d_sys_list))
 
     # Build sys_id → domain_id map for prefixing paths
     sys_domain: dict[str, str] = {s.c4_id: s.domain for s in systems}
@@ -143,7 +197,7 @@ def main():
 
     # Build complete archi_id → c4_path map (for solution views)
     archi_to_c4 = build_archi_to_c4_map(systems, sys_domain, iface_c4_path)
-    print(f'  {len(archi_to_c4)} elements in archi→c4 map')
+    logger.info('%d elements in archi→c4 map', len(archi_to_c4))
 
     # Build promoted parent → full c4 paths map (for solution views fan-out)
     promoted_archi_to_c4: dict[str, list[str]] = {}
@@ -154,13 +208,96 @@ def main():
             paths.append(f'{domain}.{c4_id}')
         promoted_archi_to_c4[parent_aid] = paths
 
-    # ── Generate ───────────────────────────────────────────
-    print('Generating files...')
+    # Deployment topology from Technology layer
+    logger.info('Building deployment topology...')
+    deployment_nodes = build_deployment_topology(
+        parsed.tech_elements, parsed.relationships)
+    from .builders import _flatten_deployment_nodes
+    all_dn = _flatten_deployment_nodes(deployment_nodes)
+    logger.info('%d top-level deployment nodes, %d total',
+                len(deployment_nodes), len(all_dn))
+
+    logger.info('Building deployment mapping...')
+    deployment_map = build_deployment_map(
+        systems, deployment_nodes, parsed.relationships, sys_domain)
+    logger.info('%d app→infrastructure deployment mappings', len(deployment_map))
+
+    return BuildResult(
+        systems=systems,
+        integrations=integrations,
+        data_access=data_access,
+        entities=entities,
+        domain_systems=domain_systems,
+        sys_domain=sys_domain,
+        archi_to_c4=archi_to_c4,
+        promoted_archi_to_c4=promoted_archi_to_c4,
+        promoted_parents=promoted_parents,
+        iface_c4_path=iface_c4_path,
+        orphan_fns=orphan_fns,
+        solution_views=parsed.solution_views,
+        relationships=parsed.relationships,
+        domains_info=parsed.domains_info,
+        deployment_nodes=deployment_nodes,
+        deployment_map=deployment_map,
+    )
+
+
+def _validate(built: BuildResult, config: ConvertConfig) -> tuple[int, int, dict, int, int]:
+    """Phase 3: quality gates. Returns (warnings, errors, sv_files, sv_unresolved, sv_total)."""
+    warnings = 0
+    errors = 0
+
+    # Generate solution views (needed for both validation and output)
+    solution_view_files, sv_unresolved, sv_total = generate_solution_views(
+        built.solution_views, built.archi_to_c4, built.sys_domain,
+        built.relationships,
+        promoted_archi_to_c4=built.promoted_archi_to_c4,
+    )
+
+    # Gate 1: Solution view unresolved ratio
+    if sv_total > 0:
+        sv_ratio = sv_unresolved / sv_total
+        if sv_ratio > config.max_unresolved_ratio:
+            logger.error('%d/%d (%.0f%%) solution view elements unresolved — '
+                         'likely data model mismatch',
+                         sv_unresolved, sv_total, sv_ratio * 100)
+            errors += 1
+        elif sv_ratio > config.max_unresolved_ratio * 0.6:
+            logger.warning('%d/%d (%.0f%%) solution view elements unresolved',
+                           sv_unresolved, sv_total, sv_ratio * 100)
+            warnings += 1
+        else:
+            logger.info('%d/%d (%.0f%%) solution view elements unresolved',
+                        sv_unresolved, sv_total, sv_ratio * 100)
+
+    # Gate 2: Orphan functions
+    if built.orphan_fns > config.max_orphan_functions_warn:
+        logger.warning('%d orphan functions (threshold: %d)',
+                       built.orphan_fns, config.max_orphan_functions_warn)
+        warnings += 1
+
+    # Gate 3: Unassigned systems
+    unassigned_count = len(built.domain_systems.get('unassigned', []))
+    if unassigned_count > config.max_unassigned_systems_warn:
+        logger.warning('%d systems in "unassigned" domain (threshold: %d)',
+                       unassigned_count, config.max_unassigned_systems_warn)
+        warnings += 1
+
+    return warnings, errors, solution_view_files, sv_unresolved, sv_total
+
+
+def _generate(
+    built: BuildResult,
+    output_dir: Path,
+    config: ConvertConfig,
+    solution_view_files: dict[str, str],
+) -> None:
+    """Phase 4: generate .c4 files."""
+    logger.info('Generating files...')
 
     # Clean & create dirs (with safety checks)
     if output_dir.exists():
         resolved = output_dir.resolve()
-        # Guard against dangerous paths
         if resolved == Path.cwd().resolve() or resolved == Path.home().resolve():
             raise SystemExit(f'FATAL: refusing to rmtree dangerous path: {resolved}')
         if resolved == Path('/') or str(resolved).count('/') <= 1:
@@ -189,25 +326,27 @@ def main():
     # Root files
     (output_dir / 'specification.c4').write_text(generate_spec(), encoding='utf-8')
     file_count += 1
-    (output_dir / 'relationships.c4').write_text(generate_relationships(integrations), encoding='utf-8')
+    (output_dir / 'relationships.c4').write_text(
+        generate_relationships(built.integrations), encoding='utf-8')
     file_count += 1
-    (output_dir / 'entities.c4').write_text(generate_entities(entities, data_access), encoding='utf-8')
+    (output_dir / 'entities.c4').write_text(
+        generate_entities(built.entities, built.data_access), encoding='utf-8')
     file_count += 1
 
     # Domain files + views
-    all_domain_meta: dict[str, DomainInfo] = {d.c4_id: d for d in domains_info}
-    for extra in EXTRA_DOMAIN_PATTERNS:
+    all_domain_meta: dict[str, DomainInfo] = {d.c4_id: d for d in built.domains_info}
+    for extra in config.extra_domain_patterns:
         if extra['c4_id'] not in all_domain_meta:
             all_domain_meta[extra['c4_id']] = DomainInfo(
                 c4_id=extra['c4_id'], name=extra['name'])
-    if domain_systems.get('unassigned'):
+    if built.domain_systems.get('unassigned'):
         all_domain_meta['unassigned'] = DomainInfo(c4_id='unassigned', name='Unassigned')
 
     domain_count = 0
     view_count = 0
     system_detail_count = 0
 
-    for domain_id, domain_sys_list in domain_systems.items():
+    for domain_id, domain_sys_list in built.domain_systems.items():
         if not domain_sys_list:
             continue
         d_info = all_domain_meta.get(domain_id)
@@ -244,22 +383,12 @@ def main():
         file_count += 1
         view_count += 1
 
-    # Solution views (functional + integration from Archi diagrams)
-    solution_view_files, sv_unresolved, sv_total = generate_solution_views(
-        solution_views, archi_to_c4, sys_domain, relationships,
-        promoted_archi_to_c4=promoted_archi_to_c4,
-    )
+    # Solution views (already generated in _validate)
     for sol_slug, content in solution_view_files.items():
         (views_solutions_dir / f'{sol_slug}.c4').write_text(content, encoding='utf-8')
         file_count += 1
         view_count += 1
-    print(f'  {len(solution_view_files)} solution view files generated')
-    if sv_total > 0:
-        sv_ratio = sv_unresolved / sv_total
-        if sv_ratio > 0.5:
-            print(f'  ERROR: {sv_unresolved}/{sv_total} ({sv_ratio:.0%}) solution view elements '
-                  f'unresolved — likely data model mismatch')
-            sys.exit(1)
+    logger.info('%d solution view files generated', len(solution_view_files))
 
     # Top-level views
     (views_dir / 'landscape.c4').write_text(generate_landscape_view(), encoding='utf-8')
@@ -269,6 +398,23 @@ def main():
     file_count += 1
     view_count += 1
 
+    # Deployment
+    if built.deployment_nodes:
+        deployment_dir = output_dir / 'deployment'
+        deployment_dir.mkdir(exist_ok=True)
+        (deployment_dir / 'topology.c4').write_text(
+            generate_deployment_c4(built.deployment_nodes), encoding='utf-8')
+        file_count += 1
+        if built.deployment_map:
+            (deployment_dir / 'mapping.c4').write_text(
+                generate_deployment_mapping_c4(built.deployment_map), encoding='utf-8')
+            file_count += 1
+        (views_dir / 'deployment-architecture.c4').write_text(
+            generate_deployment_view(), encoding='utf-8')
+        file_count += 1
+        view_count += 1
+        logger.info('  deployment/ (topology + mapping + view)')
+
     # Scripts
     (scripts_dir / 'federate.py').write_text(generate_federate_script(), encoding='utf-8')
     file_count += 1
@@ -276,11 +422,92 @@ def main():
         generate_federation_registry(), encoding='utf-8')
     file_count += 1
 
-    print(f'  {file_count} files written to {output_dir}/')
-    print(f'    specification.c4, relationships.c4, entities.c4')
-    print(f'    domains/ ({domain_count} .c4 files)')
-    print(f'    systems/ ({system_detail_count} .c4 detail files)')
-    print(f'    views/ ({view_count} view files)')
-    print(f'    scripts/ (federate.py + federation-registry.yaml)')
-    print()
-    print('Done! Run: cd output && npx likec4 serve')
+    logger.info('%d files written to %s/', file_count, output_dir)
+    logger.info('  specification.c4, relationships.c4, entities.c4')
+    logger.info('  domains/ (%d .c4 files)', domain_count)
+    logger.info('  systems/ (%d .c4 detail files)', system_detail_count)
+    logger.info('  views/ (%d view files)', view_count)
+    logger.info('  scripts/ (federate.py + federation-registry.yaml)')
+    logger.info('Done! Run: cd %s && npx likec4 serve', output_dir)
+
+
+# ── CLI entry point ──────────────────────────────────────────────────────
+
+def main():
+    import argparse
+
+    parser = argparse.ArgumentParser(
+        prog='archi2likec4',
+        description='Convert coArchi XML repository to LikeC4 .c4 files',
+    )
+    parser.add_argument('model_root', nargs='?', default='architectural_repository/model',
+                        help='Path to coArchi model directory (default: architectural_repository/model)')
+    parser.add_argument('output_dir', nargs='?', default='output',
+                        help='Output directory for .c4 files (default: output)')
+    parser.add_argument('--config', type=Path, default=None, dest='config_file',
+                        help='Config YAML file (default: .archi2likec4.yaml if exists)')
+    parser.add_argument('--strict', action='store_true',
+                        help='Treat quality-gate warnings as errors')
+    parser.add_argument('--verbose', action='store_true',
+                        help='Verbose output (DEBUG level logging)')
+    parser.add_argument('--dry-run', action='store_true',
+                        help='Parse and validate only — do not generate files')
+    args = parser.parse_args()
+
+    # Fallback logging — before config is loaded
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(levelname)s: %(message)s',
+    )
+
+    try:
+        config = load_config(args.config_file)
+    except (FileNotFoundError, ValueError) as e:
+        logger.error('Configuration error: %s', e)
+        sys.exit(2)
+
+    config.model_root = Path(args.model_root)
+    config.output_dir = Path(args.output_dir)
+    if args.strict:
+        config.strict = True
+    if args.verbose:
+        config.verbose = True
+    if args.dry_run:
+        config.dry_run = True
+
+    # Reconfigure logging if verbose
+    if config.verbose:
+        logging.getLogger().setLevel(logging.DEBUG)
+
+    logger.info('archi2likec4 v0.6.0')
+    logger.info('Input:  %s', config.model_root)
+    logger.info('Output: %s', config.output_dir)
+
+    try:
+        parsed = _parse(config.model_root, config)
+        built = _build(parsed, config)
+        gate_warnings, gate_errors, sv_files, sv_unresolved, sv_total = _validate(built, config)
+
+        if gate_errors > 0:
+            logger.error('Quality gates failed with %d error(s)', gate_errors)
+            sys.exit(1)
+        if config.strict and gate_warnings > 0:
+            logger.error('%d quality-gate warning(s) in strict mode — aborting', gate_warnings)
+            sys.exit(1)
+        if config.dry_run:
+            logger.info('Dry run complete — no files generated')
+            sys.exit(0)
+
+        _generate(built, config.output_dir, config, sv_files)
+
+    except FileNotFoundError as e:
+        logger.error('Input not found: %s', e)
+        sys.exit(2)
+    except SystemExit:
+        raise
+    except Exception as e:
+        logger.error('Unexpected error: %s', e)
+        if args.verbose:
+            import traceback
+            traceback.print_exc()
+        sys.exit(1)

@@ -1,8 +1,11 @@
 """Parsers: extract ArchiMate elements from coArchi XML files."""
 
+import logging
 import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
+
+logger = logging.getLogger('archi2likec4')
 
 from .models import (
     NS,
@@ -14,6 +17,7 @@ from .models import (
     DomainInfo,
     RawRelationship,
     SolutionView,
+    TechElement,
 )
 from .utils import make_id
 
@@ -159,7 +163,7 @@ def parse_application_components(model_root: Path) -> list[AppComponent]:
         try:
             tree = ET.parse(xml_path)
         except ET.ParseError as e:
-            print(f'  WARN: Cannot parse {xml_path}: {e}')
+            logger.warning('Cannot parse %s: %s', xml_path, e)
             continue
         root = tree.getroot()
         name = root.get('name', '').strip()
@@ -203,7 +207,7 @@ def parse_application_interfaces(model_root: Path) -> list[AppInterface]:
             continue
         results.append(AppInterface(archi_id=archi_id, name=name, documentation=documentation))
     if parse_errors:
-        print(f'  WARN: {parse_errors} ApplicationInterface XML file(s) could not be parsed')
+        logger.warning('%d ApplicationInterface XML file(s) could not be parsed', parse_errors)
     return results
 
 
@@ -230,7 +234,7 @@ def parse_data_objects(model_root: Path) -> list[DataObject]:
             continue
         results.append(DataObject(archi_id=archi_id, name=name, documentation=documentation))
     if parse_errors:
-        print(f'  WARN: {parse_errors} DataObject XML file(s) could not be parsed')
+        logger.warning('%d DataObject XML file(s) could not be parsed', parse_errors)
     return results
 
 
@@ -263,7 +267,57 @@ def parse_application_functions(model_root: Path) -> list[AppFunction]:
             documentation=documentation, parent_archi_id=parent_id,
         ))
     if parse_errors:
-        print(f'  WARN: {parse_errors} ApplicationFunction XML file(s) could not be parsed')
+        logger.warning('%d ApplicationFunction XML file(s) could not be parsed', parse_errors)
+    return results
+
+
+_TECH_PREFIXES = (
+    'Node_', 'SystemSoftware_', 'Device_', 'TechnologyCollaboration_',
+    'TechnologyService_', 'Artifact_', 'CommunicationNetwork_', 'Path_',
+)
+
+
+def parse_technology_elements(model_root: Path) -> list[TechElement]:
+    """Parse Technology layer elements from technology/ directory."""
+    tech_dir = model_root / 'technology'
+    if not tech_dir.is_dir():
+        return []
+
+    results: list[TechElement] = []
+    parse_errors = 0
+    for xml_path in sorted(tech_dir.rglob('*.xml')):
+        if xml_path.name == 'folder.xml':
+            continue
+        if not any(xml_path.name.startswith(p) for p in _TECH_PREFIXES):
+            continue
+        if _is_in_trash(xml_path, tech_dir):
+            continue
+        try:
+            tree = ET.parse(xml_path)
+        except ET.ParseError:
+            parse_errors += 1
+            continue
+        root = tree.getroot()
+        name = root.get('name', '').strip()
+        archi_id = root.get('id', '')
+        documentation = root.get('documentation', '')
+        if not name:
+            continue
+
+        # Extract tech_type from XML tag: 'archimate:Node' → 'Node'
+        tag = root.tag
+        tech_type = tag.split('}')[-1] if '}' in tag else tag
+        tech_type = tech_type.replace('archimate:', '')
+        # Fallback: extract from filename prefix
+        if not tech_type or tech_type == root.tag:
+            tech_type = xml_path.name.split('_', 1)[0]
+
+        results.append(TechElement(
+            archi_id=archi_id, name=name,
+            tech_type=tech_type, documentation=documentation,
+        ))
+    if parse_errors:
+        logger.warning('%d technology XML file(s) could not be parsed', parse_errors)
     return results
 
 
@@ -278,10 +332,16 @@ def parse_relationships(model_root: Path) -> list[RawRelationship]:
         'RealizationRelationship', 'ServingRelationship',
         'AccessRelationship', 'AssignmentRelationship',
         'TriggeringRelationship',
+        'AggregationRelationship',
     }
     relevant_element_types = {
+        # Application layer
         'archimate:ApplicationComponent', 'archimate:ApplicationInterface',
         'archimate:DataObject', 'archimate:ApplicationFunction',
+        # Technology layer
+        'archimate:Node', 'archimate:SystemSoftware', 'archimate:Device',
+        'archimate:TechnologyCollaboration', 'archimate:TechnologyService',
+        'archimate:Artifact', 'archimate:CommunicationNetwork', 'archimate:Path',
     }
 
     results: list[RawRelationship] = []
@@ -321,11 +381,14 @@ def parse_relationships(model_root: Path) -> list[RawRelationship]:
             target_id=target_id,
         ))
     if parse_errors:
-        print(f'  WARN: {parse_errors} relationship XML file(s) could not be parsed')
+        logger.warning('%d relationship XML file(s) could not be parsed', parse_errors)
     return results
 
 
-def parse_domain_mapping(model_root: Path) -> list[DomainInfo]:
+def parse_domain_mapping(
+    model_root: Path,
+    domain_renames: dict[str, tuple[str, str]] | None = None,
+) -> list[DomainInfo]:
     """Parse Archi view hierarchy to extract domain → AppComponent mapping.
 
     Scans diagrams/functional_areas/{domain}/ for ArchimateDiagramModel_*.xml
@@ -353,7 +416,7 @@ def parse_domain_mapping(model_root: Path) -> list[DomainInfo]:
             pass
 
     if not func_areas_dir:
-        print('  WARN: functional_areas folder not found in diagrams/')
+        logger.warning('functional_areas folder not found in diagrams/')
         return []
 
     domains: list[DomainInfo] = []
@@ -383,8 +446,9 @@ def parse_domain_mapping(model_root: Path) -> list[DomainInfo]:
             _extract_app_component_refs(tree.getroot(), archi_ids)
 
         # Apply domain renames
-        if domain_c4_id in DOMAIN_RENAMES:
-            new_id, new_name = DOMAIN_RENAMES[domain_c4_id]
+        renames = domain_renames if domain_renames is not None else DOMAIN_RENAMES
+        if domain_c4_id in renames:
+            new_id, new_name = renames[domain_c4_id]
             domain_c4_id = new_id
             domain_name = new_name
 
@@ -455,8 +519,8 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
             existing = results[seen_names[dedup_key]]
             existing.element_archi_ids.extend(element_ids)
             existing.relationship_archi_ids.extend(relationship_ids)
-            print(f'  WARN: Duplicate {view_type} diagram "{diagram_name}" — merged '
-                  f'{len(element_ids)} elements, {len(relationship_ids)} relationships')
+            logger.warning('Duplicate %s diagram "%s" — merged %d elements, %d relationships',
+                           view_type, diagram_name, len(element_ids), len(relationship_ids))
             continue
         seen_names[dedup_key] = len(results)
 
@@ -469,6 +533,6 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
         ))
 
     if parse_errors:
-        print(f'  WARN: {parse_errors} solution diagram XML file(s) could not be parsed')
+        logger.warning('%d solution diagram XML file(s) could not be parsed', parse_errors)
 
     return results

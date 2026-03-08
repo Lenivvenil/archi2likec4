@@ -1,7 +1,6 @@
 # Output (generated)
 output/
 output_backup/
-dist/
 
 # Build / packaging
 __pycache__/
@@ -10,6 +9,11 @@ __pycache__/
 *.egg-info/
 build/
 dist/
+
+# Testing / coverage
+htmlcov/
+.coverage
+.pytest_cache/
 
 # Federation cache
 .federation-cache/

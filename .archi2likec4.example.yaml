@@ -1,0 +1,81 @@
+# archi2likec4 configuration
+# Copy to .archi2likec4.yaml and customise for your landscape.
+#
+# Every key is optional — unset keys fall back to built-in defaults
+# from archi2likec4/models.py.
+
+# ── Subsystem promotion ───────────────────────────────────────────────
+# Parents whose dot-children should become standalone systems.
+# Format: parent_name: fallback_domain
+promote_children:
+  EFS: channels
+  EFS_PLT: customer_service
+
+# Warn about parents with >= this many subsystems not listed above
+promote_warn_threshold: 10
+
+# ── Domain rebranding ─────────────────────────────────────────────────
+# Rename domains discovered from functional_areas views.
+# Format: old_c4_id: [new_c4_id, "Display Name"]
+domain_renames:
+  banking_operations: [products, "Products"]
+  customer_service_management: [customer_service, "Customer Service"]
+
+# ── Extra domain patterns ────────────────────────────────────────────
+# Systems not on any functional_areas view are assigned to a domain
+# by substring-matching their name against these patterns.
+extra_domain_patterns:
+  - c4_id: external_exchange
+    name: "External Exchange"
+    patterns:
+      - ASBT
+      - EBP
+      - EGOV
+      - Korona
+      - MasterCard
+      - Ria
+      - VisaDirect
+      - Ofd
+      - GrossInsurance
+      - WingsInsurance
+      - PaymentHub
+      - Compensation
+  - c4_id: platform
+    name: Platform
+    patterns:
+      - ELK
+      - Grafana
+      - HA Proxy
+      - Hadoop
+      - IBM ESB
+      - IBM MQ
+      - Kubernetes
+      - Mongo DB
+      - Oracle
+      - Postgres
+      - Prometheus
+      - Rabbit MQ
+      - SFTP
+      - SMS gateway
+      - SMTP Server
+      - Stage DB
+      - WAF
+      - Zabix
+      - Zipkin
+      - Confluence
+      - Jira
+      - Jasper Server
+      - API Mngt
+
+# ── Quality gates ─────────────────────────────────────────────────────
+quality_gates:
+  # Fail if more than this fraction of solution-view elements is unresolved
+  max_unresolved_ratio: 0.5
+  # Warn if orphan function count exceeds threshold
+  max_orphan_functions_warn: 5
+  # Warn if unassigned-domain system count exceeds threshold
+  max_unassigned_systems_warn: 20
+
+# ── Behaviour flags ───────────────────────────────────────────────────
+# Treat quality-gate warnings as errors (exit 1)
+strict: false

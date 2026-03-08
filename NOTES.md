@@ -612,3 +612,461 @@ functions) маршрутизировались на одного произво
 - 289 систем, 94 подсистемы, 456 интеграций, 245 data access links
 - 2 orphan-функции (honest: promoted parent), 6 skipped интеграций
 - 21% unresolved в solution views (753/3557) — ниже порога 50%
+
+---
+
+## Итерация 10: Продуктовая готовность (12 из 15 findings)
+
+Ревью выявило 15 findings (5 P1, 7 P2, 3 P3) с вердиктом «NO-GO for broad industrial use».
+Адресовано 12 findings, отложено 3 (P1-2 honest orphans — spike, P2-3/P2-4 тесты — инкрементально).
+
+### P1-1: Внешняя конфигурация
+
+Создан модуль `archi2likec4/config.py` с `ConvertConfig` dataclass. Все захардкоженные
+значения (PROMOTE_CHILDREN, DOMAIN_RENAMES, EXTRA_DOMAIN_PATTERNS, quality gate thresholds)
+теперь конфигурируемы через `.archi2likec4.yaml`. При отсутствии конфига используются
+дефолты из `models.py`.
+
+Пример: `.archi2likec4.example.yaml` — документированный шаблон конфигурации.
+
+### P1-3: Quality gates
+
+Добавлены 3 quality gate в фазу `_validate()`:
+1. Unresolved solution views (configurable `max_unresolved_ratio`, default 0.5)
+2. Orphan functions (warning at `max_orphan_functions_warn`, default 5)
+3. Unassigned systems (warning at `max_unassigned_systems_warn`, default 20)
+
+`--strict` превращает warnings в errors. `--dry-run` валидирует без генерации файлов.
+
+### P1-4: Federation reproducibility
+
+Добавлено поле `sha` в registry template и `federate_template.py`. Если `sha` указан,
+скрипт checkout-ит конкретный коммит вместо HEAD ветки.
+
+### P1-5: Packaging
+
+`pyproject.toml` дополнен: license (MIT), authors, keywords, classifiers,
+`[project.optional-dependencies]` (federation, dev), `[build-system]`,
+`[tool.pytest.ini_options]`, `[tool.setuptools.packages.find]`.
+
+### P2-1: Рефакторинг pipeline
+
+`main()` разбит на 4 фазы:
+- `_parse()` → ParseResult (NamedTuple)
+- `_build()` → BuildResult (NamedTuple)
+- `_validate()` → (warnings, errors, sv_files, ...)
+- `_generate()` → файлы на диск
+
+### P2-2: Federation standalone
+
+`federate.py` вынесен из строкового шаблона в реальный файл
+`archi2likec4/scripts/federate_template.py`. `federation.py` читает его через
+`importlib.resources`. Скрипт тестируем, линтуем, виден IDE.
+
+### P2-5, P2-6: CLI
+
+Добавлены флаги: `--config`, `--strict`, `--verbose`, `--dry-run`.
+`main()` обёрнут в try/except с graceful error messages.
+
+### P2-7: Governance
+
+Добавлены `LICENSE` (MIT) и `CONTRIBUTING.md`.
+
+### P3-2: Logging
+
+Все `print()` заменены на `logging.getLogger('archi2likec4')`.
+Уровни: DEBUG (verbose), INFO (progress), WARNING (проблемы), ERROR (failures).
+`--verbose` переключает на DEBUG.
+
+### P3-3: .gitignore
+
+Удалён дубликат `dist/`, добавлены `htmlcov/`, `.coverage`, `.pytest_cache/`.
+
+### Изменения
+
+| Файл | Действие |
+|------|----------|
+| `archi2likec4/config.py` | Создан |
+| `archi2likec4/scripts/federate_template.py` | Создан |
+| `archi2likec4/scripts/__init__.py` | Создан |
+| `.archi2likec4.example.yaml` | Создан |
+| `LICENSE` | Создан |
+| `CONTRIBUTING.md` | Создан |
+| `tests/test_config.py` | Создан |
+| `archi2likec4/pipeline.py` | Рефакторинг (4 фазы + CLI + logging) |
+| `archi2likec4/builders.py` | Logging + promote_warn_threshold параметр |
+| `archi2likec4/parsers.py` | Logging + domain_renames параметр |
+| `archi2likec4/generators.py` | Logging |
+| `archi2likec4/federation.py` | Standalone script + SHA field |
+| `pyproject.toml` | Metadata + deps + build-system |
+| `.gitignore` | Fix duplicates |
+| `tests/test_builders.py` | capsys → caplog |
+
+### Статистика
+
+- 142 теста (+17 новых: test_config ×16, caplog fix ×1), 0 failures
+- 289 систем, 94 подсистемы, 456 интеграций, 245 data access links
+- Конвертер: идентичный output при дефолтах
+- CLI: --help, --dry-run, --strict, --verbose, --config работают
+
+---
+
+## Итерация 11: Bug fixes & wiring (6 findings)
+
+Ревьюер проверил итерацию 10. 142 теста зелёные, но 6 новых findings: 2 P1, 3 P2, 1 P3.
+
+### P1: extra_domain_patterns не передавался в assign_domains()
+
+`assign_domains()` вызывался без `config.extra_domain_patterns` — третий проход
+всегда использовал захардкоженный `EXTRA_DOMAIN_PATTERNS` из `models.py`.
+
+**Фикс**: добавлен параметр `extra_domain_patterns` в `assign_domains()` (builders.py),
+передача из `_build()` в pipeline.py. Если параметр None — fallback на EXTRA_DOMAIN_PATTERNS.
+
+### P1: load_config() вне try/except
+
+`load_config()` вызывался ДО try/except блока в `main()`. Malformed YAML давал
+raw traceback вместо graceful error.
+
+**Фикс**: перемещён внутрь try/except. Добавлен fallback `logging.basicConfig()` до
+try-блока. Verbose пере-конфигурируется после load.
+
+### P2: Явный --config с несуществующим путём молча игнорировался
+
+`load_config()` проверял `config_path.exists()`, но не различал явно указанный путь
+и auto-detect. Несуществующий `--config /no/such/file` тихо возвращал дефолты.
+
+**Фикс**: добавлен `explicit = config_path is not None`. Для explicit пути — `FileNotFoundError`.
+Для auto-detect — тихий fallback на дефолты (как раньше).
+
+### P2: domain_renames не валидировался
+
+`tuple(v)` на строке молча создавал кортеж из символов: `tuple("abc") → ('a','b','c')`.
+
+**Фикс**: проверка `isinstance(v, (list, tuple)) and len(v) == 2`, иначе `ValueError`.
+
+### P2: __version__ = 0.5.0, pyproject.toml = 0.6.0
+
+**Фикс**: `__init__.__version__` обновлён до `'0.6.0'`.
+
+### P3: README не упоминал --config и PyYAML
+
+**Фикс**: обновлена секция «Требования» — PyYAML для `--config` и `scripts/federate.py`.
+
+### Изменения
+
+| Файл | Действие |
+|------|----------|
+| `builders.py` | +`extra_domain_patterns` параметр в `assign_domains()` |
+| `pipeline.py` | Передача параметра + restructure try/except |
+| `config.py` | Explicit path error + domain_renames validation |
+| `__init__.py` | Version sync 0.6.0 |
+| `README.md` | Обновлены требования |
+| `tests/test_config.py` | +3 теста (explicit path, invalid renames ×2) |
+| `tests/test_builders.py` | +2 теста (custom/empty extra_domain_patterns) |
+
+### Статистика
+
+- 147 тестов (+5), 0 failures
+- Конвертер: идентичный output
+
+---
+
+## Итерация 12: Packaging, config validation, UX (4 findings)
+
+### P1: build-backend ломал сборку wheel
+
+`build-backend = "setuptools.backends._legacy:_Backend"` — несуществующий модуль.
+`pip wheel .` падал.
+
+**Фикс**: заменён на стандартный `"setuptools.build_meta"`. Wheel собирается: `archi2likec4-0.6.0-py3-none-any.whl`.
+
+### P2: YAML корень-список давал непонятную ошибку
+
+Если `.archi2likec4.yaml` содержит список на корневом уровне, `_apply_yaml()` падал
+с `'list' object has no attribute 'get'`.
+
+**Фикс**: type guard в `load_config()`: `if not isinstance(data, dict): raise ValueError(...)`.
+
+### P3: Config not found и model not found — одинаковое сообщение
+
+Обе ошибки ловились одним `except FileNotFoundError` с текстом `"Input not found"`.
+
+**Фикс**: `load_config()` вынесен в отдельный try/except:
+- Config error → `"Configuration error: Config file not found: ..."`
+- Model error → `"Input not found: ..."`
+
+### P3: README не документировал CLI-флаги
+
+**Фикс**: добавлена таблица CLI-флагов (`--config`, `--strict`, `--verbose`, `--dry-run`)
+с примером использования.
+
+### Изменения
+
+| Файл | Действие |
+|------|----------|
+| `pyproject.toml` | build-backend → `setuptools.build_meta` |
+| `config.py` | YAML root type guard |
+| `pipeline.py` | Раздельная обработка config vs input errors |
+| `README.md` | Документация CLI-флагов |
+| `tests/test_config.py` | +1 тест (YAML root list) |
+
+### Статистика
+
+- 148 тестов (+1), 0 failures
+- `pip wheel .` → OK
+- Конвертер: идентичный output
+
+---
+
+## Инвентаризация coArchi-модели
+
+### Масштаб входного репозитория
+
+**Всего:** 11,315 XML-файлов в `architectural_repository/model/`
+
+| Директория | Файлов | % | Описание |
+|------------|--------|---|----------|
+| `relations/` | 7,282 | 64.4% | Все типы relationships |
+| `application/` | 3,043 | 26.9% | Application layer elements |
+| `technology/` | 435 | 3.8% | Technology/infrastructure |
+| `diagrams/` | 253 | 2.2% | 125 ArchimateDiagramModel + folders |
+| `business/` | 162 | 1.4% | Business layer |
+| `strategy/` | 113 | 1.0% | Capabilities + ValueStreams |
+| `other/` | 24 | 0.2% | Grouping, Junction, Location |
+| `motivation/` | 1 | 0% | Пустой (только folder.xml) |
+| `implementation_migration/` | 1 | 0% | Пустой (только folder.xml) |
+
+### Полная таблица элементов по типам
+
+#### Application Layer (3,043 файлов) — ПАРСИМ
+
+| ArchiMate тип | Кол-во | Парсим? | Выход |
+|---------------|--------|---------|-------|
+| ApplicationFunction | 1,708 | ✅ | → `appFunction` |
+| ApplicationComponent | 397 | ✅ | → `system` / `subsystem` |
+| DataObject | 309 | ✅ | → `dataEntity` |
+| ApplicationInterface | 216 | ✅ | → links + api_interfaces metadata |
+| ApplicationService | 19 | ❌ | Не парсим |
+| ApplicationInteraction | 5 | ❌ | Не парсим |
+| ApplicationEvent | 3 | ❌ | Не парсим |
+
+ApplicationService (19 шт) — потенциально полезны для связи с business layer.
+ApplicationInteraction и ApplicationEvent — микроскопические, можно игнорировать.
+
+#### Technology Layer (423 файла) — НЕ ПАРСИМ
+
+| ArchiMate тип | Кол-во | Потенциал LikeC4 |
+|---------------|--------|------------------|
+| **Node** | **205** | → `deploymentNode` (серверы, VM, K8s nodes) |
+| **SystemSoftware** | **83** | → `container` (PostgreSQL, Redis, Kafka) |
+| **TechnologyService** | 40 | → managed services |
+| **Device** | 31 | → hardware nodes |
+| **TechnologyCollaboration** | 30 | → clusters, load balancers |
+| **Artifact** | 24 | → WAR/JAR/Docker images |
+| **CommunicationNetwork** | 7 | → VPN, LAN, API Gateway |
+| **Path** | 3 | → network paths |
+
+Это **полная deployment-топология**: Node содержит SystemSoftware (через
+AggregationRelationship), ApplicationComponent реализуется на Node (через
+RealizationRelationship). 462 AggregationRelationship — скелет deployment.
+
+#### Business Layer (121 файл) — НЕ ПАРСИМ
+
+| ArchiMate тип | Кол-во | Потенциал LikeC4 |
+|---------------|--------|------------------|
+| BusinessService | 109 | Бизнес-сервис → связь «app реализует business service» |
+| BusinessActor | 7 | → `person` в LikeC4 |
+| BusinessInterface | 3 | Каналы обслуживания |
+| BusinessRole | 2 | Ролевая модель |
+
+Тонкий слой. 109 BusinessService могут дать трассировку «бизнес → приложение».
+7 BusinessActor → `person` элементы (пользователи, внешние системы-акторы).
+
+#### Strategy Layer (96 файлов) — НЕ ПАРСИМ
+
+| ArchiMate тип | Кол-во | Потенциал |
+|---------------|--------|-----------|
+| Capability | 57 | Бизнес-способности (имеют property `Domain`!) |
+| ValueStream | 39 | Value streams (5 готовых диаграмм в model) |
+
+Capability с property `Domain` — прямая связь с нашими доменами. Потенциально
+capability map → отдельный view type.
+
+#### Other (22 файла) — НЕ ПАРСИМ
+
+| ArchiMate тип | Кол-во | Потенциал |
+|---------------|--------|-----------|
+| Grouping | 18 | Логическая группировка в диаграммах |
+| Junction | 2 | OR/AND-соединители в flows |
+| Location | 2 | Физические локации (ЦОД) |
+
+Grouping может быть полезен для deployment views (зона DMZ, внутренний контур).
+Location — для geo-distributed deployment.
+
+#### Motivation (0 элементов) и Implementation/Migration (0 элементов)
+
+Слои пусты в модели. Нечего парсить.
+
+### Полная таблица relationships
+
+| Тип | Кол-во | Парсим? | Используем для |
+|-----|--------|---------|----------------|
+| FlowRelationship | 2,346 | ✅ | → integrations (system↔system) |
+| RealizationRelationship | 1,299 | ⚠️ частично | Structural parent only. **Cross-layer (App→Tech, App→Business) теряем** |
+| AssignmentRelationship | 1,083 | ⚠️ частично | Structural parent only. Cross-layer теряем |
+| CompositionRelationship | 1,023 | ✅ | → parent resolution (function→component) |
+| ServingRelationship | 491 | ✅ | → integrations |
+| **AggregationRelationship** | **462** | **❌** | **Node↔SystemSoftware topology — потеряна** |
+| AccessRelationship | 316 | ✅ | → data access (но accessType не извлекаем) |
+| **AssociationRelationship** | **161** | **❌** | **Потеряны (generic cross-layer links)** |
+| **SpecializationRelationship** | **72** | **❌** | **Потеряны (наследование DataObject)** |
+| TriggeringRelationship | 27 | ✅ | → integrations |
+
+**Главная потеря**: фильтр в `parsers.py` (`relevant_element_types`) требует оба конца
+relationship быть application-элементами. Все cross-layer связи отбрасываются:
+- App→Node (deployment) — ~200+ relationships
+- App→BusinessService (realization) — ~100+ relationships
+- Node→SystemSoftware (aggregation) — 462 relationships
+
+### Диаграммы: 125 штук, используем 54
+
+| Категория | Кол-во | Статус |
+|-----------|--------|--------|
+| functional_areas/ (domain views) | ~15 | ✅ → domain assignment |
+| functional_architecture.* | 21 | ✅ → solution views |
+| integration_architecture.* | 31 | ✅ → solution views |
+| **technology / deployment views** | **~30** | **❌ Игнорируем** |
+| **conceptual_architecture.*** | **12** | **❌ Игнорируем** |
+| **value_stream.*** | **5** | **❌ Игнорируем** |
+| **Прочие (проектные)** | **~11** | **❌ Игнорируем** |
+
+### Properties в модели
+
+16 уникальных ключей найдено по всему репозиторию:
+
+| Key | Кол-во | Парсим? | Элементы |
+|-----|--------|---------|----------|
+| Domain | 50 | ❌ | Capability, ApplicationComponent |
+| Target | 15 | ✅ | ApplicationComponent → `target_state` |
+| LC stage | 15 | ✅ | ApplicationComponent |
+| Full name | 15 | ✅ | ApplicationComponent |
+| Criticality | 15 | ✅ | ApplicationComponent |
+| placement | 14 | ✅ | ApplicationComponent |
+| IS-officer full name | 12 | ✅ | ApplicationComponent |
+| Dev team | 12 | ✅ | ApplicationComponent |
+| Business owner dep | 12 | ✅ | ApplicationComponent |
+| Architect full name | 12 | ✅ | ApplicationComponent |
+| External/Internal | 11 | ✅ | ApplicationComponent → `placement` |
+| CI | 4 | ✅ | ApplicationComponent |
+| Client | 1 | ❌ | Мусор |
+| method | 1 | ❌ | Не используем |
+| url | 1 | ❌ | Не используем |
+| external | 1 | ❌ | Мусор |
+
+**Ключевое**: `Domain` property есть на 50 Capability-элементах — прямой маппинг
+на наши домены, если когда-нибудь парсим Strategy layer.
+
+### Итог: что берём vs что теряем
+
+```
+Берём:        2,348 application-элементов (100% application layer)
+              5,286 relationships (72.6% от всех)
+                 54 диаграммы (43.2% от всех)
+
+Теряем:         662 элемента (Technology 423, Business 121, Strategy 96, Other 22)
+              1,996 relationships (AggregationRel 462, cross-layer ~840,
+                                   AssociationRel 161, SpecializationRel 72,
+                                   прочие cross-layer ~461)
+                 71 диаграмму (technology/deployment ~30, conceptual 12,
+                               value_stream 5, прочие 24)
+```
+
+**Capture rate:**
+- Элементы: 2,348 / 3,010 = **78%**
+- Relationships: 5,286 / 7,282 = **72.6%**
+- Диаграммы: 54 / 125 = **43.2%**
+
+---
+
+## Roadmap: Deployment-диаграммы (целевая итерация)
+
+### Почему deployment — приоритет v1.0
+
+1. **423 technology-элемента** — вторая по размеру часть модели после application
+2. **462 AggregationRelationship** — полная топология Node↔SystemSoftware
+3. **~30 deployment-диаграмм** — готовые views в модели, сейчас полностью теряются
+4. **Cross-layer App↔Tech** — ~200+ RealizationRelationship «приложение работает на ноде»
+5. LikeC4 нативно поддерживает `deploymentNode` — маппинг 1:1
+
+### Целевая архитектура
+
+```
+ArchiMate                          LikeC4
+─────────                          ──────
+Node                        →      deploymentNode
+  └─ SystemSoftware         →        container (внутри deploymentNode)
+     └─ Artifact            →          (metadata: docker_image, war_file)
+Device                      →      deploymentNode (shape: device)
+CommunicationNetwork        →      (relationship styling или group)
+TechnologyCollaboration     →      deploymentNode (cluster)
+TechnologyService           →      container или service
+
+AggregationRelationship     →      вложенность (Node содержит SystemSoftware)
+RealizationRelationship     →      «ApplicationComponent deployed on Node»
+  (cross-layer App→Tech)
+```
+
+### Новый output
+
+```
+output/
+  ...existing...
+  deployment/
+    {node_group}.c4           — deploymentNode с вложенными containers
+  views/
+    ...existing...
+    deployment/
+      {view_name}.c4          — deployment views из diagrams/technologies/
+```
+
+### Фазы реализации
+
+**Фаза 1: Парсинг Technology Layer**
+- `parse_technology_elements()` — Node, SystemSoftware, Device, Artifact,
+  TechnologyCollaboration, CommunicationNetwork, TechnologyService
+- Новые dataclasses: `TechNode`, `TechSoftware`, `TechArtifact`
+- Расширить `parse_relationships()`: убрать application-only фильтр,
+  добавить technology types в `relevant_element_types`
+
+**Фаза 2: AggregationRelationship → topology**
+- Добавить `AggregationRelationship` в `relevant_types`
+- `build_deployment_topology()` — Node содержит SystemSoftware (через Aggregation)
+- Группировка: Grouping/Location → deployment zones (DMZ, internal)
+
+**Фаза 3: Cross-layer wiring**
+- RealizationRelationship App→Tech: «система X deployed on node Y»
+- Связь deployment topology с application model
+- `build_deployment_map()`: system_c4_id → [node_c4_ids]
+
+**Фаза 4: Генерация deployment .c4**
+- `generate_deployment_c4()` — файлы `deployment/{group}.c4`
+- `generate_deployment_view()` — views из `diagrams/technologies/`
+- Обновить `specification.c4` — новые element kinds
+
+**Фаза 5: Диаграммы**
+- `parse_deployment_views()` — парсинг ~30 technology-диаграмм
+- Маппинг: element archi_ids → deployment c4_paths
+- Решить: один flat deployment view или per-domain deployment views?
+
+### Открытые вопросы
+
+1. **Группировка нод**: по чему группировать deploymentNode? По Location (ЦОД)?
+   По CommunicationNetwork (сеть)? По Grouping (зона)? По домену приложения?
+2. **Глубина**: LikeC4 `deploymentNode` поддерживает вложенность — сколько уровней?
+   `ЦОД → Кластер → Node → Container` или плоский список?
+3. **App↔Deployment view**: отдельный view type или расширение существующих domain views?
+4. **Naming**: Node-имена в модели часто технические (`postgresql`, `k8s-worker-01`).
+   Нужна ли человекочитаемая нормализация?
+5. **Масштаб fan-out**: если 1 Node обслуживает 50 ApplicationComponent — как отобразить
+   без визуального шума?
