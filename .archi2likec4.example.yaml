@@ -76,6 +76,13 @@ quality_gates:
   # Warn if unassigned-domain system count exceeds threshold
   max_unassigned_systems_warn: 20
 
+# ── Audit suppress-list ──────────────────────────────────────────────
+# Systems to exclude from AUDIT.md (accepted risks).
+# Listed systems will not appear in any QA incident table.
+# audit_suppress:
+#   - LegacySystem
+#   - DeprecatedApp
+
 # ── Behaviour flags ───────────────────────────────────────────────────
 # Treat quality-gate warnings as errors (exit 1)
 strict: false

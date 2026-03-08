@@ -395,9 +395,11 @@ class TestGenerateDeploymentView:
 
 class _MockConfig:
     """Minimal config mock for audit tests."""
-    def __init__(self, promote_children=None, promote_warn_threshold=10):
+    def __init__(self, promote_children=None, promote_warn_threshold=10,
+                 audit_suppress=None):
         self.promote_children = promote_children or {}
         self.promote_warn_threshold = promote_warn_threshold
+        self.audit_suppress = audit_suppress or []
 
 
 class _MockBuilt:
@@ -431,7 +433,7 @@ class TestGenerateAuditMd:
             domain_systems={'unassigned': [s1], 'channels': [s2]},
         )
         result = generate_audit_md(built, 0, 0, _MockConfig())
-        assert 'Системы без домена (1)' in result
+        assert '[Critical] Системы без домена (1)' in result
         assert '| 1 | AD |' in result
 
     def test_metadata_completeness(self):
@@ -444,7 +446,7 @@ class TestGenerateAuditMd:
         s_bad = System(c4_id='b', name='B', archi_id='s2', metadata=dict(meta_empty), domain='d')
         built = _MockBuilt(systems=[s_good, s_bad])
         result = generate_audit_md(built, 0, 0, _MockConfig())
-        assert 'Незаполненные карточки' in result
+        assert '[High] Незаполненные карточки' in result
         assert '| 1 | B |' in result
 
     def test_to_review_listed(self):
@@ -455,7 +457,7 @@ class TestGenerateAuditMd:
             domain_systems={'unassigned': [s]},
         )
         result = generate_audit_md(built, 0, 0, _MockConfig())
-        assert 'Системы на разборе (1)' in result
+        assert '[High] Системы на разборе (1)' in result
         assert 'ReviewMe' in result
 
     def test_promote_candidates(self):
@@ -465,7 +467,7 @@ class TestGenerateAuditMd:
                    metadata={}, subsystems=subs, domain='d')
         built = _MockBuilt(systems=[s])
         result = generate_audit_md(built, 0, 0, _MockConfig(promote_warn_threshold=10))
-        assert 'Кандидаты на декомпозицию (1)' in result
+        assert '[Medium] Кандидаты на декомпозицию (1)' in result
         assert 'BigParent' in result
         assert '| 1 | BigParent | 12 |' in result
 
@@ -486,16 +488,47 @@ class TestGenerateAuditMd:
         s = System(c4_id='efs', name='EFS', archi_id='s1', metadata={}, domain='channels')
         built = _MockBuilt(systems=[s], deployment_map=[])
         result = generate_audit_md(built, 0, 0, _MockConfig())
-        assert 'инфраструктурной привязки' in result
+        assert '[Medium] Системы без инфраструктурной привязки' in result
         assert 'EFS' in result
 
     def test_orphan_fns_shown(self):
         built = _MockBuilt(orphan_fns=3)
         result = generate_audit_md(built, 0, 0, _MockConfig())
-        assert 'Осиротевшие функции (3)' in result
+        assert '[Low] Осиротевшие функции (3)' in result
 
     def test_solution_view_coverage(self):
         built = _MockBuilt()
         result = generate_audit_md(built, 100, 500, _MockConfig())
-        assert 'Покрытие solution views (80%)' in result
+        assert '[High] Покрытие solution views (80%)' in result
         assert '100 из 500' in result
+
+    def test_suppress_excludes_from_unassigned(self):
+        s1 = System(c4_id='ad', name='AD', archi_id='s1', metadata={}, domain='unassigned')
+        s2 = System(c4_id='legacy', name='Legacy', archi_id='s2', metadata={}, domain='unassigned')
+        built = _MockBuilt(
+            systems=[s1, s2],
+            domain_systems={'unassigned': [s1, s2]},
+        )
+        result = generate_audit_md(built, 0, 0, _MockConfig(audit_suppress=['Legacy']))
+        assert '[Critical] Системы без домена (1)' in result
+        assert 'AD' in result
+        assert 'Legacy' not in result.split('Сводка')[1]  # not in incident tables
+
+    def test_suppress_hides_section_when_all_suppressed(self):
+        s = System(c4_id='ad', name='AD', archi_id='s1', metadata={}, domain='unassigned')
+        built = _MockBuilt(
+            systems=[s],
+            domain_systems={'unassigned': [s]},
+        )
+        result = generate_audit_md(built, 0, 0, _MockConfig(audit_suppress=['AD']))
+        assert 'Системы без домена' not in result
+
+    def test_suppress_footer_count(self):
+        s = System(c4_id='ad', name='AD', archi_id='s1', metadata={}, domain='unassigned')
+        built = _MockBuilt(
+            systems=[s],
+            domain_systems={'unassigned': [s]},
+        )
+        result = generate_audit_md(built, 0, 0, _MockConfig(audit_suppress=['AD']))
+        assert 'audit_suppress' in result
+        assert '1 элементов' in result

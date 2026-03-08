@@ -117,6 +117,15 @@ class TestApplyYaml:
         _apply_yaml(config, {'strict': True})
         assert config.strict is True
 
+    def test_audit_suppress_override(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'audit_suppress': ['SystemA', 'SystemB']})
+        assert config.audit_suppress == ['SystemA', 'SystemB']
+
+    def test_audit_suppress_default_empty(self):
+        config = ConvertConfig()
+        assert config.audit_suppress == []
+
     def test_unrecognized_keys_ignored(self):
         config = ConvertConfig()
         _apply_yaml(config, {'unknown_key': 42, 'another': 'value'})

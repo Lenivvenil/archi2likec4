@@ -743,9 +743,13 @@ def generate_audit_md(
         all_sys.append(s)
         all_sys.extend(s.subsystems)
 
+    # Suppress-list: system names accepted as risks, excluded from tables
+    suppress: set[str] = set(getattr(config, 'audit_suppress', []))
+
     total_sys = len(systems)
     sections: list[str] = []
     qa_num = 0
+    suppressed_total = 0
 
     # ── Header ────────────────────────────────────────────────────────
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
@@ -787,16 +791,18 @@ def generate_audit_md(
     )
 
     # ── QA-1: Unassigned systems ──────────────────────────────────────
-    if unassigned_count > 0:
+    filtered_unassigned = [s for s in unassigned if s.name not in suppress]
+    suppressed_total += unassigned_count - len(filtered_unassigned)
+    if filtered_unassigned:
         qa_num += 1
         rows = []
-        for i, s in enumerate(sorted(unassigned, key=lambda x: x.name), 1):
+        for i, s in enumerate(sorted(filtered_unassigned, key=lambda x: x.name), 1):
             tags = ', '.join(s.tags) if s.tags else ''
             rows.append(f'| {i} | {s.name} | {tags} |')
         table = '\n'.join(rows)
         sections.append(
-            f'## QA-{qa_num}. Системы без домена ({unassigned_count})\n\n'
-            f'**Проблема:** {unassigned_count} систем не размещены ни на одной диаграмме '
+            f'## QA-{qa_num}. [Critical] Системы без домена ({len(filtered_unassigned)})\n\n'
+            f'**Проблема:** {len(filtered_unassigned)} систем не размещены ни на одной диаграмме '
             'в `functional_areas/`. Конвертер помещает их в домен «unassigned».\n\n'
             '**Влияние:** Системы не отображаются в доменных views, невозможно '
             'понять их бизнес-принадлежность.\n\n'
@@ -819,6 +825,8 @@ def generate_audit_md(
     # Systems with most TBD fields
     sys_tbd: list[tuple[str, str, int]] = []
     for s in all_sys:
+        if s.name in suppress:
+            continue
         tbd_count = sum(1 for key in meta_check_keys if s.metadata.get(key, 'TBD') == 'TBD')
         if tbd_count > 0:
             domain = s.domain if hasattr(s, 'domain') and s.domain else ''
@@ -843,7 +851,7 @@ def generate_audit_md(
         top_table = '\n'.join(top_rows)
 
         sections.append(
-            f'## QA-{qa_num}. Незаполненные карточки систем\n\n'
+            f'## QA-{qa_num}. [High] Незаполненные карточки систем\n\n'
             f'**Проблема:** {all_tbd_count} из {len(all_sys)} систем/подсистем не имеют '
             'ни одного заполненного свойства (CI, Criticality, LC stage и др.).\n\n'
             '**Влияние:** Метаданные в архитектурном портале отображаются как '
@@ -863,7 +871,7 @@ def generate_audit_md(
         )
 
     # ── QA-3: To-review systems ───────────────────────────────────────
-    to_review = [s for s in systems if 'to_review' in s.tags]
+    to_review = [s for s in systems if 'to_review' in s.tags and s.name not in suppress]
     if to_review:
         qa_num += 1
         rows = []
@@ -872,7 +880,7 @@ def generate_audit_md(
             rows.append(f'| {i} | {s.name} | {domain} |')
         table = '\n'.join(rows)
         sections.append(
-            f'## QA-{qa_num}. Системы на разборе ({len(to_review)})\n\n'
+            f'## QA-{qa_num}. [High] Системы на разборе ({len(to_review)})\n\n'
             '**Проблема:** Эти системы находятся в папке `!РАЗБОР` — '
             'их статус в модели не определён.\n\n'
             '**Влияние:** Системы помечены тегом `#to_review` и требуют '
@@ -893,6 +901,7 @@ def generate_audit_md(
         (s.name, len(s.subsystems))
         for s in systems
         if len(s.subsystems) >= promote_threshold and s.name not in already_promoted
+        and s.name not in suppress
     ]
     candidates.sort(key=lambda x: (-x[1], x[0]))
     if candidates:
@@ -902,7 +911,7 @@ def generate_audit_md(
             rows.append(f'| {i} | {name} | {cnt} |')
         table = '\n'.join(rows)
         sections.append(
-            f'## QA-{qa_num}. Кандидаты на декомпозицию ({len(candidates)})\n\n'
+            f'## QA-{qa_num}. [Medium] Кандидаты на декомпозицию ({len(candidates)})\n\n'
             f'**Проблема:** {len(candidates)} систем имеют ≥{promote_threshold} '
             'подсистем — вероятно, их дочерние компоненты являются самостоятельными '
             'микросервисами.\n\n'
@@ -918,7 +927,7 @@ def generate_audit_md(
         )
 
     # ── QA-5: No documentation ────────────────────────────────────────
-    no_docs = [s for s in systems if not s.documentation]
+    no_docs = [s for s in systems if not s.documentation and s.name not in suppress]
     if no_docs:
         qa_num += 1
         show = sorted(no_docs, key=lambda x: x.name)[:30]
@@ -929,7 +938,7 @@ def generate_audit_md(
         table = '\n'.join(rows)
         suffix = f' (показаны первые 30 из {len(no_docs)})' if len(no_docs) > 30 else ''
         sections.append(
-            f'## QA-{qa_num}. Системы без документации ({len(no_docs)})\n\n'
+            f'## QA-{qa_num}. [Medium] Системы без документации ({len(no_docs)})\n\n'
             '**Проблема:** Эти системы не имеют описания в поле `documentation`.\n\n'
             '**Влияние:** В архитектурном портале отсутствует описание назначения '
             'системы — затруднено понимание её роли.\n\n'
@@ -946,7 +955,7 @@ def generate_audit_md(
     if orphan_fns > 0:
         qa_num += 1
         sections.append(
-            f'## QA-{qa_num}. Осиротевшие функции ({orphan_fns})\n\n'
+            f'## QA-{qa_num}. [Low] Осиротевшие функции ({orphan_fns})\n\n'
             f'**Проблема:** {orphan_fns} ApplicationFunction не имеют привязки '
             'к родительскому ApplicationComponent.\n\n'
             '**Влияние:** Функции не отображаются ни в одной системе — '
@@ -968,7 +977,7 @@ def generate_audit_md(
         qa_num += 1
         pct = round(skipped_intg / total_flow_rels * 100) if total_flow_rels else 0
         sections.append(
-            f'## QA-{qa_num}. Потерянные интеграции ({skipped_intg})\n\n'
+            f'## QA-{qa_num}. [Critical] Потерянные интеграции ({skipped_intg})\n\n'
             f'**Проблема:** {skipped_intg} из {total_flow_rels} интеграционных связей '
             f'({pct}%) не удалось разрешить — один или оба endpoint не найдены в модели.\n\n'
             '**Влияние:** Часть интеграций между системами не отображается — '
@@ -985,7 +994,7 @@ def generate_audit_md(
         sv_resolved = sv_total - sv_unresolved
         sv_pct = round(sv_resolved / sv_total * 100)
         sections.append(
-            f'## QA-{qa_num}. Покрытие solution views ({sv_pct}%)\n\n'
+            f'## QA-{qa_num}. [High] Покрытие solution views ({sv_pct}%)\n\n'
             f'**Проблема:** {sv_unresolved} из {sv_total} элементов на solution-диаграммах '
             f'не удалось сопоставить с C4-моделью (разрешено {sv_resolved}, '
             f'не разрешено {sv_unresolved}).\n\n'
@@ -1002,7 +1011,8 @@ def generate_audit_md(
 
     # ── QA-9: No infrastructure mapping ───────────────────────────────
     unmapped = [s for s in systems if f'{s.domain}.{s.c4_id}' not in mapped_sys_paths
-                and s.domain and s.domain != 'unassigned']
+                and s.domain and s.domain != 'unassigned'
+                and s.name not in suppress]
     if unmapped:
         qa_num += 1
         show = sorted(unmapped, key=lambda x: x.name)[:30]
@@ -1012,7 +1022,7 @@ def generate_audit_md(
         table = '\n'.join(rows)
         suffix = f' (показаны первые 30 из {len(unmapped)})' if len(unmapped) > 30 else ''
         sections.append(
-            f'## QA-{qa_num}. Системы без инфраструктурной привязки ({len(unmapped)})\n\n'
+            f'## QA-{qa_num}. [Medium] Системы без инфраструктурной привязки ({len(unmapped)})\n\n'
             f'**Проблема:** {len(unmapped)} систем не имеют связи с инфраструктурными '
             'нодами (Node, SystemSoftware).\n\n'
             '**Влияние:** На deployment view не видно, где развёрнуты эти системы.\n\n'
@@ -1027,13 +1037,16 @@ def generate_audit_md(
         )
 
     # ── Assemble ──────────────────────────────────────────────────────
+    suppress_note = (f' Исключено из отчёта (audit_suppress): {suppressed_total} элементов.'
+                     if suppressed_total else '')
     if not sections:
         return (
             header + '\n'
             + summary + '\n'
-            + 'Инцидентов качества не обнаружено.\n'
+            + f'Инцидентов качества не обнаружено.{suppress_note}\n'
         )
 
     body = '\n---\n\n'.join(sections)
-    footer = f'\n---\n\n*Всего инцидентов: {qa_num}. Сгенерировано archi2likec4 v{__version__}.*\n'
+    footer = (f'\n---\n\n*Всего инцидентов: {qa_num}.{suppress_note} '
+              f'Сгенерировано archi2likec4 v{__version__}.*\n')
     return header + '\n' + summary + '\n---\n\n' + body + footer

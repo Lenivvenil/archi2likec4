@@ -35,6 +35,9 @@ class ConvertConfig:
     max_orphan_functions_warn: int = 5
     max_unassigned_systems_warn: int = 20
 
+    # Audit suppress-list: system names to exclude from AUDIT.md (accepted risks)
+    audit_suppress: list[str] = field(default_factory=list)
+
     # CLI flags
     strict: bool = False
     verbose: bool = False
@@ -117,6 +120,9 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             config.max_orphan_functions_warn = int(gates['max_orphan_functions_warn'])
         if 'max_unassigned_systems_warn' in gates:
             config.max_unassigned_systems_warn = int(gates['max_unassigned_systems_warn'])
+
+    if 'audit_suppress' in data and isinstance(data['audit_suppress'], list):
+        config.audit_suppress = [str(s) for s in data['audit_suppress']]
 
     if 'strict' in data:
         val = data['strict']
