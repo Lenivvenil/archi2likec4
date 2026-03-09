@@ -25,6 +25,7 @@ from .utils import make_id
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 def _detect_special_folder(xml_path: Path) -> str:
+    """Walk up from *xml_path* looking for a folder whose name starts with '!'."""
     current = xml_path.parent
     model_root = None
     for parent in xml_path.parents:
@@ -51,6 +52,7 @@ def _detect_special_folder(xml_path: Path) -> str:
 
 
 def _is_in_trash(xml_path: Path, base_dir: Path) -> bool:
+    """Return True if *xml_path* is inside a folder named 'trash'."""
     current = xml_path.parent
     while current != base_dir:
         folder_xml = current / 'folder.xml'
@@ -85,7 +87,7 @@ def _find_parent_component(xml_path: Path, app_dir: Path) -> str:
                 if archi_id:
                     return archi_id
             except ET.ParseError:
-                pass
+                logger.debug('Skipping malformed XML: %s', ac_xmls[0])
         elif len(ac_xmls) > 1:
             # Multiple components: try to match by folder name
             folder_xml = current / 'folder.xml'
@@ -95,7 +97,7 @@ def _find_parent_component(xml_path: Path, app_dir: Path) -> str:
                     ft = ET.parse(folder_xml)
                     folder_name = ft.getroot().get('name', '').strip().lower()
                 except ET.ParseError:
-                    pass
+                    logger.debug('Skipping malformed folder.xml: %s', folder_xml)
             if folder_name:
                 for ac_xml in ac_xmls:
                     try:
@@ -106,13 +108,14 @@ def _find_parent_component(xml_path: Path, app_dir: Path) -> str:
                         if ac_name == folder_name and archi_id:
                             return archi_id
                     except ET.ParseError:
-                        pass
+                        logger.debug('Skipping malformed XML: %s', ac_xml)
             # Still ambiguous — skip and walk up
         current = current.parent
     return ''
 
 
 def _extract_ref_id(href: str) -> str:
+    """Extract the fragment (archi_id) from an href like 'file.xml#id-xxx'."""
     if '#' in href:
         return href.split('#', 1)[1]
     return ''
@@ -416,7 +419,7 @@ def parse_domain_mapping(
                 func_areas_dir = child
                 break
         except ET.ParseError:
-            pass
+            logger.debug('Skipping malformed folder.xml: %s', folder_xml)
 
     if not func_areas_dir:
         logger.warning('functional_areas folder not found in diagrams/')
@@ -433,6 +436,7 @@ def parse_domain_mapping(
             tree = ET.parse(folder_xml)
             domain_name = tree.getroot().get('name', '').strip()
         except ET.ParseError:
+            logger.debug('Skipping malformed folder.xml: %s', folder_xml)
             continue
         if not domain_name:
             continue
@@ -445,6 +449,7 @@ def parse_domain_mapping(
             try:
                 tree = ET.parse(view_xml)
             except ET.ParseError:
+                logger.debug('Skipping malformed diagram XML: %s', view_xml)
                 continue
             _extract_app_component_refs(tree.getroot(), archi_ids)
 
@@ -477,6 +482,7 @@ def parse_location_elements(model_root: Path) -> list[TechElement]:
         try:
             tree = ET.parse(xml_path)
         except ET.ParseError:
+            logger.debug('Skipping malformed Location XML: %s', xml_path)
             continue
         root = tree.getroot()
         name = root.get('name', '').strip()
@@ -512,6 +518,7 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
 
     results: list[SolutionView] = []
     seen_names: dict[str, int] = {}  # dedup_key → index in results
+    seen_slugs: set[str] = set()  # track used slugs for collision avoidance
     parse_errors = 0
 
     for xml_path in sorted(diagrams_dir.rglob('ArchimateDiagramModel_*.xml')):
@@ -552,17 +559,29 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
         dedup_key = f'{view_type}:{solution_name}'
         if dedup_key in seen_names:
             existing = results[seen_names[dedup_key]]
-            existing.element_archi_ids.extend(element_ids)
-            existing.relationship_archi_ids.extend(relationship_ids)
-            logger.warning('Duplicate %s diagram "%s" — merged %d elements, %d relationships',
-                           view_type, diagram_name, len(element_ids), len(relationship_ids))
+            existing_elem_set = set(existing.element_archi_ids)
+            existing_rel_set = set(existing.relationship_archi_ids)
+            new_elems = [e for e in element_ids if e not in existing_elem_set]
+            new_rels = [r for r in relationship_ids if r not in existing_rel_set]
+            existing.element_archi_ids.extend(new_elems)
+            existing.relationship_archi_ids.extend(new_rels)
+            logger.warning('Duplicate %s diagram "%s" — merged %d new elements, %d new relationships',
+                           view_type, diagram_name, len(new_elems), len(new_rels))
             continue
         seen_names[dedup_key] = len(results)
+
+        # Avoid slug collisions: "A B" and "A_B" → same slug
+        unique_slug = solution_slug
+        counter = 2
+        while unique_slug in seen_slugs:
+            unique_slug = f'{solution_slug}_{counter}'
+            counter += 1
+        seen_slugs.add(unique_slug)
 
         results.append(SolutionView(
             name=diagram_name,
             view_type=view_type,
-            solution=solution_slug,
+            solution=unique_slug,
             element_archi_ids=element_ids,
             relationship_archi_ids=relationship_ids,
         ))

@@ -17,6 +17,7 @@ class TestCLIArgs:
              patch('archi2likec4.pipeline._validate') as mock_validate, \
              patch('archi2likec4.pipeline._generate'), \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
              patch('sys.argv', ['archi2likec4']):
             cfg = MagicMock()
             cfg.strict = False
@@ -25,7 +26,7 @@ class TestCLIArgs:
             mock_load.return_value = cfg
             mock_validate.return_value = (0, 0, {}, 0, 0)
             main()
-            assert cfg.model_root == Path('architectural_repository/model')
+            assert cfg.model_root == Path('architectural_repository/model').resolve()
             assert cfg.output_dir == Path('output')
 
     def test_strict_flag(self):
@@ -35,6 +36,7 @@ class TestCLIArgs:
              patch('archi2likec4.pipeline._validate') as mock_validate, \
              patch('archi2likec4.pipeline._generate'), \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
              patch('sys.argv', ['archi2likec4', '--strict']):
             cfg = MagicMock()
             cfg.strict = False
@@ -52,6 +54,7 @@ class TestCLIArgs:
              patch('archi2likec4.pipeline._validate') as mock_validate, \
              patch('archi2likec4.pipeline._generate'), \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
              patch('sys.argv', ['archi2likec4', '--verbose']):
             cfg = MagicMock()
             cfg.strict = False
@@ -69,6 +72,7 @@ class TestCLIArgs:
              patch('archi2likec4.pipeline._validate') as mock_validate, \
              patch('archi2likec4.pipeline._generate') as mock_gen, \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
              patch('sys.argv', ['archi2likec4', '--dry-run']):
             cfg = MagicMock()
             cfg.strict = False
@@ -88,6 +92,7 @@ class TestCLIArgs:
              patch('archi2likec4.pipeline._validate') as mock_validate, \
              patch('archi2likec4.pipeline._generate'), \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
              patch('sys.argv', ['archi2likec4', '/tmp/model', '/tmp/out']):
             cfg = MagicMock()
             cfg.strict = False
@@ -96,7 +101,7 @@ class TestCLIArgs:
             mock_load.return_value = cfg
             mock_validate.return_value = (0, 0, {}, 0, 0)
             main()
-            assert cfg.model_root == Path('/tmp/model')
+            assert cfg.model_root == Path('/tmp/model').resolve()
             assert cfg.output_dir == Path('/tmp/out')
 
 
@@ -109,6 +114,7 @@ class TestCLIErrorHandling:
              patch('archi2likec4.pipeline._build'), \
              patch('archi2likec4.pipeline._validate') as mock_validate, \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
              patch('sys.argv', ['archi2likec4']):
             cfg = MagicMock()
             cfg.strict = False
@@ -126,6 +132,7 @@ class TestCLIErrorHandling:
              patch('archi2likec4.pipeline._build'), \
              patch('archi2likec4.pipeline._validate') as mock_validate, \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
              patch('sys.argv', ['archi2likec4', '--strict']):
             cfg = MagicMock()
             cfg.strict = False
@@ -150,6 +157,7 @@ class TestCLIErrorHandling:
         """FileNotFoundError during parse causes exit 2."""
         with patch('archi2likec4.pipeline._parse') as mock_parse, \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
              patch('sys.argv', ['archi2likec4']):
             cfg = MagicMock()
             cfg.strict = False
@@ -162,19 +170,33 @@ class TestCLIErrorHandling:
             assert exc_info.value.code == 2
 
     def test_unexpected_error_exit_1(self):
-        """Unexpected exception causes exit 1."""
+        """Any unexpected error during pipeline causes exit 1."""
         with patch('archi2likec4.pipeline._parse') as mock_parse, \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
              patch('sys.argv', ['archi2likec4']):
             cfg = MagicMock()
             cfg.strict = False
             cfg.verbose = False
             cfg.dry_run = False
             mock_load.return_value = cfg
-            mock_parse.side_effect = RuntimeError('boom')
+            mock_parse.side_effect = ValueError('bad data')
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 1
+
+    def test_model_root_not_found_exit_2(self):
+        """Non-existent model_root causes exit 2."""
+        with patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('sys.argv', ['archi2likec4', '/nonexistent/path']):
+            cfg = MagicMock()
+            cfg.strict = False
+            cfg.verbose = False
+            cfg.dry_run = False
+            mock_load.return_value = cfg
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 2
 
 
 class TestWebSubcommand:

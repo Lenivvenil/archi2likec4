@@ -553,7 +553,7 @@ class TestIntegrationFanOut:
             ),
         ]
         promoted = {'id-parent': ['child_a', 'child_b']}
-        intgs = build_integrations([sys_a, sys_b, sys_x], rels, {}, promoted)
+        intgs, _, _ = build_integrations([sys_a, sys_b, sys_x], rels, {}, promoted)
         pairs = sorted((i.source_path, i.target_path) for i in intgs)
         assert ('child_a', 'target') in pairs
         assert ('child_b', 'target') in pairs
@@ -571,7 +571,7 @@ class TestIntegrationFanOut:
             ),
         ]
         promoted = {'id-parent': ['child_a', 'child_b']}
-        intgs = build_integrations([sys_x, sys_a, sys_b], rels, {}, promoted)
+        intgs, _, _ = build_integrations([sys_x, sys_a, sys_b], rels, {}, promoted)
         pairs = sorted((i.source_path, i.target_path) for i in intgs)
         assert ('source', 'child_a') in pairs
         assert ('source', 'child_b') in pairs
@@ -586,8 +586,9 @@ class TestIntegrationFanOut:
                 target_type='ApplicationComponent', target_id='id-x',
             ),
         ]
-        intgs = build_integrations([sys_x], rels, {})
+        intgs, skipped, total = build_integrations([sys_x], rels, {})
         assert len(intgs) == 0  # skipped, no promoted_parents
+        assert skipped == 1
 
     def test_fanout_skips_self_loops(self):
         """Fan-out doesn't create self-loops between siblings."""
@@ -601,7 +602,7 @@ class TestIntegrationFanOut:
             ),
         ]
         promoted = {'id-parent': ['child_a', 'child_b']}
-        intgs = build_integrations([sys_a, sys_b], rels, {}, promoted)
+        intgs, _, _ = build_integrations([sys_a, sys_b], rels, {}, promoted)
         # child_a → child_a would be self-loop, only child_b → child_a
         pairs = [(i.source_path, i.target_path) for i in intgs]
         assert ('child_a', 'child_a') not in pairs
@@ -736,6 +737,28 @@ class TestDeploymentTopology:
     def test_empty_input(self):
         """Empty tech_elements → empty result."""
         assert build_deployment_topology([], []) == []
+
+    def test_duplicate_aggregation_no_duplicate_children(self):
+        """Duplicate AggregationRelationship should not create duplicate children."""
+        elems = [
+            TechElement(archi_id='n-1', name='Server', tech_type='Node'),
+            TechElement(archi_id='sw-1', name='Postgres', tech_type='SystemSoftware'),
+        ]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AggregationRelationship', name='',
+                source_type='Node', source_id='n-1',
+                target_type='SystemSoftware', target_id='sw-1',
+            ),
+            RawRelationship(
+                rel_id='r-2', rel_type='AggregationRelationship', name='',
+                source_type='Node', source_id='n-1',
+                target_type='SystemSoftware', target_id='sw-1',
+            ),
+        ]
+        roots = build_deployment_topology(elems, rels)
+        assert len(roots) == 1
+        assert len(roots[0].children) == 1  # not 2
 
 
 class TestDeploymentMap:

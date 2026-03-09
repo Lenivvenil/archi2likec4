@@ -26,6 +26,7 @@ except ImportError:
 REGISTRY_PATH = "scripts/federation-registry.yaml"
 SYSTEMS_DIR = "systems"
 CLONE_DIR = ".federation-cache"
+FEDERATION_MARKERS = ("// Federated from:", "# Federated from:")
 
 
 def load_registry():
@@ -185,7 +186,6 @@ def federate(filter_name=None):
     # Clean up stale federated files from removed projects
     # Only removes files that contain the federation marker comment,
     # so hand-maintained or auxiliary files are never deleted.
-    FEDERATION_MARKERS = ("// Federated from:", "# Federated from:")
     if not filter_name:
         known_names = {p.get("name") for p in projects if isinstance(p, dict) and p.get("name")}
         stale = 0

@@ -116,6 +116,42 @@ class TestApplyYaml:
         assert config.max_orphan_functions_warn == 5
         assert config.max_unassigned_systems_warn == 20
 
+    def test_max_unresolved_ratio_bounds(self):
+        """max_unresolved_ratio must be between 0 and 1."""
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='between 0 and 1'):
+            _apply_yaml(config, {'quality_gates': {'max_unresolved_ratio': -0.1}})
+        with pytest.raises(ValueError, match='between 0 and 1'):
+            _apply_yaml(config, {'quality_gates': {'max_unresolved_ratio': 1.5}})
+        # Valid boundary values
+        _apply_yaml(config, {'quality_gates': {'max_unresolved_ratio': 0}})
+        assert config.max_unresolved_ratio == 0
+        _apply_yaml(config, {'quality_gates': {'max_unresolved_ratio': 1}})
+        assert config.max_unresolved_ratio == 1
+
+    def test_negative_promote_warn_threshold(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='non-negative'):
+            _apply_yaml(config, {'promote_warn_threshold': -1})
+
+    def test_negative_max_orphan_functions_warn(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='non-negative'):
+            _apply_yaml(config, {'quality_gates': {'max_orphan_functions_warn': -5}})
+
+    def test_negative_max_unassigned_systems_warn(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='non-negative'):
+            _apply_yaml(config, {'quality_gates': {'max_unassigned_systems_warn': -1}})
+
+    def test_extra_domain_patterns_items_must_be_strings(self):
+        """Pattern items in extra_domain_patterns must be strings."""
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='expected string'):
+            _apply_yaml(config, {'extra_domain_patterns': [
+                {'c4_id': 'test', 'name': 'Test', 'patterns': [123]}
+            ]})
+
     def test_strict_override(self):
         config = ConvertConfig()
         _apply_yaml(config, {'strict': True})
@@ -130,17 +166,22 @@ class TestApplyYaml:
         config = ConvertConfig()
         assert config.audit_suppress == []
 
-    def test_unrecognized_keys_ignored(self):
+    def test_unrecognized_keys_warned(self, caplog):
+        import logging
         config = ConvertConfig()
-        _apply_yaml(config, {'unknown_key': 42, 'another': 'value'})
-        # Should not raise, defaults unchanged
+        with caplog.at_level(logging.WARNING, logger='archi2likec4.config'):
+            _apply_yaml(config, {'unknown_key': 42, 'another': 'value'})
+        assert 'Unknown config keys' in caplog.text
+        assert 'another' in caplog.text
+        assert 'unknown_key' in caplog.text
+        # Defaults unchanged
         assert config.promote_children == dict(_DEFAULT_PROMOTE_CHILDREN)
 
-    def test_invalid_type_ignored(self):
+    def test_invalid_type_raises(self):
         config = ConvertConfig()
-        # promote_children expects dict — string should be ignored
-        _apply_yaml(config, {'promote_children': 'not a dict'})
-        assert config.promote_children == dict(_DEFAULT_PROMOTE_CHILDREN)
+        # promote_children expects dict — string must raise ValueError
+        with pytest.raises(ValueError, match='promote_children.*expected mapping'):
+            _apply_yaml(config, {'promote_children': 'not a dict'})
 
     def test_domain_renames_invalid_shape_string(self):
         """String value instead of [id, name] must raise ValueError."""
@@ -247,6 +288,22 @@ class TestExtraDomainPatternsValidation:
         with pytest.raises(ValueError, match='expected mapping'):
             _apply_yaml(config, {'extra_domain_patterns': ['just-a-string']})
 
+    def test_c4_id_must_be_string(self):
+        from archi2likec4.config import _apply_yaml, ConvertConfig
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match="c4_id.*expected string"):
+            _apply_yaml(config, {'extra_domain_patterns': [
+                {'c4_id': 123, 'name': 'X', 'patterns': ['a']}
+            ]})
+
+    def test_name_must_be_string(self):
+        from archi2likec4.config import _apply_yaml, ConvertConfig
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match="name.*expected string"):
+            _apply_yaml(config, {'extra_domain_patterns': [
+                {'c4_id': 'x', 'name': 42, 'patterns': ['a']}
+            ]})
+
 
 class TestAuditSuppressIncidents:
     """audit_suppress_incidents config option."""
@@ -307,6 +364,20 @@ class TestSaveSuppress:
         assert data is None or 'audit_suppress' not in (data or {})
 
 
+    def test_list_root_yaml_not_crash(self, tmp_path):
+        """save_suppress should handle YAML file with list root gracefully."""
+        from archi2likec4.config import save_suppress
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            pytest.skip('PyYAML not installed')
+        config_file = tmp_path / '.archi2likec4.yaml'
+        config_file.write_text('- item1\n- item2\n')
+        save_suppress(config_file, ['Sys'], [])
+        data = yaml.safe_load(config_file.read_text())
+        assert data['audit_suppress'] == ['Sys']
+
+
 class TestMutableDefaults:
     """P2-8: mutable defaults should not leak between instances."""
 
@@ -314,8 +385,8 @@ class TestMutableDefaults:
         from archi2likec4.config import ConvertConfig
         c1 = ConvertConfig()
         c2 = ConvertConfig()
-        c1.extra_domain_patterns[0]['patterns'].append('MUTATED')
-        assert 'MUTATED' not in c2.extra_domain_patterns[0]['patterns']
+        c1.extra_domain_patterns.append({'c4_id': 'x', 'name': 'X', 'patterns': ['a']})
+        assert len(c2.extra_domain_patterns) == 0
 
 
 class TestLanguageConfig:
@@ -348,10 +419,10 @@ class TestDomainOverrides:
         _apply_yaml(config, {'domain_overrides': {'CRM': 'products', 'AD': 'platform'}})
         assert config.domain_overrides == {'CRM': 'products', 'AD': 'platform'}
 
-    def test_invalid_type_ignored(self):
+    def test_invalid_type_raises(self):
         config = ConvertConfig()
-        _apply_yaml(config, {'domain_overrides': 'not-a-dict'})
-        assert config.domain_overrides == {}
+        with pytest.raises(ValueError, match='domain_overrides.*expected mapping'):
+            _apply_yaml(config, {'domain_overrides': 'not-a-dict'})
 
 
 class TestReviewedSystems:

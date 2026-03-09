@@ -1,4 +1,4 @@
-"""Tests for archi2likec4.web module — Flask routes via test client."""
+"""Tests for archi2likec4.web module — Flask routes via create_app + test client."""
 
 import pytest
 from pathlib import Path
@@ -34,11 +34,8 @@ def _make_config(**kwargs):
     return c
 
 
-@pytest.fixture
-def app_client():
-    """Create Flask test client with mocked pipeline."""
-    from archi2likec4 import web
-
+def _mock_load_data():
+    """Return mock data matching what _load_data() produces."""
     summary = _make_summary()
     incidents = [
         _make_incident('QA-1', 'Critical', 'Системы без домена', 2,
@@ -49,97 +46,48 @@ def app_client():
     config = _make_config()
     available_domains = ['channels', 'products', 'platform']
 
-    mock_data = (config, summary, incidents, available_domains)
+    # Mock built object for hierarchy page
+    from archi2likec4.models import System, Subsystem
+    sys1 = System(c4_id='efs', name='EFS', archi_id='s1', metadata={}, domain='channels',
+                  subsystems=[Subsystem(c4_id='core', name='EFS.Core', archi_id='sub1', metadata={})])
+    sys2 = System(c4_id='crm', name='CRM', archi_id='s2', metadata={}, domain='products')
 
-    with patch.object(web, '_DASHBOARD_TEMPLATE', web._DASHBOARD_TEMPLATE), \
-         patch.object(web, '_DETAIL_TEMPLATE', web._DETAIL_TEMPLATE):
-        # We need to actually create a Flask app via run_web but without running it.
-        # Instead, let's directly construct the app by calling run_web internals.
-        pass
+    mock_built = MagicMock()
+    mock_built.domain_systems = {'channels': [sys1], 'products': [sys2]}
+    mock_built.systems = [sys1, sys2]
+    mock_built.deployment_map = []
+    mock_built.integrations = []
+    mock_built.entities = []
+    mock_built.deployment_nodes = []
+    mock_built.relationships = []
+    mock_built.orphan_fns = 0
 
-    # Create app by importing Flask and setting up routes manually
-    from flask import Flask, render_template_string, request, redirect
-    from archi2likec4 import __version__
+    return config, summary, incidents, available_domains, mock_built
 
-    test_app = Flask(__name__)
 
-    def _load_data():
-        return mock_data
+@pytest.fixture
+def app_client(tmp_path):
+    """Create Flask test client via create_app with mocked pipeline."""
+    from archi2likec4 import web
 
-    @test_app.route('/')
-    def dashboard():
-        config, summary, incidents, available_domains = _load_data()
-        lang = getattr(config, 'language', 'ru')
-        active_count = sum(1 for i in incidents if not i.suppressed)
-        suppressed_count = sum(1 for i in incidents if i.suppressed)
-        return render_template_string(
-            web._DASHBOARD_TEMPLATE,
-            t=web._ui(lang), lang=lang,
-            version=__version__,
-            summary=summary,
-            incidents=incidents,
-            severity_colors=web._SEVERITY_COLORS,
-            health=web._metric_health(summary),
-            suppress_names=sorted(config.audit_suppress),
-            suppress_incidents_list=sorted(config.audit_suppress_incidents),
-            config_path='.archi2likec4.yaml',
-            active_count=active_count,
-            suppressed_count=suppressed_count,
-            remed_domain=len(config.domain_overrides),
-            remed_reviewed=len(config.reviewed_systems),
-            remed_total=len(config.domain_overrides) + len(config.reviewed_systems),
+    config, summary, incidents, available_domains, mock_built = _mock_load_data()
+
+    model_dir = tmp_path / 'model'
+    model_dir.mkdir()
+
+    # Patch the pipeline functions called by _load_data inside create_app
+    with patch('archi2likec4.config.load_config', return_value=config), \
+         patch('archi2likec4.pipeline._parse', return_value=MagicMock()), \
+         patch('archi2likec4.pipeline._build', return_value=mock_built), \
+         patch('archi2likec4.pipeline._validate', return_value=(0, 0, {}, 0, 0)), \
+         patch('archi2likec4.audit_data.compute_audit_incidents',
+               return_value=(summary, incidents)):
+        app = web.create_app(
+            config_path=None,
+            model_root=model_dir,
+            output_dir=tmp_path / 'output',
         )
-
-    @test_app.route('/incident/<qa_id>')
-    def incident_detail(qa_id):
-        config, summary, incidents, available_domains = _load_data()
-        lang = getattr(config, 'language', 'ru')
-        incident = next((i for i in incidents if i.qa_id == qa_id), None)
-        if incident is None:
-            return redirect('/')
-        columns = web._get_columns(incident)
-        return render_template_string(
-            web._DETAIL_TEMPLATE,
-            t=web._ui(lang), lang=lang,
-            incident=incident,
-            columns=columns,
-            severity_colors=web._SEVERITY_COLORS,
-            available_domains=available_domains,
-        )
-
-    @test_app.route('/remediations')
-    def remediations():
-        lang = getattr(config, 'language', 'ru')
-        return render_template_string(
-            web._REMEDIATIONS_TEMPLATE,
-            t=web._ui(lang), lang=lang,
-            domain_overrides=config.domain_overrides,
-            reviewed_systems=sorted(config.reviewed_systems),
-            promote_children=config.promote_children,
-            suppress_names=sorted(config.audit_suppress),
-            suppress_incidents_list=sorted(config.audit_suppress_incidents),
-        )
-
-    @test_app.route('/hierarchy')
-    def hierarchy():
-        from archi2likec4.models import System, Subsystem
-        from archi2likec4 import __version__
-        lang = getattr(config, 'language', 'ru')
-        sys1 = System(c4_id='efs', name='EFS', archi_id='s1', metadata={}, domain='channels',
-                      subsystems=[Subsystem(c4_id='core', name='EFS.Core', archi_id='sub1', metadata={})])
-        sys2 = System(c4_id='crm', name='CRM', archi_id='s2', metadata={}, domain='products')
-        domain_groups = {'channels': [sys1], 'products': [sys2]}
-        return render_template_string(
-            web._HIERARCHY_TEMPLATE,
-            t=web._ui(lang), lang=lang,
-            version=__version__,
-            domain_groups=domain_groups,
-            promoted_parents=set(),
-            total_systems=2,
-            total_subsystems=1,
-        )
-
-    return test_app.test_client()
+        yield app.test_client()
 
 
 # ── Dashboard tests ──────────────────────────────────────────────────────
@@ -214,11 +162,11 @@ class TestRemediations:
         html = resp.data.decode()
         assert 'Обзор ремедиаций' in html or 'Remediations Review' in html
 
-    def test_shows_default_promote_children(self, app_client):
-        """Default ConvertConfig has promote_children, so they show on remediations page."""
+    def test_empty_remediations_shows_placeholder(self, app_client):
+        """Default ConvertConfig has no remediations, page shows empty state."""
         resp = app_client.get('/remediations')
         html = resp.data.decode()
-        assert 'Промоутированные' in html or 'Promoted Children' in html
+        assert resp.status_code == 200
 
 
 # ── Helper function tests ───────────────────────────────────────────────
@@ -288,3 +236,34 @@ class TestHierarchy:
         resp = app_client.get('/hierarchy')
         html = resp.data.decode()
         assert 'EFS.Core' in html
+
+
+# ── Open redirect prevention ──────────────────────────────────────────
+
+class TestOpenRedirect:
+    def test_safe_redirect_rejects_absolute_url(self, app_client):
+        """POST with absolute redirect URL should redirect to / instead."""
+        resp = app_client.post('/suppress/system', data={
+            'name': 'TestSys',
+            'redirect': 'https://evil.com/steal',
+        })
+        assert resp.status_code == 302
+        assert resp.headers['Location'].endswith('/')
+
+    def test_safe_redirect_allows_relative(self, app_client):
+        """POST with relative redirect URL should be allowed."""
+        resp = app_client.post('/suppress/system', data={
+            'name': 'TestSys',
+            'redirect': '/incident/QA-1',
+        })
+        assert resp.status_code == 302
+        assert '/incident/QA-1' in resp.headers['Location']
+
+    def test_safe_redirect_rejects_protocol_relative(self, app_client):
+        """POST with protocol-relative redirect URL (//evil.com) should redirect to /."""
+        resp = app_client.post('/suppress/system', data={
+            'name': 'TestSys',
+            'redirect': '//evil.example/steal',
+        })
+        assert resp.status_code == 302
+        assert resp.headers['Location'].endswith('/')

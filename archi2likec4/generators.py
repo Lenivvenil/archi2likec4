@@ -16,14 +16,17 @@ from .models import (
     SolutionView,
     Subsystem,
     System,
-    _STANDARD_KEYS,
 )
-from .i18n import get_audit_label, get_msg
+from .i18n import get_audit_label
 from .utils import escape_str
 
 if TYPE_CHECKING:
     from .config import ConvertConfig
 
+
+# Maximum description length before truncation (characters).
+_MAX_DESC_LEN = 500
+_MAX_FN_DESC_LEN = 300
 
 # ── Renderers (internal) ────────────────────────────────────────────────
 
@@ -35,8 +38,8 @@ def _render_system(sys: System, lines: list[str], indent: int = 2) -> None:
         lines.append(f'{pad}  #{tag}')
     if sys.documentation:
         desc = escape_str(sys.documentation)
-        if len(desc) > 500:
-            desc = desc[:497] + '...'
+        if len(desc) > _MAX_DESC_LEN:
+            desc = desc[:_MAX_DESC_LEN - 3] + '...'
         lines.append(f"{pad}  description '{desc}'")
     for url, link_title in sys.links:
         lines.append(f"{pad}  link {url} '{escape_str(link_title)}'")
@@ -60,8 +63,8 @@ def _render_subsystem(sub: Subsystem, lines: list[str], indent: int = 4) -> None
         lines.append(f'{pad}  #{tag}')
     if sub.documentation:
         desc = escape_str(sub.documentation)
-        if len(desc) > 500:
-            desc = desc[:497] + '...'
+        if len(desc) > _MAX_DESC_LEN:
+            desc = desc[:_MAX_DESC_LEN - 3] + '...'
         lines.append(f"{pad}  description '{desc}'")
     for url, link_title in sub.links:
         lines.append(f"{pad}  link {url} '{escape_str(link_title)}'")
@@ -83,8 +86,8 @@ def _render_appfunction(fn: AppFunction, lines: list[str], indent: int = 6) -> N
     title = escape_str(fn.name)
     if fn.documentation:
         desc = escape_str(fn.documentation)
-        if len(desc) > 300:
-            desc = desc[:297] + '...'
+        if len(desc) > _MAX_FN_DESC_LEN:
+            desc = desc[:_MAX_FN_DESC_LEN - 3] + '...'
         lines.append(f"{pad}{fn.c4_id} = appFunction '{title}' {{")
         lines.append(f"{pad}  description '{desc}'")
         lines.append(f"{pad}  metadata {{")
@@ -482,25 +485,35 @@ def generate_solution_views(
             # Resolve element archi_ids to c4 paths
             c4_paths: list[str] = []
             unresolved = 0
-            total_elements += len(sv.element_archi_ids)
             system_c4_ids: set[str] = set()  # track unique systems
-            for aid in sv.element_archi_ids:
-                c4_path = archi_to_c4.get(aid)
-                if c4_path:
-                    c4_paths.append(c4_path)
-                    # Extract system c4_id (domain.system → system)
-                    parts = c4_path.split('.')
-                    if len(parts) >= 2:
-                        system_c4_ids.add(parts[1])
-                elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
-                    # Fan-out: promoted parent → all children
-                    for child_path in promoted_archi_to_c4[aid]:
-                        c4_paths.append(child_path)
-                        parts = child_path.split('.')
+
+            if sv.view_type == 'deployment':
+                # Deployment views resolve via tech_archi_to_c4, not archi_to_c4
+                total_elements += len(sv.element_archi_ids)
+                for aid in sv.element_archi_ids:
+                    if tech_archi_to_c4 and aid in tech_archi_to_c4:
+                        c4_paths.append(tech_archi_to_c4[aid])
+                    elif aid in archi_to_c4:
+                        c4_paths.append(archi_to_c4[aid])
+                    else:
+                        unresolved += 1
+            else:
+                total_elements += len(sv.element_archi_ids)
+                for aid in sv.element_archi_ids:
+                    c4_path = archi_to_c4.get(aid)
+                    if c4_path:
+                        c4_paths.append(c4_path)
+                        parts = c4_path.split('.')
                         if len(parts) >= 2:
                             system_c4_ids.add(parts[1])
-                else:
-                    unresolved += 1
+                    elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
+                        for child_path in promoted_archi_to_c4[aid]:
+                            c4_paths.append(child_path)
+                            parts = child_path.split('.')
+                            if len(parts) >= 2:
+                                system_c4_ids.add(parts[1])
+                    else:
+                        unresolved += 1
             total_unresolved += unresolved
 
             if not c4_paths and sv.view_type != 'deployment':
@@ -614,25 +627,14 @@ def generate_solution_views(
                     # Use specific relationship pairs from diagram
                     for src, tgt in rel_pairs:
                         lines.append(f"      {src} -> {tgt},")
-                else:
-                    # Fallback: no resolved relationships, use broad predicates
-                    for sp in system_paths:
-                        lines.append(f"      {sp} -> *,")
-                        lines.append(f"      * -> {sp},")
                 # Remove trailing comma
                 if lines[-1].endswith(','):
                     lines[-1] = lines[-1][:-1]
                 lines.append(f"  }}")
 
             elif sv.view_type == 'deployment':
-                # Deployment view: resolve element IDs via tech_archi_to_c4
-                resolved_paths: list[str] = []
-                for aid in sv.element_archi_ids:
-                    if tech_archi_to_c4 and aid in tech_archi_to_c4:
-                        resolved_paths.append(tech_archi_to_c4[aid])
-                    elif aid in archi_to_c4:
-                        resolved_paths.append(archi_to_c4[aid])
-                resolved_unique = list(dict.fromkeys(resolved_paths))
+                # Deployment view: c4_paths already resolved via tech_archi_to_c4 above
+                resolved_unique = list(dict.fromkeys(c4_paths))
                 if resolved_unique:
                     lines.append(f"  view {view_id} {{")
                     lines.append(f"    title '{escape_str(title)}'")
@@ -672,8 +674,8 @@ def _render_deployment_node(node: DeploymentNode, lines: list[str], indent: int)
     lines.append(f"{pad}{node.c4_id} = {node.kind} '{title}' {{")
     if node.documentation:
         desc = escape_str(node.documentation)
-        if len(desc) > 500:
-            desc = desc[:497] + '...'
+        if len(desc) > _MAX_DESC_LEN:
+            desc = desc[:_MAX_DESC_LEN - 3] + '...'
         lines.append(f"{pad}  description '{desc}'")
     lines.append(f'{pad}  metadata {{')
     lines.append(f"{pad}    archi_id '{node.archi_id}'")
@@ -751,20 +753,6 @@ views {
 
 # ── Audit report ──────────────────────────────────────────────────────────
 
-# Human-readable field labels for metadata completeness table
-_FIELD_LABELS: dict[str, str] = {
-    'ci': 'CI',
-    'full_name': 'Full name',
-    'lc_stage': 'LC stage',
-    'criticality': 'Criticality',
-    'target_state': 'Target state',
-    'business_owner_dep': 'Business owner',
-    'dev_team': 'Dev team',
-    'architect': 'Architect',
-    'is_officer': 'IS-officer',
-    'placement': 'Placement',
-}
-
 
 def generate_audit_md(
     built: object,
@@ -774,373 +762,145 @@ def generate_audit_md(
 ) -> str:
     """Generate AUDIT.md — quality incident register for ArchiMate repository owners.
 
-    Each section is a discrete quality incident with:
-    - Problem description
-    - Impact assessment
-    - Step-by-step remediation in Archi
-    - Table of affected elements
-
-    Sections with 0 affected elements are omitted.
+    Delegates all logic to compute_audit_incidents() (audit_data.py) as the
+    single source of truth, then renders results as markdown. Respects
+    config.audit_suppress_incidents to skip entire QA categories.
+    Fully bilingual (ru/en) via config.language.
     """
     from . import __version__
+    from .audit_data import compute_audit_incidents
 
     lang: str = getattr(config, 'language', 'ru')
-    systems: list[System] = built.systems  # type: ignore[attr-defined]
-    # Flat list of all systems + subsystems for metadata/doc checks
-    all_sys: list[System | Subsystem] = []
-    for s in systems:
-        all_sys.append(s)
-        all_sys.extend(s.subsystems)
+    summary, all_incidents = compute_audit_incidents(built, sv_unresolved, sv_total, config)
 
-    # Suppress-list: system names accepted as risks, excluded from tables
-    suppress: set[str] = set(getattr(config, 'audit_suppress', []))
+    # Filter out suppressed and zero-count incidents (keep for suppressed_count tracking)
+    incidents = [inc for inc in all_incidents if not inc.suppressed and inc.count > 0]
 
-    total_sys = len(systems)
-    sections: list[str] = []
-    qa_num = 0
-    suppressed_total = 0
+    _L = lambda k, **kw: get_audit_label(k, lang, **kw)  # noqa: E731
 
     # ── Header ────────────────────────────────────────────────────────
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
     header = (
-        f'# {get_audit_label("title", lang)}\n\n'
-        f'> {get_audit_label("auto_generated", lang, version=__version__, date=now)}\n'
-        f'> {get_audit_label("fix_prompt", lang)}\n'
+        f'# {_L("title")}\n\n'
+        f'> {_L("auto_generated", version=__version__, date=now)}\n'
+        f'> {_L("fix_prompt")}\n'
     )
 
-    # ── Summary ───────────────────────────────────────────────────────
-    unassigned: list[System] = built.domain_systems.get('unassigned', [])  # type: ignore[attr-defined]
-    unassigned_count = len(unassigned)
-    assigned_count = total_sys - unassigned_count
-
-    # Metadata completeness
-    meta_filled_total = 0
-    meta_check_keys = [k for k in _STANDARD_KEYS if k != 'full_name']  # full_name always set
-    meta_possible = len(all_sys) * len(meta_check_keys)
-    for s in all_sys:
-        for key in meta_check_keys:
-            if s.metadata.get(key, 'TBD') != 'TBD':
-                meta_filled_total += 1
-    meta_pct = round(meta_filled_total / meta_possible * 100) if meta_possible else 100
-
-    deployment_map: list = built.deployment_map  # type: ignore[attr-defined]
-    mapped_sys_paths = {pair[0] for pair in deployment_map}
-
-    _L = lambda k: get_audit_label(k, lang)  # noqa: E731
-    summary = (
+    # ── Summary table ─────────────────────────────────────────────────
+    total_sys = summary.total_systems
+    assigned_pct = round(summary.assigned_count / total_sys * 100) if total_sys else 0
+    summary_md = (
         f'## {_L("summary_heading")}\n\n'
         f'| {_L("metric")} | {_L("value")} |\n'
         '|---------|----------|\n'
         f'| {_L("systems")} | {total_sys} |\n'
-        f'| {_L("subsystems")} | {sum(len(s.subsystems) for s in systems)} |\n'
-        f'| {_L("meta_completeness")} | {meta_pct}% |\n'
-        f'| {_L("domain_assigned")} | {assigned_count} / {total_sys} ({round(assigned_count / total_sys * 100) if total_sys else 0}%) |\n'
-        f'| {_L("integrations")} | {len(built.integrations)} |\n'  # type: ignore[attr-defined]
-        f'| {_L("data_entities")} | {len(built.entities)} |\n'  # type: ignore[attr-defined]
-        f'| {_L("deploy_mappings")} | {len(deployment_map)} |\n'
+        f'| {_L("subsystems")} | {summary.total_subsystems} |\n'
+        f'| {_L("meta_completeness")} | {summary.meta_completeness_pct}% |\n'
+        f'| {_L("domain_assigned")} | {summary.assigned_count} / {total_sys} ({assigned_pct}%) |\n'
+        f'| {_L("integrations")} | {summary.total_integrations} |\n'
+        f'| {_L("data_entities")} | {summary.total_entities} |\n'
+        f'| {_L("deploy_mappings")} | {summary.deployment_mappings} |\n'
     )
 
-    # ── QA-1: Unassigned systems ──────────────────────────────────────
-    filtered_unassigned = [s for s in unassigned if s.name not in suppress]
-    suppressed_total += unassigned_count - len(filtered_unassigned)
-    if filtered_unassigned:
-        qa_num += 1
-        rows = []
-        for i, s in enumerate(sorted(filtered_unassigned, key=lambda x: x.name), 1):
-            tags = ', '.join(s.tags) if s.tags else ''
-            rows.append(f'| {i} | {s.name} | {tags} |')
-        table = '\n'.join(rows)
-        sections.append(
-            f'## QA-{qa_num}. [Critical] Системы без домена ({len(filtered_unassigned)})\n\n'
-            f'**Проблема:** {len(filtered_unassigned)} систем не размещены ни на одной диаграмме '
-            'в `functional_areas/`. Конвертер помещает их в домен «unassigned».\n\n'
-            '**Влияние:** Системы не отображаются в доменных views, невозможно '
-            'понять их бизнес-принадлежность.\n\n'
-            '**Рекомендация:**\n'
-            '1. Откройте Archi → Views → functional_areas\n'
-            '2. Для каждой системы из таблицы определите целевой домен\n'
-            '3. Перетащите элемент на соответствующую диаграмму домена\n\n'
-            '| # | Система | Теги |\n'
-            '|---|---------|------|\n'
-            f'{table}\n'
-        )
+    # ── Render incident sections ──────────────────────────────────────
+    sections: list[str] = []
+    suppressed_total = sum(inc.suppressed_count for inc in all_incidents)
 
-    # ── QA-2: Metadata gaps ───────────────────────────────────────────
-    # Per-field completeness
-    field_stats: list[tuple[str, int, int]] = []
-    for key in meta_check_keys:
-        filled = sum(1 for s in all_sys if s.metadata.get(key, 'TBD') != 'TBD')
-        field_stats.append((key, filled, len(all_sys)))
+    for inc in incidents:
+        section = f'## {inc.qa_id}. [{inc.severity}] {inc.title} ({inc.count})\n\n'
+        section += f'**{_L("problem")}:** {inc.description}\n\n'
+        section += f'**{_L("impact_label")}:** {inc.impact}\n\n'
+        section += f'**{_L("recommendation")}:**\n{inc.remediation}\n'
 
-    # Systems with most TBD fields
-    sys_tbd: list[tuple[str, str, int]] = []
-    for s in all_sys:
-        if s.name in suppress:
-            continue
-        tbd_count = sum(1 for key in meta_check_keys if s.metadata.get(key, 'TBD') == 'TBD')
-        if tbd_count > 0:
-            domain = s.domain if hasattr(s, 'domain') and s.domain else ''
-            sys_tbd.append((s.name, domain, tbd_count))
-    sys_tbd.sort(key=lambda x: (-x[2], x[0]))
+        if inc.affected:
+            section += '\n'
+            section += _render_affected_table(inc, lang)
 
-    all_tbd_count = sum(1 for _, _, c in sys_tbd if c == len(meta_check_keys))
-
-    if all_tbd_count > 0:
-        qa_num += 1
-        field_rows = []
-        for key, filled, total in field_stats:
-            label = _FIELD_LABELS.get(key, key)
-            pct = round(filled / total * 100) if total else 0
-            field_rows.append(f'| {label} | {filled} / {total} | {pct}% |')
-        field_table = '\n'.join(field_rows)
-
-        top_n = min(20, len(sys_tbd))
-        top_rows = []
-        for i, (name, domain, tbd_cnt) in enumerate(sys_tbd[:top_n], 1):
-            top_rows.append(f'| {i} | {name} | {domain} | {tbd_cnt} / {len(meta_check_keys)} |')
-        top_table = '\n'.join(top_rows)
-
-        sections.append(
-            f'## QA-{qa_num}. [High] Незаполненные карточки систем\n\n'
-            f'**Проблема:** {all_tbd_count} из {len(all_sys)} систем/подсистем не имеют '
-            'ни одного заполненного свойства (CI, Criticality, LC stage и др.).\n\n'
-            '**Влияние:** Метаданные в архитектурном портале отображаются как '
-            '«TBD» — невозможно оценить критичность, ответственных, стадию ЖЦ.\n\n'
-            '**Рекомендация:**\n'
-            '1. Откройте элемент в Archi → вкладка Properties\n'
-            '2. Заполните как минимум: CI, Criticality, Dev team\n'
-            '3. Приоритет — системы с наибольшим числом пустых полей (см. таблицу)\n\n'
-            '**Заполненность по полям:**\n\n'
-            '| Поле | Заполнено | % |\n'
-            '|------|-----------|---|\n'
-            f'{field_table}\n\n'
-            f'**Топ-{top_n} систем с максимальным числом пустых полей:**\n\n'
-            '| # | Система | Домен | Пустых полей |\n'
-            '|---|---------|-------|--------------|\n'
-            f'{top_table}\n'
-        )
-
-    # ── QA-3: To-review systems ───────────────────────────────────────
-    to_review = [s for s in systems if 'to_review' in s.tags and s.name not in suppress]
-    if to_review:
-        qa_num += 1
-        rows = []
-        for i, s in enumerate(sorted(to_review, key=lambda x: x.name), 1):
-            domain = s.domain or 'unassigned'
-            rows.append(f'| {i} | {s.name} | {domain} |')
-        table = '\n'.join(rows)
-        sections.append(
-            f'## QA-{qa_num}. [High] Системы на разборе ({len(to_review)})\n\n'
-            '**Проблема:** Эти системы находятся в папке `!РАЗБОР` — '
-            'их статус в модели не определён.\n\n'
-            '**Влияние:** Системы помечены тегом `#to_review` и требуют '
-            'решения: оставить в модели или удалить.\n\n'
-            '**Рекомендация:**\n'
-            '1. Для каждой системы определите, является ли она актуальной\n'
-            '2. Если актуальна — переместите из `!РАЗБОР` в правильную папку\n'
-            '3. Если не актуальна — удалите элемент из модели\n\n'
-            '| # | Система | Домен |\n'
-            '|---|---------|-------|\n'
-            f'{table}\n'
-        )
-
-    # ── QA-4: Promote candidates ──────────────────────────────────────
-    promote_threshold = getattr(config, 'promote_warn_threshold', 10)
-    already_promoted = set(getattr(config, 'promote_children', {}).keys())
-    candidates = [
-        (s.name, len(s.subsystems))
-        for s in systems
-        if len(s.subsystems) >= promote_threshold and s.name not in already_promoted
-        and s.name not in suppress
-    ]
-    candidates.sort(key=lambda x: (-x[1], x[0]))
-    if candidates:
-        qa_num += 1
-        rows = []
-        for i, (name, cnt) in enumerate(candidates, 1):
-            rows.append(f'| {i} | {name} | {cnt} |')
-        table = '\n'.join(rows)
-        sections.append(
-            f'## QA-{qa_num}. [Medium] Кандидаты на декомпозицию ({len(candidates)})\n\n'
-            f'**Проблема:** {len(candidates)} систем имеют ≥{promote_threshold} '
-            'подсистем — вероятно, их дочерние компоненты являются самостоятельными '
-            'микросервисами.\n\n'
-            '**Влияние:** Интеграции всех подсистем схлопываются в одну стрелку '
-            'родителя, теряется детализация.\n\n'
-            '**Рекомендация:**\n'
-            '1. Добавьте систему в `promote_children` в `.archi2likec4.yaml`\n'
-            '2. Укажите целевой домен: `promote_children: { "Parent": "domain" }`\n'
-            '3. Перезапустите конвертер — подсистемы станут самостоятельными системами\n\n'
-            '| # | Система | Подсистем |\n'
-            '|---|---------|----------|\n'
-            f'{table}\n'
-        )
-
-    # ── QA-5: No documentation ────────────────────────────────────────
-    no_docs = [s for s in systems if not s.documentation and s.name not in suppress]
-    if no_docs:
-        qa_num += 1
-        show = sorted(no_docs, key=lambda x: x.name)[:30]
-        rows = []
-        for i, s in enumerate(show, 1):
-            domain = s.domain or 'unassigned'
-            rows.append(f'| {i} | {s.name} | {domain} |')
-        table = '\n'.join(rows)
-        suffix = f' (показаны первые 30 из {len(no_docs)})' if len(no_docs) > 30 else ''
-        sections.append(
-            f'## QA-{qa_num}. [Medium] Системы без документации ({len(no_docs)})\n\n'
-            '**Проблема:** Эти системы не имеют описания в поле `documentation`.\n\n'
-            '**Влияние:** В архитектурном портале отсутствует описание назначения '
-            'системы — затруднено понимание её роли.\n\n'
-            '**Рекомендация:**\n'
-            '1. Откройте элемент в Archi → поле Documentation\n'
-            '2. Добавьте краткое описание назначения системы (1-2 предложения)\n\n'
-            f'| # | Система | Домен |{suffix}\n'
-            '|---|---------|-------|\n'
-            f'{table}\n'
-        )
-
-    # ── QA-6: Orphan functions ────────────────────────────────────────
-    orphan_fns: int = built.orphan_fns  # type: ignore[attr-defined]
-    if orphan_fns > 0:
-        qa_num += 1
-        sections.append(
-            f'## QA-{qa_num}. [Low] Осиротевшие функции ({orphan_fns})\n\n'
-            f'**Проблема:** {orphan_fns} ApplicationFunction не имеют привязки '
-            'к родительскому ApplicationComponent.\n\n'
-            '**Влияние:** Функции не отображаются ни в одной системе — '
-            'потеряна часть функциональной архитектуры.\n\n'
-            '**Рекомендация:**\n'
-            '1. Найдите осиротевшие функции в Archi (проверьте лог конвертера с `--verbose`)\n'
-            '2. Для каждой добавьте CompositionRelationship к целевому ApplicationComponent\n'
-            '3. Или переместите XML-файл функции в папку целевого компонента\n'
-        )
-
-    # ── QA-7: Lost integrations ───────────────────────────────────────
-    total_flow_rels = sum(
-        1 for r in built.relationships  # type: ignore[attr-defined]
-        if r.rel_type in ('FlowRelationship', 'ServingRelationship', 'TriggeringRelationship')
-    )
-    resolved_intg = len(built.integrations)  # type: ignore[attr-defined]
-    skipped_intg = total_flow_rels - resolved_intg
-    if skipped_intg > 0:
-        qa_num += 1
-        pct = round(skipped_intg / total_flow_rels * 100) if total_flow_rels else 0
-        sections.append(
-            f'## QA-{qa_num}. [Critical] Потерянные интеграции ({skipped_intg})\n\n'
-            f'**Проблема:** {skipped_intg} из {total_flow_rels} интеграционных связей '
-            f'({pct}%) не удалось разрешить — один или оба endpoint не найдены в модели.\n\n'
-            '**Влияние:** Часть интеграций между системами не отображается — '
-            'неполная картина взаимодействий.\n\n'
-            '**Рекомендация:**\n'
-            '1. Запустите конвертер с `--verbose` для детального лога\n'
-            '2. Проверьте, что source и target каждой связи — валидные ApplicationComponent\n'
-            '3. Убедитесь, что связи не ведут на удалённые или перемещённые элементы\n'
-        )
-
-    # ── QA-8: Solution view coverage ──────────────────────────────────
-    if sv_total > 0 and sv_unresolved > 0:
-        qa_num += 1
-        sv_resolved = sv_total - sv_unresolved
-        sv_pct = round(sv_resolved / sv_total * 100)
-        sections.append(
-            f'## QA-{qa_num}. [High] Покрытие solution views ({sv_pct}%)\n\n'
-            f'**Проблема:** {sv_unresolved} из {sv_total} элементов на solution-диаграммах '
-            f'не удалось сопоставить с C4-моделью (разрешено {sv_resolved}, '
-            f'не разрешено {sv_unresolved}).\n\n'
-            '**Влияние:** Solution views могут отображать неполную картину — '
-            'часть элементов диаграмм теряется при конвертации.\n\n'
-            '**Рекомендация:**\n'
-            '1. Проверьте, что все элементы на solution-диаграммах — '
-            'валидные ApplicationComponent\n'
-            '2. Удалите с диаграмм элементы других типов (BusinessService, '
-            'TechnologyService и т.д.)\n'
-            '3. Убедитесь, что элементы не удалены из модели, '
-            'но остались на диаграммах как «призраки»\n'
-        )
-
-    # ── QA-9: No infrastructure mapping ───────────────────────────────
-    unmapped = [s for s in systems if f'{s.domain}.{s.c4_id}' not in mapped_sys_paths
-                and s.domain and s.domain != 'unassigned'
-                and s.name not in suppress]
-    if unmapped:
-        qa_num += 1
-        show = sorted(unmapped, key=lambda x: x.name)[:30]
-        rows = []
-        for i, s in enumerate(show, 1):
-            rows.append(f'| {i} | {s.name} | {s.domain} |')
-        table = '\n'.join(rows)
-        suffix = f' (показаны первые 30 из {len(unmapped)})' if len(unmapped) > 30 else ''
-        sections.append(
-            f'## QA-{qa_num}. [Medium] Системы без инфраструктурной привязки ({len(unmapped)})\n\n'
-            f'**Проблема:** {len(unmapped)} систем не имеют связи с инфраструктурными '
-            'нодами (Node, SystemSoftware).\n\n'
-            '**Влияние:** На deployment view не видно, где развёрнуты эти системы.\n\n'
-            '**Рекомендация:**\n'
-            '1. Откройте систему в Archi\n'
-            '2. Создайте RealizationRelationship к целевому Node '
-            '(серверу, кластеру, VM)\n'
-            '3. Или добавьте AssignmentRelationship, если используете этот тип\n\n'
-            f'| # | Система | Домен |{suffix}\n'
-            '|---|---------|-------|\n'
-            f'{table}\n'
-        )
-
-    # ── QA-10: Deployment hierarchy issues ─────────────────────────
-    deployment_nodes: list[DeploymentNode] = built.deployment_nodes  # type: ignore[attr-defined]
-    if deployment_nodes:
-        from .builders import _flatten_deployment_nodes
-        all_dn = _flatten_deployment_nodes(deployment_nodes)
-        qa10_issues: list[tuple[str, str, str]] = []  # (name, kind, issue)
-
-        for dn in deployment_nodes:
-            if dn.kind == 'infraSoftware':
-                qa10_issues.append((dn.name, dn.kind, 'SystemSoftware как root-нод'))
-
-        locations = [dn for dn in all_dn if dn.kind == 'infraLocation']
-        if locations:
-            for loc in locations:
-                if not loc.children:
-                    qa10_issues.append((loc.name, loc.kind, 'Location без дочерних нод'))
-            location_child_ids: set[str] = set()
-            for loc in locations:
-                for child in loc.children:
-                    location_child_ids.add(child.archi_id)
-            for dn in deployment_nodes:
-                if dn.kind == 'infraNode' and dn.archi_id not in location_child_ids:
-                    qa10_issues.append((dn.name, dn.kind, 'Root Node без привязки к Location'))
-
-        if qa10_issues:
-            qa_num += 1
-            rows = []
-            for i, (name, kind, issue) in enumerate(qa10_issues, 1):
-                rows.append(f'| {i} | {name} | {kind} | {issue} |')
-            table = '\n'.join(rows)
-            sections.append(
-                f'## QA-{qa_num}. [Medium] Проблемы иерархии развёртывания ({len(qa10_issues)})\n\n'
-                f'**Проблема:** {len(qa10_issues)} проблем в deployment-топологии.\n\n'
-                '**Влияние:** Deployment view показывает неструктурированную топологию — '
-                'невозможно определить физическое размещение.\n\n'
-                '**Рекомендация:**\n'
-                '1. SystemSoftware должен быть вложен в Node (AggregationRelationship)\n'
-                '2. Location должен содержать хотя бы один Node\n'
-                '3. Root Node должен быть вложен в Location\n\n'
-                '| # | Элемент | Kind | Проблема |\n'
-                '|---|---------|------|----------|\n'
-                f'{table}\n'
-            )
+        sections.append(section)
 
     # ── Assemble ──────────────────────────────────────────────────────
-    suppress_note = (f' Исключено из отчёта (audit_suppress): {suppressed_total} элементов.'
-                     if suppressed_total else '')
+    suppressed_qa_ids = [inc.qa_id for inc in all_incidents if inc.suppressed]
+    has_suppression = suppressed_total > 0 or suppressed_qa_ids
+    suppress_note = ''
+    if suppressed_total > 0:
+        suppress_note = _L('suppressed_note', count=suppressed_total)
+    if suppressed_qa_ids:
+        suppress_note += _L('suppressed_qa_note', ids=', '.join(suppressed_qa_ids))
     if not sections:
         return (
             header + '\n'
-            + summary + '\n'
-            + f'Инцидентов качества не обнаружено.{suppress_note}\n'
+            + summary_md + '\n'
+            + f'{_L("no_incidents")}{suppress_note}\n'
         )
 
     body = '\n---\n\n'.join(sections)
-    footer = (f'\n---\n\n*Всего инцидентов: {qa_num}.{suppress_note} '
-              f'Сгенерировано archi2likec4 v{__version__}.*\n')
-    return header + '\n' + summary + '\n---\n\n' + body + footer
+    footer_text = _L('footer', qa_num=len(incidents),
+                      suppress_note=suppress_note, version=__version__)
+    footer = f'\n---\n\n*{footer_text}*\n'
+    return header + '\n' + summary_md + '\n---\n\n' + body + footer
+
+
+def _render_affected_table(inc: 'AuditIncident', lang: str) -> str:
+    """Render incident's affected items as a markdown table."""
+    _L = lambda k, **kw: get_audit_label(k, lang, **kw)  # noqa: E731
+
+    if not inc.affected:
+        return ''
+
+    # Determine columns from first affected item
+    keys = list(inc.affected[0].keys())
+
+    # QA-2 has special rendering with field_stats sub-tables
+    if inc.qa_id == 'QA-2':
+        return _render_qa2_table(inc, lang)
+
+    # QA-10 has element/kind/issue columns
+    if inc.qa_id == 'QA-10':
+        header = f'| {_L("col_num")} | {_L("col_element")} | {_L("col_kind")} | {_L("col_issue")} |\n'
+        header += '|---|---------|------|----------|\n'
+        rows = []
+        for i, item in enumerate(inc.affected, 1):
+            rows.append(f'| {i} | {item.get("name", "")} | {item.get("kind", "")} | {item.get("issue", "")} |')
+        return header + '\n'.join(rows) + '\n'
+
+    # Generic table based on keys
+    col_map = {
+        'name': _L('col_system'),
+        'tags': _L('col_tags'),
+        'domain': _L('col_domain'),
+        'subsystem_count': _L('col_subsystems'),
+    }
+    col_headers = [_L('col_num')] + [col_map.get(k, k) for k in keys]
+    header = '| ' + ' | '.join(col_headers) + ' |\n'
+    header += '|' + '|'.join('---' for _ in col_headers) + '|\n'
+
+    shown = inc.affected
+    suffix = ''
+    if inc.count > len(shown):
+        suffix = _L('shown_first', n=len(shown), total=inc.count)
+
+    rows = []
+    for i, item in enumerate(shown, 1):
+        vals = [str(i)] + [str(item.get(k, '')) for k in keys]
+        rows.append('| ' + ' | '.join(vals) + ' |')
+
+    return header + '\n'.join(rows) + suffix + '\n'
+
+
+def _render_qa2_table(inc: 'AuditIncident', lang: str) -> str:
+    """Render QA-2 metadata gap tables (field completeness + top systems)."""
+    _L = lambda k, **kw: get_audit_label(k, lang, **kw)  # noqa: E731
+
+    # Top-N systems with most empty fields
+    top_n = min(20, len(inc.affected))
+    top_header = f'| {_L("col_num")} | {_L("col_system")} | {_L("col_domain")} | {_L("col_empty_fields")} |\n'
+    top_header += '|---|---------|-------|--------------|\n'
+    rows = []
+    for i, item in enumerate(inc.affected[:top_n], 1):
+        rows.append(f'| {i} | {item["name"]} | {item.get("domain", "")} '
+                    f'| {item["tbd_count"]} / {item.get("total_fields", "")} |')
+
+    return (
+        f'\n**{_L("top_systems", n=top_n)}:**\n\n'
+        + top_header + '\n'.join(rows) + '\n'
+    )

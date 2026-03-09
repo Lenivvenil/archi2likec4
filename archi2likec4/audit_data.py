@@ -5,6 +5,9 @@ from dataclasses import dataclass, field
 from .i18n import get_msg, get_qa10_issue
 from .models import System, Subsystem, _STANDARD_KEYS
 
+# Maximum number of affected items shown in an incident's detail table.
+_MAX_AFFECTED_ITEMS = 30
+
 
 @dataclass
 class AuditSummary:
@@ -90,7 +93,13 @@ def compute_audit_incidents(
     meta_pct = round(meta_filled / meta_possible * 100) if meta_possible else 100
 
     deployment_map: list = built.deployment_map  # type: ignore[attr-defined]
-    mapped_sys_paths = {pair[0] for pair in deployment_map}
+    # Extract system-level paths: 'domain.system.subsystem' → 'domain.system'
+    mapped_sys_paths: set[str] = set()
+    for pair in deployment_map:
+        parts = pair[0].split('.')
+        if len(parts) >= 2:
+            mapped_sys_paths.add(f'{parts[0]}.{parts[1]}')
+        mapped_sys_paths.add(pair[0])
 
     summary = AuditSummary(
         total_systems=total_sys,
@@ -105,7 +114,7 @@ def compute_audit_incidents(
     # ── QA-1: Unassigned systems ─────────────────────────────────────
     filtered = [s for s in unassigned if s.name not in suppress]
     suppressed_cnt = unassigned_count - len(filtered)
-    if filtered:
+    if filtered or suppressed_cnt > 0:
         incidents.append(AuditIncident(
             qa_id='QA-1',
             severity='Critical',
@@ -159,7 +168,7 @@ def compute_audit_incidents(
                                 count=all_tbd_count, total=len(all_sys)),
             impact=get_msg('QA-2', 'impact', lang),
             remediation=get_msg('QA-2', 'remediation', lang),
-            affected=sys_tbd[:20],
+            affected=sys_tbd[:_MAX_AFFECTED_ITEMS],
             suppressed_count=0,
             suppressed=('QA-2' in suppress_incidents),
         ))
@@ -167,20 +176,20 @@ def compute_audit_incidents(
     # ── QA-3: To-review systems ──────────────────────────────────────
     to_review = [s for s in systems if 'to_review' in s.tags and s.name not in suppress]
     if to_review:
-            incidents.append(AuditIncident(
-                qa_id='QA-3',
-                severity='High',
-                title=get_msg('QA-3', 'title', lang),
-                count=len(to_review),
-                description=get_msg('QA-3', 'description', lang),
-                impact=get_msg('QA-3', 'impact', lang),
-                remediation=get_msg('QA-3', 'remediation', lang),
-                affected=[
-                    {'name': s.name, 'domain': s.domain or 'unassigned'}
-                    for s in sorted(to_review, key=lambda x: x.name)
-                ],
-                suppressed=('QA-3' in suppress_incidents),
-            ))
+        incidents.append(AuditIncident(
+            qa_id='QA-3',
+            severity='High',
+            title=get_msg('QA-3', 'title', lang),
+            count=len(to_review),
+            description=get_msg('QA-3', 'description', lang),
+            impact=get_msg('QA-3', 'impact', lang),
+            remediation=get_msg('QA-3', 'remediation', lang),
+            affected=[
+                {'name': s.name, 'domain': s.domain or 'unassigned'}
+                for s in sorted(to_review, key=lambda x: x.name)
+            ],
+            suppressed=('QA-3' in suppress_incidents),
+        ))
 
     # ── QA-4: Promote candidates ─────────────────────────────────────
     promote_threshold = getattr(config, 'promote_warn_threshold', 10)
@@ -194,112 +203,108 @@ def compute_audit_incidents(
     candidates.sort(key=lambda x: (-x[1], x[0]))
     if candidates:
         incidents.append(AuditIncident(
-                qa_id='QA-4',
-                severity='Medium',
-                title=get_msg('QA-4', 'title', lang),
-                count=len(candidates),
-                description=get_msg('QA-4', 'description', lang,
-                                    count=len(candidates), threshold=promote_threshold),
-                impact=get_msg('QA-4', 'impact', lang),
-                remediation=get_msg('QA-4', 'remediation', lang),
-                affected=[
-                    {'name': name, 'subsystem_count': cnt}
-                    for name, cnt in candidates
-                ],
-                suppressed=('QA-4' in suppress_incidents),
-            ))
+            qa_id='QA-4',
+            severity='Medium',
+            title=get_msg('QA-4', 'title', lang),
+            count=len(candidates),
+            description=get_msg('QA-4', 'description', lang,
+                                count=len(candidates), threshold=promote_threshold),
+            impact=get_msg('QA-4', 'impact', lang),
+            remediation=get_msg('QA-4', 'remediation', lang),
+            affected=[
+                {'name': name, 'subsystem_count': cnt}
+                for name, cnt in candidates
+            ],
+            suppressed=('QA-4' in suppress_incidents),
+        ))
 
     # ── QA-5: No documentation ───────────────────────────────────────
     no_docs = [s for s in systems if not s.documentation and s.name not in suppress]
     if no_docs:
-            show = sorted(no_docs, key=lambda x: x.name)[:30]
-            incidents.append(AuditIncident(
-                qa_id='QA-5',
-                severity='Medium',
-                title=get_msg('QA-5', 'title', lang),
-                count=len(no_docs),
-                description=get_msg('QA-5', 'description', lang),
-                impact=get_msg('QA-5', 'impact', lang),
-                remediation=get_msg('QA-5', 'remediation', lang),
-                affected=[
-                    {'name': s.name, 'domain': s.domain or 'unassigned'}
-                    for s in show
-                ],
-                suppressed=('QA-5' in suppress_incidents),
-            ))
+        show = sorted(no_docs, key=lambda x: x.name)[:_MAX_AFFECTED_ITEMS]
+        incidents.append(AuditIncident(
+            qa_id='QA-5',
+            severity='Medium',
+            title=get_msg('QA-5', 'title', lang),
+            count=len(no_docs),
+            description=get_msg('QA-5', 'description', lang),
+            impact=get_msg('QA-5', 'impact', lang),
+            remediation=get_msg('QA-5', 'remediation', lang),
+            affected=[
+                {'name': s.name, 'domain': s.domain or 'unassigned'}
+                for s in show
+            ],
+            suppressed=('QA-5' in suppress_incidents),
+        ))
 
     # ── QA-6: Orphan functions ───────────────────────────────────────
     orphan_fns: int = built.orphan_fns  # type: ignore[attr-defined]
     if orphan_fns > 0:
-            incidents.append(AuditIncident(
-                qa_id='QA-6',
-                severity='Low',
-                title=get_msg('QA-6', 'title', lang),
-                count=orphan_fns,
-                description=get_msg('QA-6', 'description', lang, count=orphan_fns),
-                impact=get_msg('QA-6', 'impact', lang),
-                remediation=get_msg('QA-6', 'remediation', lang),
-                suppressed=('QA-6' in suppress_incidents),
-            ))
+        incidents.append(AuditIncident(
+            qa_id='QA-6',
+            severity='Low',
+            title=get_msg('QA-6', 'title', lang),
+            count=orphan_fns,
+            description=get_msg('QA-6', 'description', lang, count=orphan_fns),
+            impact=get_msg('QA-6', 'impact', lang),
+            remediation=get_msg('QA-6', 'remediation', lang),
+            suppressed=('QA-6' in suppress_incidents),
+        ))
 
     # ── QA-7: Lost integrations ──────────────────────────────────────
-    total_flow_rels = sum(
-            1 for r in built.relationships  # type: ignore[attr-defined]
-            if r.rel_type in ('FlowRelationship', 'ServingRelationship', 'TriggeringRelationship')
-        )
-    resolved_intg = len(built.integrations)  # type: ignore[attr-defined]
-    skipped_intg = total_flow_rels - resolved_intg
-    if skipped_intg > 0:
-        pct = round(skipped_intg / total_flow_rels * 100) if total_flow_rels else 0
+    skipped_intg: int = getattr(built, 'intg_skipped', 0)
+    total_eligible: int = getattr(built, 'intg_total_eligible', 0)
+    if skipped_intg > 0 and total_eligible > 0:
+        pct = round(skipped_intg / total_eligible * 100)
         incidents.append(AuditIncident(
-                qa_id='QA-7',
-                severity='Critical',
-                title=get_msg('QA-7', 'title', lang),
-                count=skipped_intg,
-                description=get_msg('QA-7', 'description', lang,
-                                    skipped=skipped_intg, total=total_flow_rels, pct=pct),
-                impact=get_msg('QA-7', 'impact', lang),
-                remediation=get_msg('QA-7', 'remediation', lang),
-                suppressed=('QA-7' in suppress_incidents),
-            ))
+            qa_id='QA-7',
+            severity='Critical',
+            title=get_msg('QA-7', 'title', lang),
+            count=skipped_intg,
+            description=get_msg('QA-7', 'description', lang,
+                                skipped=skipped_intg, total=total_eligible, pct=pct),
+            impact=get_msg('QA-7', 'impact', lang),
+            remediation=get_msg('QA-7', 'remediation', lang),
+            suppressed=('QA-7' in suppress_incidents),
+        ))
 
     # ── QA-8: Solution view coverage ─────────────────────────────────
     if sv_total > 0 and sv_unresolved > 0:
         sv_resolved = sv_total - sv_unresolved
         sv_pct = round(sv_resolved / sv_total * 100)
         incidents.append(AuditIncident(
-                qa_id='QA-8',
-                severity='High',
-                title=get_msg('QA-8', 'title', lang),
-                count=sv_unresolved,
-                description=get_msg('QA-8', 'description', lang,
-                                    unresolved=sv_unresolved, total=sv_total,
-                                    resolved=sv_resolved),
-                impact=get_msg('QA-8', 'impact', lang),
-                remediation=get_msg('QA-8', 'remediation', lang),
-                suppressed=('QA-8' in suppress_incidents),
-            ))
+            qa_id='QA-8',
+            severity='High',
+            title=get_msg('QA-8', 'title', lang),
+            count=sv_unresolved,
+            description=get_msg('QA-8', 'description', lang,
+                                unresolved=sv_unresolved, total=sv_total,
+                                resolved=sv_resolved),
+            impact=get_msg('QA-8', 'impact', lang),
+            remediation=get_msg('QA-8', 'remediation', lang),
+            suppressed=('QA-8' in suppress_incidents),
+        ))
 
     # ── QA-9: No infrastructure mapping ──────────────────────────────
     unmapped = [s for s in systems if f'{s.domain}.{s.c4_id}' not in mapped_sys_paths
                     and s.domain and s.domain != 'unassigned'
                     and s.name not in suppress]
     if unmapped:
-        show = sorted(unmapped, key=lambda x: x.name)[:30]
+        show = sorted(unmapped, key=lambda x: x.name)[:_MAX_AFFECTED_ITEMS]
         incidents.append(AuditIncident(
-                qa_id='QA-9',
-                severity='Medium',
-                title=get_msg('QA-9', 'title', lang),
-                count=len(unmapped),
-                description=get_msg('QA-9', 'description', lang, count=len(unmapped)),
-                impact=get_msg('QA-9', 'impact', lang),
-                remediation=get_msg('QA-9', 'remediation', lang),
-                affected=[
-                    {'name': s.name, 'domain': s.domain}
-                    for s in show
-                ],
-                suppressed=('QA-9' in suppress_incidents),
-            ))
+            qa_id='QA-9',
+            severity='Medium',
+            title=get_msg('QA-9', 'title', lang),
+            count=len(unmapped),
+            description=get_msg('QA-9', 'description', lang, count=len(unmapped)),
+            impact=get_msg('QA-9', 'impact', lang),
+            remediation=get_msg('QA-9', 'remediation', lang),
+            affected=[
+                {'name': s.name, 'domain': s.domain}
+                for s in show
+            ],
+            suppressed=('QA-9' in suppress_incidents),
+        ))
 
     # ── QA-10: Deployment hierarchy issues ─────────────────────────
     deployment_nodes: list = built.deployment_nodes  # type: ignore[attr-defined]

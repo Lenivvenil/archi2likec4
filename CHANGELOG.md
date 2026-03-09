@@ -4,32 +4,39 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
-### Added
-- **dataStore**: automatic detection of database SystemSoftware (PostgreSQL, Oracle, Redis, MongoDB, etc.) → `dataStore` element kind on deployment diagrams
-- **dataStore↔dataEntity links**: `build_datastore_entity_links()` via AccessRelationship, generates `persists` relationships
-- **i18n**: bilingual (ru/en) message catalog for all 10 QA incidents + audit report headers
-- **Language config**: `language: ru|en` in `.archi2likec4.yaml`
-- **Bank-specific constants decoupled**: DOMAIN_RENAMES, EXTRA_DOMAIN_PATTERNS, PROMOTE_CHILDREN moved from models.py to config.py defaults
-
 ## [1.0.0] — 2026-03-09
 
 ### Added
 - **Core converter**: 4-phase pipeline (parse → build → validate → generate) for coArchi XML → LikeC4 .c4
-- **Element kinds**: domain, system, subsystem, appFunction, dataEntity, infraNode, infraSoftware, infraLocation
+- **Element kinds**: domain, system, subsystem, appFunction, dataEntity, infraNode, infraSoftware, infraLocation, dataStore
 - **Deployment topology**: 735 nodes, 383 app→infra mappings, Location elements (ЦОД)
+- **dataStore**: automatic detection of database SystemSoftware (PostgreSQL, Oracle, Redis, MongoDB, etc.)
+- **dataStore↔dataEntity links**: `build_datastore_entity_links()` via AccessRelationship
 - **Solution views**: functional, integration, and deployment diagram generation
 - **Quality audit**: 10 QA incidents (QA-1..QA-10) with AUDIT.md report generation
 - **Web UI**: Flask audit dashboard, incident detail, remediations review, system hierarchy pages
 - **Configuration**: `.archi2likec4.yaml` — domain overrides, promote_children, audit_suppress, quality gates
+- **i18n**: bilingual (ru/en) message catalog for all QA incidents + audit report
 - **Federation**: multi-project support via `federate_template.py`
 - **CLI**: `archi2likec4` entry point with `--strict`, `--verbose`, `--dry-run` flags; `web` subcommand
+- **CI**: GitHub Actions workflow (Python 3.10–3.13, ruff, pytest, mypy)
 - **PEP 561**: `py.typed` marker for type checker discovery
+
+### Security & reliability (code review rounds 1–6)
+- **Output safety**: `.archi2likec4-output` marker file prevents accidental `rmtree` of non-generated directories
+- **Open redirect protection**: `_safe_redirect()` rejects protocol-relative URLs (`//`)
+- **Config validation**: type checks for all mapping fields, negative threshold guards, unknown keys warning
+- **Integration accuracy**: `AggregationRelationship` excluded from integration builder; `total_eligible` metric for QA-7
+- **Web hardening**: `model_root.is_dir()` fail-fast, `_load_config_safe()` for all mutation routes, `RuntimeError` handler
+- **PyYAML error contract**: `RuntimeError` instead of `SystemExit` for uniform CLI error handling
 
 ### Architecture highlights
 - 289 systems, 94 subsystems, 1656 functions, 309 data entities parsed from ArchiMate model
 - Cross-layer relationships via ApplicationService realization
 - Domain assignment: folder-based detection + regex patterns + manual overrides
-- Subsystem promotion for complex systems (EFS, EFS_PLT)
+- Subsystem promotion for complex systems
+- Bank-specific constants decoupled to config defaults
+- 369 tests across 12 test files
 
 ## [0.x] — Pre-release iterations
 

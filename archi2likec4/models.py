@@ -57,7 +57,7 @@ _PROP_MAP = {
     'External/Internal': 'placement', 'placement': 'placement',
 }
 
-_STANDARD_KEYS = [
+_STANDARD_KEYS: list[str] = [
     'ci', 'full_name', 'lc_stage', 'criticality', 'target_state',
     'business_owner_dep', 'dev_team', 'architect', 'is_officer', 'placement',
 ]

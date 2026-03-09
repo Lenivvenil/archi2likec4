@@ -88,6 +88,8 @@ class BuildResult(NamedTuple):
     deployment_map: list
     tech_archi_to_c4: dict
     datastore_entity_links: list
+    intg_skipped: int
+    intg_total_eligible: int
 
 
 # ── Phases ───────────────────────────────────────────────────────────────
@@ -186,9 +188,10 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     logger.info('%d interfaces attached to %d systems', len(iface_c4_path), linked)
 
     logger.info('Building integrations...')
-    integrations = build_integrations(
+    integrations, intg_skipped, intg_total_eligible = build_integrations(
         systems, parsed.relationships, iface_c4_path, promoted_parents)
-    logger.info('%d unique system-to-system integrations', len(integrations))
+    logger.info('%d unique system-to-system integrations (%d/%d eligible skipped)',
+                len(integrations), intg_skipped, intg_total_eligible)
 
     logger.info('Building data access relationships...')
     data_access = build_data_access(
@@ -264,6 +267,8 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
         deployment_map=deployment_map,
         tech_archi_to_c4=tech_archi_to_c4,
         datastore_entity_links=datastore_entity_links,
+        intg_skipped=intg_skipped,
+        intg_total_eligible=intg_total_eligible,
     )
 
 
@@ -309,6 +314,18 @@ def _validate(built: BuildResult, config: ConvertConfig) -> tuple[int, int, dict
                        unassigned_count, config.max_unassigned_systems_warn)
         warnings += 1
 
+    # Gate 4: Critical QA incidents (strict mode only)
+    if config.strict:
+        from .audit_data import compute_audit_incidents
+        _, audit_incidents = compute_audit_incidents(built, sv_unresolved, sv_total, config)
+        critical = [i for i in audit_incidents
+                    if i.severity == 'Critical' and not i.suppressed and i.count > 0]
+        if critical:
+            for inc in critical:
+                logger.warning('Critical QA incident: %s %s (%d)',
+                               inc.qa_id, inc.title, inc.count)
+            warnings += len(critical)
+
     return warnings, errors, solution_view_files, sv_unresolved, sv_total
 
 
@@ -324,18 +341,21 @@ def _generate(
     logger.info('Generating files...')
 
     # Clean & create dirs (with safety checks)
+    _OUTPUT_MARKER = '.archi2likec4-output'
     if output_dir.exists():
         resolved = output_dir.resolve()
         if resolved == Path.cwd().resolve() or resolved == Path.home().resolve():
             raise SystemExit(f'FATAL: refusing to rmtree dangerous path: {resolved}')
-        if resolved == Path('/') or str(resolved).count('/') <= 1:
+        if len(resolved.parts) <= 2:  # root or one level (e.g. /tmp, C:\Users)
             raise SystemExit(f'FATAL: refusing to rmtree root-level path: {resolved}')
-        if not (resolved / 'specification.c4').exists() and any(resolved.iterdir()):
+        has_marker = (resolved / _OUTPUT_MARKER).exists()
+        if not has_marker and any(resolved.iterdir()):
             raise SystemExit(
                 f'FATAL: {resolved} does not look like a converter output dir '
-                f'(missing specification.c4). Refusing to delete.')
+                f'(missing {_OUTPUT_MARKER}). Refusing to delete.')
         shutil.rmtree(resolved)
     output_dir.mkdir(parents=True, exist_ok=True)
+    (output_dir / _OUTPUT_MARKER).write_text('', encoding='utf-8')
     domains_dir = output_dir / 'domains'
     domains_dir.mkdir(exist_ok=True)
     systems_dir = output_dir / 'systems'
@@ -509,12 +529,15 @@ def main():
 
     try:
         config = load_config(args.config_file)
-    except (FileNotFoundError, ValueError) as e:
+    except (FileNotFoundError, ValueError, OSError, RuntimeError) as e:
         logger.error('Configuration error: %s', e)
         sys.exit(2)
 
-    config.model_root = Path(args.model_root)
+    config.model_root = Path(args.model_root).resolve()
     config.output_dir = Path(args.output_dir)
+    if not config.model_root.is_dir():
+        logger.error('Model root directory does not exist: %s', config.model_root)
+        sys.exit(2)
     if args.strict:
         config.strict = True
     if args.verbose:

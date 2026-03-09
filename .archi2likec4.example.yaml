@@ -2,7 +2,7 @@
 # Copy to .archi2likec4.yaml and customise for your landscape.
 #
 # Every key is optional — unset keys fall back to built-in defaults
-# from archi2likec4/models.py.
+# from archi2likec4/config.py.
 
 # ── Subsystem promotion ───────────────────────────────────────────────
 # Parents whose dot-children should become standalone systems.

@@ -5,48 +5,23 @@ children) live here rather than in models.py so they can be overridden
 via .archi2likec4.yaml without touching source code.
 """
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .models import PROMOTE_WARN_THRESHOLD
 
+logger = logging.getLogger(__name__)
 
-# ── Organization-specific defaults ──────────────────────────────────────
-# Override these in .archi2likec4.yaml for your organization.
 
-_DEFAULT_DOMAIN_RENAMES: dict[str, tuple[str, str]] = {
-    'banking_operations': ('products', 'Products'),
-    'customer_service_management': ('customer_service', 'Customer Service'),
-}
+# ── Defaults ───────────────────────────────────────────────────────────
+# Empty by default — organization-specific values belong in .archi2likec4.yaml.
 
-_DEFAULT_EXTRA_DOMAIN_PATTERNS: list[dict] = [
-    {
-        'c4_id': 'external_exchange',
-        'name': 'External Exchange',
-        'patterns': [
-            'ASBT', 'EBP', 'EGOV', 'Korona', 'MasterCard', 'Ria',
-            'VisaDirect', 'ЗАГС', 'Ofd', 'GrossInsurance', 'WingsInsurance',
-            'PaymentHub', 'Compensation',
-        ],
-    },
-    {
-        'c4_id': 'platform',
-        'name': 'Platform',
-        'patterns': [
-            'ELK', 'Grafana', 'HA Proxy', 'Hadoop', 'IBM ESB', 'IBM MQ',
-            'Kubernetes', 'Mongo DB', 'Oracle', 'Postgres', 'Prometheus',
-            'Rabbit MQ', 'SFTP', 'SMS gateway', 'SMTP Server', 'Stage DB',
-            'WAF', 'Zabix', 'Zipkin', 'Confluence', 'Jira', 'Jasper Server',
-            'API Mngt', 'Файловое Хранилище S3', 'ЭФС API Gateway',
-            'API Gateway клиента', 'Сервер ЭЦП',
-        ],
-    },
-]
+_DEFAULT_DOMAIN_RENAMES: dict[str, tuple[str, str]] = {}
 
-_DEFAULT_PROMOTE_CHILDREN: dict[str, str] = {
-    'EFS': 'channels',
-    'EFS_PLT': 'customer_service',
-}
+_DEFAULT_EXTRA_DOMAIN_PATTERNS: list[dict] = []
+
+_DEFAULT_PROMOTE_CHILDREN: dict[str, str] = {}
 
 
 @dataclass
@@ -115,7 +90,7 @@ def load_config(config_path: Path | None) -> ConvertConfig:
         try:
             import yaml  # type: ignore[import-untyped]
         except ImportError:
-            raise SystemExit(
+            raise RuntimeError(
                 f'Config file {config_path} requires PyYAML: pip install pyyaml')
         with open(config_path, 'r', encoding='utf-8') as fh:
             data = yaml.safe_load(fh) or {}
@@ -127,22 +102,55 @@ def load_config(config_path: Path | None) -> ConvertConfig:
     return config
 
 
+_KNOWN_YAML_KEYS: set[str] = {
+    'promote_children', 'promote_warn_threshold',
+    'domain_renames', 'extra_domain_patterns',
+    'quality_gates',
+    'audit_suppress', 'audit_suppress_incidents',
+    'domain_overrides', 'reviewed_systems',
+    'language', 'strict',
+}
+
+
 def _apply_yaml(config: ConvertConfig, data: dict) -> None:
     """Merge *data* from YAML into *config*, overriding only supplied keys."""
-    if 'promote_children' in data and isinstance(data['promote_children'], dict):
+    unknown = set(data.keys()) - _KNOWN_YAML_KEYS
+    if unknown:
+        logger.warning('Unknown config keys (ignored): %s', ', '.join(sorted(unknown)))
+    if 'promote_children' in data:
+        if not isinstance(data['promote_children'], dict):
+            raise ValueError(
+                f"promote_children: expected mapping, got {type(data['promote_children']).__name__}")
+        for k, v in data['promote_children'].items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                raise ValueError(
+                    f"promote_children['{k}']: key and value must be strings, "
+                    f"got key={type(k).__name__}, value={type(v).__name__}")
         config.promote_children = data['promote_children']
     if 'promote_warn_threshold' in data:
-        config.promote_warn_threshold = int(data['promote_warn_threshold'])
-    if 'domain_renames' in data and isinstance(data['domain_renames'], dict):
+        val = int(data['promote_warn_threshold'])
+        if val < 0:
+            raise ValueError(f"promote_warn_threshold: must be non-negative, got {val}")
+        config.promote_warn_threshold = val
+    if 'domain_renames' in data:
+        if not isinstance(data['domain_renames'], dict):
+            raise ValueError(
+                f"domain_renames: expected mapping, got {type(data['domain_renames']).__name__}")
         renames: dict[str, tuple[str, str]] = {}
         for k, v in data['domain_renames'].items():
             if not isinstance(v, (list, tuple)) or len(v) != 2:
                 raise ValueError(
                     f"domain_renames['{k}']: expected [new_id, 'Display Name'], "
                     f"got {v!r}")
+            if not isinstance(v[0], str) or not isinstance(v[1], str):
+                raise ValueError(
+                    f"domain_renames['{k}']: values must be strings, got {v!r}")
             renames[k] = tuple(v)
         config.domain_renames = renames
-    if 'extra_domain_patterns' in data and isinstance(data['extra_domain_patterns'], list):
+    if 'extra_domain_patterns' in data:
+        if not isinstance(data['extra_domain_patterns'], list):
+            raise ValueError(
+                f"extra_domain_patterns: expected list, got {type(data['extra_domain_patterns']).__name__}")
         validated: list[dict] = []
         for i, entry in enumerate(data['extra_domain_patterns']):
             if not isinstance(entry, dict):
@@ -152,10 +160,23 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                 if key not in entry:
                     raise ValueError(
                         f"extra_domain_patterns[{i}]: missing required key '{key}'")
+            if not isinstance(entry['c4_id'], str):
+                raise ValueError(
+                    f"extra_domain_patterns[{i}]['c4_id']: expected string, "
+                    f"got {type(entry['c4_id']).__name__}")
+            if not isinstance(entry['name'], str):
+                raise ValueError(
+                    f"extra_domain_patterns[{i}]['name']: expected string, "
+                    f"got {type(entry['name']).__name__}")
             if not isinstance(entry['patterns'], list):
                 raise ValueError(
                     f"extra_domain_patterns[{i}]['patterns']: expected list, "
                     f"got {type(entry['patterns']).__name__}")
+            for j, pat in enumerate(entry['patterns']):
+                if not isinstance(pat, str):
+                    raise ValueError(
+                        f"extra_domain_patterns[{i}]['patterns'][{j}]: expected string, "
+                        f"got {type(pat).__name__}")
             validated.append(entry)
         config.extra_domain_patterns = validated
 
@@ -163,18 +184,31 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
     gates = data.get('quality_gates')
     if isinstance(gates, dict):
         if 'max_unresolved_ratio' in gates:
-            config.max_unresolved_ratio = float(gates['max_unresolved_ratio'])
+            ratio = float(gates['max_unresolved_ratio'])
+            if not 0 <= ratio <= 1:
+                raise ValueError(
+                    f"quality_gates.max_unresolved_ratio: must be between 0 and 1, got {ratio}")
+            config.max_unresolved_ratio = ratio
         if 'max_orphan_functions_warn' in gates:
-            config.max_orphan_functions_warn = int(gates['max_orphan_functions_warn'])
+            val = int(gates['max_orphan_functions_warn'])
+            if val < 0:
+                raise ValueError(f"quality_gates.max_orphan_functions_warn: must be non-negative, got {val}")
+            config.max_orphan_functions_warn = val
         if 'max_unassigned_systems_warn' in gates:
-            config.max_unassigned_systems_warn = int(gates['max_unassigned_systems_warn'])
+            val = int(gates['max_unassigned_systems_warn'])
+            if val < 0:
+                raise ValueError(f"quality_gates.max_unassigned_systems_warn: must be non-negative, got {val}")
+            config.max_unassigned_systems_warn = val
 
     if 'audit_suppress' in data and isinstance(data['audit_suppress'], list):
         config.audit_suppress = [str(s) for s in data['audit_suppress']]
     if 'audit_suppress_incidents' in data and isinstance(data['audit_suppress_incidents'], list):
         config.audit_suppress_incidents = [str(s) for s in data['audit_suppress_incidents']]
 
-    if 'domain_overrides' in data and isinstance(data['domain_overrides'], dict):
+    if 'domain_overrides' in data:
+        if not isinstance(data['domain_overrides'], dict):
+            raise ValueError(
+                f"domain_overrides: expected mapping, got {type(data['domain_overrides']).__name__}")
         config.domain_overrides = {str(k): str(v) for k, v in data['domain_overrides'].items()}
     if 'reviewed_systems' in data and isinstance(data['reviewed_systems'], list):
         config.reviewed_systems = [str(s) for s in data['reviewed_systems']]
@@ -208,7 +242,8 @@ def save_suppress(
     data: dict = {}
     if config_path.exists():
         with open(config_path, 'r', encoding='utf-8') as fh:
-            data = yaml.safe_load(fh) or {}
+            raw = yaml.safe_load(fh)
+            data = raw if isinstance(raw, dict) else {}
 
     if suppress_names:
         data['audit_suppress'] = sorted(set(suppress_names))
@@ -221,7 +256,7 @@ def save_suppress(
         data.pop('audit_suppress_incidents', None)
 
     with open(config_path, 'w', encoding='utf-8') as fh:
-        yaml.dump(data, fh, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        yaml.safe_dump(data, fh, default_flow_style=False, allow_unicode=True, sort_keys=False)
 
 
 def update_config_field(
@@ -239,7 +274,8 @@ def update_config_field(
     data: dict = {}
     if config_path.exists():
         with open(config_path, 'r', encoding='utf-8') as fh:
-            data = yaml.safe_load(fh) or {}
+            raw = yaml.safe_load(fh)
+            data = raw if isinstance(raw, dict) else {}
 
     if value is None or value == {} or value == []:
         data.pop(field_name, None)
@@ -247,4 +283,4 @@ def update_config_field(
         data[field_name] = value
 
     with open(config_path, 'w', encoding='utf-8') as fh:
-        yaml.dump(data, fh, default_flow_style=False, allow_unicode=True, sort_keys=False)
+        yaml.safe_dump(data, fh, default_flow_style=False, allow_unicode=True, sort_keys=False)

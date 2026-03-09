@@ -11,7 +11,7 @@ cd archi2likec4
 python3 -m venv .venv
 source .venv/bin/activate
 
-# Install in development mode
+# Install in development mode (includes pytest, flask, pyyaml)
 pip install -e ".[dev]"
 
 # For federation script development:

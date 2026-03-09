@@ -59,12 +59,62 @@ def _build_comp_c4_path(systems: list[System]) -> tuple[dict[str, str], dict[str
 
 
 def _extract_url(documentation: str) -> str | None:
+    """Extract the first HTTP(S) URL from a documentation string."""
     if not documentation:
         return None
     url_match = re.search(r'https?://\S+', documentation)
     if url_match:
         return url_match.group(0).rstrip('.,;)')
     return None
+
+
+def _make_unique_id(base_id: str, used_ids: set[str]) -> str:
+    """Return *base_id* if unused, otherwise append _2, _3, … until unique."""
+    if base_id not in used_ids:
+        return base_id
+    suffix = 2
+    while f'{base_id}_{suffix}' in used_ids:
+        suffix += 1
+    return f'{base_id}_{suffix}'
+
+
+def _assign_tags(source_folder: str) -> list[str]:
+    """Derive element tags from the coArchi source folder name."""
+    if source_folder == '!РАЗБОР':
+        return ['to_review']
+    if source_folder == '!External_services':
+        return ['external']
+    return []
+
+
+def _attach_subsystems(
+    parent_systems: dict[str, System],
+    subsystem_acs: list[AppComponent],
+    parent_name_fn,
+    sub_name_fn,
+) -> None:
+    """Attach a list of subsystem AppComponents to their parent Systems.
+
+    *parent_name_fn(ac)* extracts the parent system name.
+    *sub_name_fn(ac)* extracts the subsystem display name.
+    """
+    for ac in subsystem_acs:
+        parent_name = parent_name_fn(ac)
+        sub_name = sub_name_fn(ac)
+        if parent_name not in parent_systems:
+            logger.warning('Subsystem "%s" has no parent system "%s", skipping',
+                           ac.name, parent_name)
+            continue
+
+        parent = parent_systems[parent_name]
+        sub_ids_used = {s.c4_id for s in parent.subsystems}
+        sub_c4_id = _make_unique_id(make_id(sub_name), sub_ids_used)
+
+        parent.subsystems.append(Subsystem(
+            c4_id=sub_c4_id, name=ac.name, archi_id=ac.archi_id,
+            documentation=ac.documentation, metadata=build_metadata(ac),
+            tags=_assign_tags(ac.source_folder),
+        ))
 
 
 # ── Builders ─────────────────────────────────────────────────────────────
@@ -75,6 +125,11 @@ def build_systems(
     promote_warn_threshold: int | None = None,
     reviewed_systems: list[str] | None = None,
 ) -> tuple[list[System], dict[str, list[str]]]:
+    """Build System objects from parsed AppComponents.
+
+    Returns (systems, promoted_parents) where promoted_parents maps
+    parent archi_id → list of child c4_ids for fan-out.
+    """
     if promote_children is None:
         promote_children = {}
     if promote_warn_threshold is None:
@@ -158,19 +213,10 @@ def build_systems(
     used_ids: set[str] = set()
 
     for name, ac in sorted(system_acs.items()):
-        c4_id = make_id(name)
-        if c4_id in used_ids:
-            suffix = 2
-            while f'{c4_id}_{suffix}' in used_ids:
-                suffix += 1
-            c4_id = f'{c4_id}_{suffix}'
+        c4_id = _make_unique_id(make_id(name), used_ids)
         used_ids.add(c4_id)
 
-        tags: list[str] = []
-        if ac.source_folder == '!РАЗБОР':
-            tags.append('to_review')
-        elif ac.source_folder == '!External_services':
-            tags.append('external')
+        tags = _assign_tags(ac.source_folder)
 
         if reviewed_systems and name in reviewed_systems:
             if 'to_review' in tags:
@@ -199,64 +245,31 @@ def build_systems(
                         parent_name, len(children_c4_ids))
 
     # ── Attach regular subsystems ────────────────────────────────────────
-    for ac in subsystem_acs:
-        parts = ac.name.split('.', 1)
-        parent_name = parts[0]
-        sub_name = parts[1] if len(parts) > 1 else ac.name
-        if parent_name not in systems:
-            logger.warning('Subsystem "%s" has no parent system "%s", skipping',
-                           ac.name, parent_name)
-            continue
-
-        parent = systems[parent_name]
-        sub_ids_used = {s.c4_id for s in parent.subsystems}
-        sub_c4_id = make_id(sub_name)
-        if sub_c4_id in sub_ids_used:
-            suffix = 2
-            while f'{sub_c4_id}_{suffix}' in sub_ids_used:
-                suffix += 1
-            sub_c4_id = f'{sub_c4_id}_{suffix}'
-
-        tags: list[str] = []
-        if ac.source_folder == '!РАЗБОР':
-            tags.append('to_review')
-        elif ac.source_folder == '!External_services':
-            tags.append('external')
-
-        parent.subsystems.append(Subsystem(
-            c4_id=sub_c4_id, name=ac.name, archi_id=ac.archi_id,
-            documentation=ac.documentation, metadata=build_metadata(ac), tags=tags,
-        ))
+    _attach_subsystems(
+        systems, subsystem_acs,
+        parent_name_fn=lambda ac: ac.name.split('.', 1)[0],
+        sub_name_fn=lambda ac: ac.name.split('.', 1)[1] if '.' in ac.name else ac.name,
+    )
 
     # ── Attach promoted subsystems (3-segment names) ─────────────────────
+    # Ensure 2-segment parent systems exist for any 3+ segment promoted ACs
     for ac in promoted_subsystem_acs:
-        parts = ac.name.split('.', 2)
-        parent_name = f'{parts[0]}.{parts[1]}'
-        sub_name = parts[2]
-        if parent_name not in systems:
-            logger.warning('Promoted subsystem "%s" has no parent system "%s", skipping',
-                           ac.name, parent_name)
-            continue
+        parent_2seg = '.'.join(ac.name.split('.', 2)[:2])
+        if parent_2seg not in systems:
+            c4_id = _make_unique_id(make_id(parent_2seg), used_ids)
+            used_ids.add(c4_id)
+            systems[parent_2seg] = System(
+                c4_id=c4_id, name=parent_2seg, archi_id='',
+                documentation='', metadata={},
+            )
+            logger.info('Auto-created promoted system "%s" for 3-segment child "%s"',
+                        parent_2seg, ac.name)
 
-        parent = systems[parent_name]
-        sub_ids_used = {s.c4_id for s in parent.subsystems}
-        sub_c4_id = make_id(sub_name)
-        if sub_c4_id in sub_ids_used:
-            suffix = 2
-            while f'{sub_c4_id}_{suffix}' in sub_ids_used:
-                suffix += 1
-            sub_c4_id = f'{sub_c4_id}_{suffix}'
-
-        tags: list[str] = []
-        if ac.source_folder == '!РАЗБОР':
-            tags.append('to_review')
-        elif ac.source_folder == '!External_services':
-            tags.append('external')
-
-        parent.subsystems.append(Subsystem(
-            c4_id=sub_c4_id, name=ac.name, archi_id=ac.archi_id,
-            documentation=ac.documentation, metadata=build_metadata(ac), tags=tags,
-        ))
+    _attach_subsystems(
+        systems, promoted_subsystem_acs,
+        parent_name_fn=lambda ac: '.'.join(ac.name.split('.', 2)[:2]),
+        sub_name_fn=lambda ac: ac.name.split('.', 2)[2],
+    )
 
     # ── Phase 4: warn about suspicious parents ───────────────────────────
     parent_sub_count: dict[str, int] = {}
@@ -374,6 +387,10 @@ def attach_interfaces(
     interfaces: list[AppInterface],
     relationships: list[RawRelationship],
 ) -> dict[str, str]:
+    """Resolve ApplicationInterface ownership and attach to systems.
+
+    Returns iface_c4_path: archi_id → c4_path for resolved interfaces.
+    """
     comp_index = _build_comp_index(systems)
 
     iface_index: dict[str, AppInterface] = {i.archi_id: i for i in interfaces}
@@ -447,19 +464,29 @@ def build_integrations(
     relationships: list[RawRelationship],
     iface_c4_path: dict[str, str],
     promoted_parents: dict[str, list[str]] | None = None,
-) -> list[Integration]:
+) -> tuple[list[Integration], int, int]:
+    """Build deduplicated system-to-system integrations.
+
+    Returns (integrations, skipped_count, total_eligible) where skipped_count
+    is the number of eligible relationships with unresolvable endpoints and
+    total_eligible is the total number of eligible (non-structural) relationships.
+    """
     comp_c4_path, comp_system_id = _build_comp_c4_path(systems)
 
     raw_integrations: list[Integration] = []
     skipped = 0
+    total_eligible = 0
     for rel in relationships:
         if rel.rel_type == 'AccessRelationship':
             continue
-        if rel.rel_type in ('CompositionRelationship', 'RealizationRelationship', 'AssignmentRelationship'):
+        if rel.rel_type in ('CompositionRelationship', 'AggregationRelationship',
+                            'RealizationRelationship', 'AssignmentRelationship'):
             continue
         # Skip relationships involving ApplicationFunctions (not cross-system integrations)
         if rel.source_type == 'ApplicationFunction' or rel.target_type == 'ApplicationFunction':
             continue
+
+        total_eligible += 1
 
         # Resolve source to one or more c4 paths (fan-out for promoted parents)
         src_paths: list[str] = []
@@ -530,7 +557,7 @@ def build_integrations(
         else:
             label = f'{"; ".join(unique_names[:3])}... ({count} flows)'
         deduped.append(Integration(source_path=src, target_path=tgt, name=label, rel_type=''))
-    return deduped
+    return deduped, skipped, total_eligible
 
 
 def build_data_access(
@@ -805,12 +832,7 @@ def build_deployment_topology(
     node_by_archi: dict[str, DeploymentNode] = {}
 
     for te in tech_elements:
-        c4_id = make_id(te.name)
-        if c4_id in used_ids:
-            suffix = 2
-            while f'{c4_id}_{suffix}' in used_ids:
-                suffix += 1
-            c4_id = f'{c4_id}_{suffix}'
+        c4_id = _make_unique_id(make_id(te.name), used_ids)
         used_ids.add(c4_id)
 
         if te.tech_type == 'Location':
@@ -840,7 +862,7 @@ def build_deployment_topology(
             continue
         parent = node_by_archi.get(rel.source_id)
         child = node_by_archi.get(rel.target_id)
-        if parent and child:
+        if parent and child and rel.target_id not in children_set:
             parent.children.append(child)
             children_set.add(rel.target_id)
 
@@ -914,8 +936,8 @@ def build_deployment_map(
     # Build tech index: archi_id → qualified c4 path (parent.child for nested)
     tech_path = _build_deployment_path_index(deployment_nodes)
 
-    _app_types = {'ApplicationComponent', 'ApplicationInterface',
-                  'ApplicationFunction', 'ApplicationService'}
+    # Only ApplicationComponent is resolvable via app_path (systems/subsystems).
+    _app_types = {'ApplicationComponent'}
     _tech_types = {'Node', 'SystemSoftware', 'Device', 'TechnologyCollaboration',
                    'TechnologyService', 'Artifact', 'CommunicationNetwork', 'Path'}
 
@@ -923,7 +945,7 @@ def build_deployment_map(
     result: list[tuple[str, str]] = []
 
     for rel in relationships:
-        if rel.rel_type != 'RealizationRelationship':
+        if rel.rel_type not in ('RealizationRelationship', 'AssignmentRelationship'):
             continue
 
         app_id: str | None = None

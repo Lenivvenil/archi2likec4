@@ -629,15 +629,22 @@ def _get_columns(incident) -> list[str]:
     return list(incident.affected[0].keys())
 
 
+_HEALTH_DOMAIN_OK = 0.8
+_HEALTH_DOMAIN_WARN = 0.5
+_HEALTH_META_OK = 50
+_HEALTH_META_WARN = 20
+
+
 def _metric_health(summary) -> dict[str, str]:
     """Compute CSS classes for metric cards based on risk thresholds."""
     h: dict[str, str] = {}
     # With Domain
     ratio = summary.assigned_count / summary.total_systems if summary.total_systems else 1
-    h['domain'] = 'metric-ok' if ratio >= 0.8 else ('metric-warn' if ratio >= 0.5 else 'metric-crit')
+    h['domain'] = 'metric-ok' if ratio >= _HEALTH_DOMAIN_OK else (
+        'metric-warn' if ratio >= _HEALTH_DOMAIN_WARN else 'metric-crit')
     # Metadata
-    h['meta'] = 'metric-ok' if summary.meta_completeness_pct >= 50 else (
-        'metric-warn' if summary.meta_completeness_pct >= 20 else 'metric-crit')
+    h['meta'] = 'metric-ok' if summary.meta_completeness_pct >= _HEALTH_META_OK else (
+        'metric-warn' if summary.meta_completeness_pct >= _HEALTH_META_WARN else 'metric-crit')
     # Integrations
     h['intg'] = 'metric-ok' if summary.total_integrations > 0 else 'metric-crit'
     # Deploy Maps
@@ -648,13 +655,12 @@ def _metric_health(summary) -> dict[str, str]:
     return h
 
 
-def run_web(
+def create_app(
     config_path: Path | None,
     model_root: Path,
     output_dir: Path,
-    port: int = 8090,
-) -> None:
-    """Start Flask web UI for quality audit dashboard."""
+) -> 'Flask':
+    """Create Flask app for quality audit dashboard (without starting the server)."""
     try:
         from flask import Flask, render_template_string, request, redirect
     except ImportError:
@@ -666,6 +672,12 @@ def run_web(
     from .config import load_config, save_suppress, update_config_field
     from .audit_data import compute_audit_incidents
 
+    # Fail-fast: validate paths at startup, not on first request
+    if config_path is not None and not config_path.exists():
+        raise SystemExit(f'Config file not found: {config_path}')
+    if not model_root.is_dir():
+        raise SystemExit(f'Model root directory not found: {model_root}')
+
     # Resolve config path for save operations
     resolved_config_path = config_path
     if resolved_config_path is None:
@@ -673,10 +685,27 @@ def run_web(
 
     app = Flask(__name__)
 
+    def _safe_redirect(url: str) -> str:
+        """Validate redirect URL to prevent open redirect attacks."""
+        if not url or not url.startswith('/') or url.startswith('//'):
+            return '/'
+        return url
+
+    _cache: dict[str, object] = {}
+    _CACHE_TTL = 30  # seconds
+
     def _load_data():
-        """Parse -> build -> validate -> compute audit incidents."""
+        """Parse -> build -> validate -> compute audit incidents (cached for _CACHE_TTL seconds)."""
+        import time
+        now = time.monotonic()
+        if '_data' in _cache and now - _cache.get('_ts', 0) < _CACHE_TTL:
+            return _cache['_data']
+
         from .pipeline import _parse, _build, _validate
-        config = load_config(config_path)
+        try:
+            config = load_config(config_path)
+        except (FileNotFoundError, ValueError, OSError) as e:
+            raise RuntimeError(f'Configuration error: {e}') from e
         config.model_root = model_root
         config.output_dir = output_dir
         parsed = _parse(model_root, config)
@@ -687,11 +716,29 @@ def run_web(
             d for d in built.domain_systems.keys()
             if d != 'unassigned' and built.domain_systems[d]
         )
-        return config, summary, incidents, available_domains
+        result = config, summary, incidents, available_domains, built
+        _cache['_data'] = result
+        _cache['_ts'] = now
+        return result
+
+    def _invalidate_cache():
+        """Clear cached data (called after config modifications)."""
+        _cache.clear()
+
+    @app.after_request
+    def _after_request(response):
+        """Invalidate cache after any POST (config-modifying) request."""
+        if request.method == 'POST':
+            _invalidate_cache()
+        return response
+
+    @app.errorhandler(RuntimeError)
+    def _handle_runtime_error(error):
+        return f'<h1>Configuration Error</h1><pre>{error}</pre>', 500
 
     @app.route('/')
     def dashboard():
-        config, summary, incidents, available_domains = _load_data()
+        config, summary, incidents, available_domains, built = _load_data()
         lang = getattr(config, 'language', 'ru')
         active_count = sum(1 for i in incidents if not i.suppressed)
         suppressed_count = sum(1 for i in incidents if i.suppressed)
@@ -718,7 +765,7 @@ def run_web(
 
     @app.route('/incident/<qa_id>')
     def incident_detail(qa_id):
-        config, summary, incidents, available_domains = _load_data()
+        config, summary, incidents, available_domains, built = _load_data()
         lang = getattr(config, 'language', 'ru')
         incident = next((i for i in incidents if i.qa_id == qa_id), None)
         if incident is None:
@@ -733,9 +780,16 @@ def run_web(
             available_domains=available_domains,
         )
 
+    def _load_config_safe():
+        """Load config with error handling for web routes."""
+        try:
+            return load_config(config_path)
+        except (FileNotFoundError, ValueError, OSError) as e:
+            raise RuntimeError(f'Configuration error: {e}') from e
+
     @app.route('/remediations')
     def remediations():
-        config = load_config(config_path)
+        config = _load_config_safe()
         lang = getattr(config, 'language', 'ru')
         return render_template_string(
             _REMEDIATIONS_TEMPLATE,
@@ -752,9 +806,9 @@ def run_web(
     @app.route('/suppress/system', methods=['POST'])
     def suppress_system():
         name = request.form.get('name', '').strip()
-        redirect_to = request.form.get('redirect', '/')
+        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name:
-            config = load_config(config_path)
+            config = _load_config_safe()
             names = list(set(config.audit_suppress + [name]))
             save_suppress(resolved_config_path, names, config.audit_suppress_incidents)
             logger.info('Suppressed system: %s', name)
@@ -763,9 +817,9 @@ def run_web(
     @app.route('/unsuppress/system', methods=['POST'])
     def unsuppress_system():
         name = request.form.get('name', '').strip()
-        redirect_to = request.form.get('redirect', '/')
+        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name:
-            config = load_config(config_path)
+            config = _load_config_safe()
             names = [n for n in config.audit_suppress if n != name]
             save_suppress(resolved_config_path, names, config.audit_suppress_incidents)
             logger.info('Unsuppressed system: %s', name)
@@ -775,7 +829,7 @@ def run_web(
     def suppress_incident():
         qa_id = request.form.get('qa_id', '').strip()
         if qa_id:
-            config = load_config(config_path)
+            config = _load_config_safe()
             ids = list(set(config.audit_suppress_incidents + [qa_id]))
             save_suppress(resolved_config_path, config.audit_suppress, ids)
             logger.info('Suppressed incident: %s', qa_id)
@@ -784,9 +838,9 @@ def run_web(
     @app.route('/unsuppress/incident', methods=['POST'])
     def unsuppress_incident():
         qa_id = request.form.get('qa_id', '').strip()
-        redirect_to = request.form.get('redirect', '/')
+        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if qa_id:
-            config = load_config(config_path)
+            config = _load_config_safe()
             ids = [i for i in config.audit_suppress_incidents if i != qa_id]
             save_suppress(resolved_config_path, config.audit_suppress, ids)
             logger.info('Unsuppressed incident: %s', qa_id)
@@ -798,9 +852,9 @@ def run_web(
     def assign_domain():
         name = request.form.get('name', '').strip()
         domain = request.form.get('domain', '').strip()
-        redirect_to = request.form.get('redirect', '/')
+        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name and domain:
-            config = load_config(config_path)
+            config = _load_config_safe()
             overrides = dict(config.domain_overrides)
             overrides[name] = domain
             update_config_field(resolved_config_path, 'domain_overrides', overrides)
@@ -810,9 +864,9 @@ def run_web(
     @app.route('/undo-assign-domain', methods=['POST'])
     def undo_assign_domain():
         name = request.form.get('name', '').strip()
-        redirect_to = request.form.get('redirect', '/')
+        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name:
-            config = load_config(config_path)
+            config = _load_config_safe()
             overrides = dict(config.domain_overrides)
             overrides.pop(name, None)
             update_config_field(resolved_config_path, 'domain_overrides', overrides)
@@ -822,9 +876,9 @@ def run_web(
     @app.route('/mark-reviewed', methods=['POST'])
     def mark_reviewed():
         name = request.form.get('name', '').strip()
-        redirect_to = request.form.get('redirect', '/')
+        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name:
-            config = load_config(config_path)
+            config = _load_config_safe()
             reviewed = list(set(config.reviewed_systems + [name]))
             update_config_field(resolved_config_path, 'reviewed_systems', sorted(reviewed))
             logger.info('Marked system as reviewed: %s', name)
@@ -833,9 +887,9 @@ def run_web(
     @app.route('/undo-mark-reviewed', methods=['POST'])
     def undo_mark_reviewed():
         name = request.form.get('name', '').strip()
-        redirect_to = request.form.get('redirect', '/')
+        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name:
-            config = load_config(config_path)
+            config = _load_config_safe()
             reviewed = [s for s in config.reviewed_systems if s != name]
             update_config_field(resolved_config_path, 'reviewed_systems', reviewed)
             logger.info('Undone reviewed mark for %s', name)
@@ -845,9 +899,9 @@ def run_web(
     def promote_system():
         name = request.form.get('name', '').strip()
         domain = request.form.get('domain', '').strip()
-        redirect_to = request.form.get('redirect', '/')
+        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name and domain:
-            config = load_config(config_path)
+            config = _load_config_safe()
             promote = dict(config.promote_children)
             promote[name] = domain
             update_config_field(resolved_config_path, 'promote_children', promote)
@@ -857,9 +911,9 @@ def run_web(
     @app.route('/undo-promote', methods=['POST'])
     def undo_promote():
         name = request.form.get('name', '').strip()
-        redirect_to = request.form.get('redirect', '/')
+        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name:
-            config = load_config(config_path)
+            config = _load_config_safe()
             promote = dict(config.promote_children)
             promote.pop(name, None)
             update_config_field(resolved_config_path, 'promote_children', promote)
@@ -868,15 +922,8 @@ def run_web(
 
     @app.route('/hierarchy')
     def hierarchy():
-        config, summary, incidents, available_domains = _load_data()
+        config, summary, incidents, available_domains, built = _load_data()
         lang = getattr(config, 'language', 'ru')
-        # Get built data for hierarchy display
-        from .pipeline import _parse, _build
-        cfg = load_config(config_path)
-        cfg.model_root = model_root
-        cfg.output_dir = output_dir
-        parsed = _parse(model_root, cfg)
-        built = _build(parsed, cfg)
 
         # Group systems by domain
         domain_groups: dict[str, list] = {}
@@ -885,7 +932,7 @@ def run_web(
                 domain_groups[domain_id] = sorted(sys_list, key=lambda s: s.name)
 
         # Promoted info
-        promoted_parents = set(cfg.promote_children.keys())
+        promoted_parents = set(config.promote_children.keys())
 
         return render_template_string(
             _HIERARCHY_TEMPLATE,
@@ -897,6 +944,17 @@ def run_web(
             total_subsystems=summary.total_subsystems,
         )
 
+    return app
+
+
+def run_web(
+    config_path: Path | None,
+    model_root: Path,
+    output_dir: Path,
+    port: int = 8090,
+) -> None:
+    """Create and start Flask web UI for quality audit dashboard."""
+    app = create_app(config_path, model_root, output_dir)
     logger.info('archi2likec4 web UI: http://127.0.0.1:%d', port)
     app.run(host='127.0.0.1', port=port, debug=False)
 

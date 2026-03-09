@@ -19,7 +19,8 @@ class MockBuilt:
     def __init__(self, systems=None, domain_systems=None, integrations=None,
                  entities=None, deployment_map=None, orphan_fns=0,
                  relationships=None, deployment_nodes=None,
-                 datastore_entity_links=None):
+                 datastore_entity_links=None, intg_skipped=0,
+                 intg_total_eligible=0):
         self.systems = systems or []
         self.domain_systems = domain_systems or {}
         self.integrations = integrations or []
@@ -29,3 +30,5 @@ class MockBuilt:
         self.relationships = relationships or []
         self.deployment_nodes = deployment_nodes or []
         self.datastore_entity_links = datastore_entity_links or []
+        self.intg_skipped = intg_skipped
+        self.intg_total_eligible = intg_total_eligible

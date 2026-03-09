@@ -38,7 +38,10 @@ class TestComputeAuditIncidents:
         _, incidents = compute_audit_incidents(built, 0, 0,
                                               MockConfig(audit_suppress=['AD']))
         qa1 = next((i for i in incidents if i.qa_id == 'QA-1'), None)
-        assert qa1 is None
+        assert qa1 is not None
+        assert qa1.count == 0
+        assert qa1.suppressed_count == 1
+        assert qa1.affected == []
 
     def test_suppress_incidents_marks_suppressed(self):
         s1 = System(c4_id='ad', name='AD', archi_id='s1', metadata={}, domain='unassigned')
@@ -72,6 +75,8 @@ class TestComputeAuditIncidents:
             systems=[s1],
             integrations=[],
             relationships=rels,
+            intg_skipped=1,
+            intg_total_eligible=1,
         )
         _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
         qa7 = next((i for i in incidents if i.qa_id == 'QA-7'), None)
@@ -300,6 +305,18 @@ class TestQA9NoInfraMapping:
         """Systems in 'unassigned' domain should not trigger QA-9."""
         s = System(c4_id='x', name='X', archi_id='s1', metadata={}, domain='unassigned')
         built = MockBuilt(systems=[s], deployment_map=[])
+        _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
+        qa9 = next((i for i in incidents if i.qa_id == 'QA-9'), None)
+        assert qa9 is None
+
+    def test_subsystem_mapped_no_qa9(self):
+        """System should not trigger QA-9 when its subsystem has deployment mapping."""
+        s = System(c4_id='efs', name='EFS', archi_id='s1', metadata={}, domain='channels',
+                   subsystems=[Subsystem(c4_id='core', name='EFS.Core', archi_id='sub1', metadata={})])
+        built = MockBuilt(
+            systems=[s],
+            deployment_map=[('channels.efs.core', 'server_1')],
+        )
         _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
         qa9 = next((i for i in incidents if i.qa_id == 'QA-9'), None)
         assert qa9 is None
