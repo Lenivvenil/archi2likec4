@@ -1234,3 +1234,243 @@ output/
 
 - Async/threading — модели до 10K систем, sequential достаточно
 - Business/Strategy layer ArchiMate — только Application + Technology
+
+---
+
+## Бэклог релиза 2.0
+
+**Видение:** Из внутреннего банковского инструмента — в **стандартный мост
+между ArchiMate и LikeC4** для международного сообщества архитекторов.
+
+**Тема релиза:** Open-source продукт для практикующих архитекторов.
+
+v1.0 умеет конвертировать одну модель для одной команды.
+v2.0 должен стать инструментом, который архитектор из Берлина, Токио или
+Сан-Паулу установит за 30 секунд, подключит к своей модели и получит
+работающий LikeC4-workspace с интерактивной диагностикой качества.
+
+### Эпик A: Дистрибуция — «brew install за 30 секунд»
+
+**A1. PyPI + pipx — основной канал**
+- Публикация на PyPI: `pipx install archi2likec4`
+- Проверить: все зависимости опциональны, чистый `pip install` без flask/pyyaml
+- README: installation one-liner для Linux/macOS/Windows
+
+**A2. Homebrew tap**
+- Создать `github.com/Lenivvenil/homebrew-archi2likec4`
+- Ruby formula с virtualenv isolation (по образцу httpie/pgcli)
+- `brew tap Lenivvenil/archi2likec4 && brew install archi2likec4`
+- Автоматизация: GitHub Action для обновления формулы при новом релизе
+
+**A3. Docker-образ**
+- `ghcr.io/lenivvenil/archi2likec4:latest`
+- Для CI/CD пайплайнов и тех, кто не хочет ставить Python
+- Маленький alpine-based образ, entrypoint = CLI
+
+**A4. GitHub Releases + автоматизация**
+- GitHub Action: при push тега `v*` → PyPI publish + brew formula update + Docker push
+- Генерация release notes из CHANGELOG.md
+- Checksums и подписи для security-conscious пользователей
+
+### Эпик B: Интернационализация — 7 языков
+
+Текущее: ru/en. Целевое: **en, ru, de, fr, pt-BR, nl, ja** — покрытие
+основных рынков EA-практики (DACH, Франция, Бразилия, Нидерланды — родина
+ArchiMate, Япония).
+
+**B1. Расширение i18n-каталога**
+- 10 QA-инцидентов × 7 языков (title, description, remediation)
+- AUDIT.md headers + summary на всех языках
+- Web UI: все строки через i18n (сейчас часть захардкожена)
+
+**B2. Locale-aware CLI**
+- Автоопределение языка из `LANG`/`LC_ALL` env
+- Fallback: `config.language` → env → en
+- `--language de` override
+
+**B3. Вынос строк в gettext-совместимый формат**
+- Переход с dict-каталога (i18n.py) на `.po/.mo` файлы
+- Возможность контрибьюторам присылать переводы через стандартный workflow
+- Интеграция с Weblate / Crowdin для community-переводов
+
+### Эпик C: Web UI — от dashboard к рабочему инструменту
+
+**C1. Интерактивный domain assignment**
+- Drag-and-drop систем между доменами
+- Сохранение в `domain_overrides` конфига
+- Цель: снизить unassigned без редактирования YAML вручную
+
+**C2. Metadata bulk-edit**
+- Импорт метаданных из CSV/Excel (CI, владелец, criticality)
+- Inline-редактирование metadata прямо в таблице
+- Маппинг по имени системы или archi_id
+
+**C3. Review workflow для #to_review систем**
+- Список систем из !РАЗБОР с действиями: keep / archive / merge
+- Результат → обновление `reviewed_systems` в конфиге
+
+**C4. Model explorer**
+- Навигация по полной модели: домены → системы → подсистемы → функции
+- Граф интеграций (интерактивная визуализация связей между системами)
+- Поиск, фильтрация по домену/тегу/статусу
+- Переход от «аудит-дашборда» к «архитектурному порталу»
+
+**C5. Auto-fix wizard**
+- QA-10 (floating SystemSoftware): предложить parent Node
+- QA-9 (no infra binding): матчинг system↔node по имени
+- QA-4 (promotion candidates): автопредложение promote_children
+- Wizard-интерфейс: проблема → предложение → accept/reject → apply to config
+
+**C6. Современный frontend**
+- Переход с inline Jinja2 на отдельный SPA (React/Svelte/Vue)
+- REST API backend (Flask → FastAPI опционально)
+- Responsive design, полноценная тёмная тема
+- Возможность встраивания LikeC4 diagram-компонентов (`@likec4/diagram`)
+
+### Эпик D: Экосистемная интеграция
+
+**D1. Поддержка ArchiMate Model Exchange Format**
+- Парсер для Open Group Exchange XML (archimate3_Model.xsd + View.xsd)
+- Любой ArchiMate-сертифицированный инструмент → LikeC4
+- Не только Archi: BiZZdesign, Sparx EA, MEGA HOPEX, Modelio
+- Это **ключ к широкой аудитории** — не привязываемся к coArchi
+
+**D2. Поддержка .archimate формата (standalone Archi)**
+- Одиночный файл .archimate (не coArchi/Grafico)
+- Многие архитекторы не используют coArchi, работают с файлом напрямую
+- Автодетект формата: coArchi dir / .archimate file / Exchange XML
+
+**D3. jArchi-скрипт для экспорта в LikeC4**
+- JavaScript-скрипт для Archi: «Export to LikeC4» одной кнопкой
+- Вызывает archi2likec4 CLI или генерирует промежуточный Exchange XML
+- Публикация в jArchi community scripts wiki
+
+**D4. LikeC4 Model API интеграция**
+- Использование `LikeC4.fromWorkspace()` для валидации сгенерированных .c4
+- Post-generate проверка: парсится ли выход LikeC4 без ошибок?
+- Опционально: запуск `likec4 build` как quality gate
+
+**D5. CI/CD шаблоны**
+- GitHub Action: `uses: Lenivvenil/archi2likec4-action@v2`
+- GitLab CI include-шаблон
+- Автоматический MR/PR с change report при изменении модели
+- Quality gate: блокировка при деградации метрик
+
+### Эпик E: Диагностика и объяснимость
+
+**E1. Verbose tracing — «почему потерялась интеграция»**
+- `--trace` флаг: для каждого skipped relationship — причина
+- Structured log (JSON) + human-readable summary
+- Web UI: страница трассировки потерь
+
+**E2. Lineage — «откуда взялся элемент»**
+- `archi2likec4 explain <c4-id>` → цепочка: XML → parse → build → generate
+- Обратная ссылка на исходный XML файл + строку
+- Web UI: click на элемент → lineage panel
+
+**E3. Coverage map**
+- Какие ArchiMate-объекты конвертированы, какие нет
+- Группировка по типам и слоям ArchiMate
+- HTML-отчёт в Web UI + standalone export
+
+**E4. Change report**
+- При каждом запуске — diff: что добавлено, удалено, изменено
+- Markdown, пригодный для MR description
+- `archi2likec4 diff --since <commit>` для targeted-отчёта
+
+### Эпик F: Расширение модели
+
+**F1. Business Layer**
+- Парсинг: BusinessProcess, BusinessFunction, BusinessRole, BusinessActor
+- LikeC4 kinds: actor, process, capability
+- Связи serves/uses между business и application слоями
+- Новый view: business capability map
+
+**F2. Группировки и теги**
+- ArchiMate Grouping → LikeC4 tags
+- Фильтрация views по тегам
+- Пользовательские группировки в конфиге
+
+**F3. Расширенные view-типы**
+- Dynamic views (sequence-style)
+- Deployment views per environment (dev/test/prod split)
+- Cross-domain integration matrix
+
+### Приоритизация v2.0
+
+| Приоритет | ID | Название | Почему | Сложность |
+|-----------|-----|----------|--------|-----------|
+| MUST | A1 | PyPI + pipx | Базовая дистрибуция, без этого нет продукта | Низкая |
+| MUST | A2 | Homebrew tap | «brew install» — порог входа для macOS-архитекторов | Низкая |
+| MUST | A4 | GitHub Releases CI | Автоматизация релизов, без ручной работы | Низкая |
+| MUST | D1 | Exchange Format | Ключ к широкой аудитории — любой ArchiMate-инструмент | Высокая |
+| MUST | D2 | .archimate формат | Покрытие standalone-пользователей Archi | Средняя |
+| MUST | B1 | i18n 7 языков | en/de/fr/pt-BR/nl/ja — покрытие мирового рынка EA | Средняя |
+| MUST | E1 | Verbose tracing | Объяснимость — доверие к инструменту | Низкая |
+| SHOULD | C1 | Domain assignment UI | Интерактивное решение #1 QA-проблемы | Средняя |
+| SHOULD | C4 | Model explorer | Из dashboard в архитектурный портал | Высокая |
+| SHOULD | D5 | CI/CD шаблоны | Автоматизация для команд | Средняя |
+| SHOULD | E2 | Lineage/explain | Отладка и доверие | Средняя |
+| SHOULD | E4 | Change report | Прозрачность для MR review | Средняя |
+| SHOULD | C2 | Metadata bulk-edit | Решение QA-2 (1% metadata) | Низкая |
+| SHOULD | D3 | jArchi-скрипт | Интеграция в Archi напрямую | Низкая |
+| SHOULD | F1 | Business Layer | Полнота модели, новая аудитория | Высокая |
+| COULD | A3 | Docker-образ | CI convenience | Низкая |
+| COULD | B2 | Locale-aware CLI | DX polish | Низкая |
+| COULD | B3 | gettext/.po файлы | Community-переводы | Средняя |
+| COULD | C3 | Review workflow | QA-3 (176 #to_review) | Средняя |
+| COULD | C5 | Auto-fix wizard | QA-9, QA-10 | Средняя |
+| COULD | C6 | SPA frontend | Современный UX | Высокая |
+| COULD | D4 | LikeC4 Model API | Post-generate валидация | Низкая |
+| COULD | E3 | Coverage map | Визуализация покрытия | Средняя |
+| COULD | F2 | Теги и группировки | Nice-to-have | Низкая |
+| COULD | F3 | Расширенные views | LikeC4 ещё не всё поддерживает | Высокая |
+
+### Волны реализации v2.0
+
+**Волна 1 — «Open source launch» (MVP для сообщества)**
+- A1 (PyPI), A2 (brew), A4 (CI releases)
+- D1 (Exchange Format), D2 (.archimate)
+- B1 (i18n 7 языков), E1 (tracing)
+- Результат: любой архитектор в мире может установить и попробовать
+
+**Волна 2 — «Power tools»**
+- C1 (domain assignment), C4 (model explorer), C2 (metadata edit)
+- D5 (CI/CD), D3 (jArchi), E2 (lineage), E4 (change report)
+- Результат: инструмент для ежедневной работы, а не разовой конвертации
+
+**Волна 3 — «Full platform»**
+- C6 (SPA frontend), F1 (Business Layer), B3 (gettext)
+- C5 (auto-fix), F2 (теги), F3 (views)
+- Результат: полноценная платформа architecture-as-code bridge
+
+### Критерии готовности v2.0
+
+- [ ] `brew install archi2likec4` работает из tap
+- [ ] `pipx install archi2likec4` работает из PyPI
+- [ ] Поддержка 3 входных форматов: coArchi, .archimate, Exchange XML
+- [ ] 7 языков UI/отчётов: en, ru, de, fr, pt-BR, nl, ja
+- [ ] Web UI: model explorer + interactive domain assignment
+- [ ] `--trace` для диагностики потерянных элементов
+- [ ] GitHub Action для автоматизации в CI
+- [ ] 500+ тестов, покрытие > 80%
+- [ ] README на английском, Getting Started guide
+- [ ] CHANGELOG.md, версия 2.0.0
+
+---
+
+## Горизонт v3.0 — «Двусторонний мост»
+
+**Видение:** Не только ArchiMate → LikeC4, но и **LikeC4 → ArchiMate**.
+Архитекторы правят модель в Archi, разработчики — в LikeC4, изменения
+синхронизируются в обе стороны.
+
+**Ключевые идеи:**
+- Обратная синхронизация: изменения в .c4 → патчи coArchi XML / Exchange XML
+- Минимальный scope: domain_overrides, metadata, documentation, новые связи
+- Conflict resolution при одновременном редактировании
+- Watch-режим с двусторонним sync
+- Plugin-архитектура для кастомных трансформаций (хуки post-parse/pre-generate)
+- Multi-model merge: несколько coArchi-репо → один LikeC4 workspace
+- Strategy/Motivation Layer (Goal, Principle, Requirement → traceability)
+- Потенциально: VS Code extension для .c4 ↔ ArchiMate навигации
