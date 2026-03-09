@@ -1160,8 +1160,63 @@ output/
 - 223 теста (+15), 0 failures
 - 7 новых POST-маршрутов, страница /remediations
 
-## Бэклог 1.0
+## Бэклог релиза 1.0
 
-- [ ] Валидация иерархии систем/подсистем в Web UI (подтверждение, что мигрирует как система vs подсистема)
-- [ ] Unit-тесты для Flask-маршрутов (`web.py`)
-- [ ] Unit-тесты для `federation.py`
+### Блокеры (MUST)
+
+**B1. Документация — убрать legacy-шум**
+- README.md: убрать `convert.py`, оставить только `python -m archi2likec4` и `archi2likec4`
+- CONTRIBUTING.md: аналогично
+- Проверить, нужен ли `convert.py` — если да, документировать как legacy wrapper
+
+**B2. pyproject.toml — готовность к публикации**
+- Classifier: `Development Status :: 4 - Beta` → `5 - Production/Stable`
+- Добавить `readme = "README.md"`
+- Добавить `[project.urls]` (Homepage, Repository)
+- Синхронизировать версию `__init__.py` ↔ `pyproject.toml` → `1.0.0`
+
+**B3. Тесты — покрытие audit_data.py**
+- Сейчас 9 тестов покрывают только QA-1, QA-7, suppress
+- Добавить тесты для QA-2 (metadata gaps), QA-3 (to_review), QA-4 (promote candidates), QA-5 (no docs), QA-6 (orphan functions), QA-8 (solution views), QA-9 (no infra mapping)
+- ~14 новых тестов
+
+**B4. Тесты — conftest.py**
+- `_MockConfig` и `_MockBuilt` дублируются в `test_generators.py` и `test_audit_data.py`
+- Вынести в `tests/conftest.py` как shared fixtures
+
+**B5. Тесты — web.py**
+- 710 строк с 15+ маршрутами, 0 тестов
+- Flask test client: дашборд, detail-страницы, POST-маршруты suppress/assign/promote
+- ~15 тестов
+
+### Рекомендуемые (SHOULD)
+
+**S1. Новая фича: валидация иерархии систем/подсистем в Web UI**
+- Человек должен явно видеть и подтверждать, что мигрирует как система vs подсистема
+- Отдельная страница `/hierarchy` или раздел на дашборде
+
+**S2. print() → logger в web.py**
+- Startup message использует `print()` вместо `logger.info()`
+
+**S3. py.typed маркер**
+- PEP 561: пустой файл `archi2likec4/py.typed` для type checker discovery
+
+### Можно отложить (COULD)
+
+**C1. CHANGELOG.md**
+- История релизов отдельным файлом (сейчас всё в NOTES.md)
+
+**C2. Расширение тестов парсера**
+- `parse_domain_mapping()`, `parse_solution_views()` — только через e2e
+- Helper-функции (`_detect_special_folder`, `_find_parent_component`) без unit-тестов
+
+**C3. CLI-тесты**
+- `main()`, `--strict`, `--dry-run` комбинации
+- Тесты error-handling (missing model dir, invalid XML)
+
+### Не делаем (WON'T для 1.0)
+
+- i18n (English translations) — проект для конкретного банка
+- Async/threading — модели до 10K систем, sequential достаточно
+- Business/Strategy layer ArchiMate — только Application + Technology
+- dataStore builder — используем dataEntity
