@@ -18,6 +18,14 @@ htmlcov/
 # Federation cache
 .federation-cache/
 
+# Instance config (user-specific)
+.archi2likec4.yaml
+
+# Working data (model inputs, old outputs, prototypes)
+architectural_repository/
+output_before_promote/
+prototype/
+
 # IDE / OS
 .DS_Store
 .venv/

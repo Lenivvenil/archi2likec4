@@ -244,6 +244,65 @@ class TestExtraDomainPatternsValidation:
             _apply_yaml(config, {'extra_domain_patterns': ['just-a-string']})
 
 
+class TestAuditSuppressIncidents:
+    """audit_suppress_incidents config option."""
+
+    def test_default_empty(self):
+        config = ConvertConfig()
+        assert config.audit_suppress_incidents == []
+
+    def test_yaml_override(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'audit_suppress_incidents': ['QA-5', 'QA-6']})
+        assert config.audit_suppress_incidents == ['QA-5', 'QA-6']
+
+
+class TestSaveSuppress:
+    """save_suppress() writes YAML correctly."""
+
+    def test_creates_yaml(self, tmp_path):
+        from archi2likec4.config import save_suppress
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            import pytest
+            pytest.skip('PyYAML not installed')
+        config_file = tmp_path / '.archi2likec4.yaml'
+        save_suppress(config_file, ['SystemA'], ['QA-5'])
+        assert config_file.exists()
+        data = yaml.safe_load(config_file.read_text())
+        assert data['audit_suppress'] == ['SystemA']
+        assert data['audit_suppress_incidents'] == ['QA-5']
+
+    def test_preserves_other_keys(self, tmp_path):
+        from archi2likec4.config import save_suppress
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            import pytest
+            pytest.skip('PyYAML not installed')
+        config_file = tmp_path / '.archi2likec4.yaml'
+        config_file.write_text('promote_warn_threshold: 15\n')
+        save_suppress(config_file, ['X'], [])
+        data = yaml.safe_load(config_file.read_text())
+        assert data['promote_warn_threshold'] == 15
+        assert data['audit_suppress'] == ['X']
+        assert 'audit_suppress_incidents' not in data  # empty list not written
+
+    def test_removes_empty_lists(self, tmp_path):
+        from archi2likec4.config import save_suppress
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            import pytest
+            pytest.skip('PyYAML not installed')
+        config_file = tmp_path / '.archi2likec4.yaml'
+        config_file.write_text('audit_suppress:\n  - Old\n')
+        save_suppress(config_file, [], [])
+        data = yaml.safe_load(config_file.read_text())
+        assert data is None or 'audit_suppress' not in (data or {})
+
+
 class TestMutableDefaults:
     """P2-8: mutable defaults should not leak between instances."""
 
@@ -253,3 +312,74 @@ class TestMutableDefaults:
         c2 = ConvertConfig()
         c1.extra_domain_patterns[0]['patterns'].append('MUTATED')
         assert 'MUTATED' not in c2.extra_domain_patterns[0]['patterns']
+
+
+class TestDomainOverrides:
+    """domain_overrides config option."""
+
+    def test_default_empty(self):
+        config = ConvertConfig()
+        assert config.domain_overrides == {}
+
+    def test_yaml_override(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'domain_overrides': {'CRM': 'products', 'AD': 'platform'}})
+        assert config.domain_overrides == {'CRM': 'products', 'AD': 'platform'}
+
+    def test_invalid_type_ignored(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'domain_overrides': 'not-a-dict'})
+        assert config.domain_overrides == {}
+
+
+class TestReviewedSystems:
+    """reviewed_systems config option."""
+
+    def test_default_empty(self):
+        config = ConvertConfig()
+        assert config.reviewed_systems == []
+
+    def test_yaml_override(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'reviewed_systems': ['SysA', 'SysB']})
+        assert config.reviewed_systems == ['SysA', 'SysB']
+
+
+class TestUpdateConfigField:
+    """update_config_field() writes YAML correctly."""
+
+    def test_creates_file(self, tmp_path):
+        from archi2likec4.config import update_config_field
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            pytest.skip('PyYAML not installed')
+        f = tmp_path / '.archi2likec4.yaml'
+        update_config_field(f, 'domain_overrides', {'CRM': 'products'})
+        data = yaml.safe_load(f.read_text())
+        assert data['domain_overrides'] == {'CRM': 'products'}
+
+    def test_preserves_other_keys(self, tmp_path):
+        from archi2likec4.config import update_config_field
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            pytest.skip('PyYAML not installed')
+        f = tmp_path / '.archi2likec4.yaml'
+        f.write_text('promote_warn_threshold: 15\n')
+        update_config_field(f, 'reviewed_systems', ['Sys1'])
+        data = yaml.safe_load(f.read_text())
+        assert data['promote_warn_threshold'] == 15
+        assert data['reviewed_systems'] == ['Sys1']
+
+    def test_removes_empty_dict(self, tmp_path):
+        from archi2likec4.config import update_config_field
+        try:
+            import yaml  # noqa: F401
+        except ImportError:
+            pytest.skip('PyYAML not installed')
+        f = tmp_path / '.archi2likec4.yaml'
+        f.write_text('domain_overrides:\n  CRM: products\n')
+        update_config_field(f, 'domain_overrides', {})
+        data = yaml.safe_load(f.read_text())
+        assert data is None or 'domain_overrides' not in (data or {})

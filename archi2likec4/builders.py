@@ -75,6 +75,7 @@ def build_systems(
     components: list[AppComponent],
     promote_children: dict[str, str] | None = None,
     promote_warn_threshold: int | None = None,
+    reviewed_systems: list[str] | None = None,
 ) -> tuple[list[System], dict[str, list[str]]]:
     if promote_children is None:
         promote_children = PROMOTE_CHILDREN
@@ -172,6 +173,10 @@ def build_systems(
             tags.append('to_review')
         elif ac.source_folder == '!External_services':
             tags.append('external')
+
+        if reviewed_systems and name in reviewed_systems:
+            if 'to_review' in tags:
+                tags.remove('to_review')
 
         sys_extra_ids = list(extra_ids.get(name, []))
 
@@ -614,6 +619,7 @@ def assign_domains(
     domains: list[DomainInfo],
     promote_children: dict[str, str] | None = None,
     extra_domain_patterns: list[dict] | None = None,
+    domain_overrides: dict[str, str] | None = None,
 ) -> dict[str, list[System]]:
     """Assign each system to a primary domain based on view membership."""
     # Reverse map: archi_id → [(domain_c4_id, ...)]
@@ -625,7 +631,21 @@ def assign_domains(
     result: dict[str, list[System]] = {d.c4_id: [] for d in domains}
     result['unassigned'] = []
 
-    for sys in systems:
+    # Pass 0: explicit domain overrides (highest priority)
+    remaining = list(systems)
+    if domain_overrides:
+        override_ids: set[int] = set()
+        for sys in systems:
+            if sys.name in domain_overrides:
+                target = domain_overrides[sys.name]
+                if target not in result:
+                    result[target] = []
+                sys.domain = target
+                result[target].append(sys)
+                override_ids.add(id(sys))
+        remaining = [s for s in systems if id(s) not in override_ids]
+
+    for sys in remaining:
         # Collect archi IDs for this system (system + duplicates + all subsystems)
         all_ids: set[str] = set()
         if sys.archi_id:

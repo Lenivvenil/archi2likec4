@@ -1068,3 +1068,100 @@ output/
 
 - 183 теста (+11), 0 failures
 - Конвертер: идентичный output
+
+## Итерация 15: Structured Audit Data + AUDIT.md
+
+### Что сделано
+
+Перевод качественного аудита из текстового лога в структурированные данные.
+
+- **`archi2likec4/audit_data.py`** — новый модуль:
+  - `AuditSummary` dataclass: метрики конвертации (systems, subsystems, integrations, metadata %, domain coverage)
+  - `AuditIncident` dataclass: QA-инцидент с severity, affected items, remediation hints
+  - `compute_audit_incidents()`: вычисляет 9 категорий инцидентов (QA-1..QA-9)
+  - Suppress-механика: `audit_suppress` (по системам), `audit_suppress_incidents` (по QA-ID)
+
+- **9 QA-инцидентов**:
+  - QA-1 Critical: Системы без домена (unassigned)
+  - QA-2 High: Пробелы в метаданных (CI, Full name, LC stage, etc.)
+  - QA-3 High: Системы с тегом `to_review`
+  - QA-4 Medium: Кандидаты на промоцию (>= threshold подсистем)
+  - QA-5 Medium: Системы без документации
+  - QA-6 Low: Осиротевшие функции
+  - QA-7 Critical: Потерянные интеграции (relationships → 0 integrations)
+  - QA-8 High: Покрытие solution views (% разрешённых элементов)
+  - QA-9 Medium: Системы без инфраструктурного маппинга
+
+- **`generators.py`** — `generate_audit_md()`: генерация AUDIT.md с таблицами, severity, remediation
+- **`config.py`** — поля `audit_suppress`, `audit_suppress_incidents`, `save_suppress()`
+- **Pipeline** — интеграция: compute → generate AUDIT.md, suppress-флаги из конфига
+
+### Статистика
+
+- 208 тестов (+25), 0 failures
+- AUDIT.md генерируется как часть вывода
+
+## Итерация 16: Flask Web UI для аудита качества
+
+### Что сделано
+
+- **`archi2likec4/web.py`** — Flask-приложение (710 строк):
+  - Субкоманда `archi2likec4 web [--port PORT]`
+  - Дашборд: 6 метрик-карточек + таблица инцидентов с severity-бейджами
+  - Detail-страницы: таблица affected элементов для каждого QA-инцидента
+  - Suppress/Unsuppress: POST-маршруты → обновление `.archi2likec4.yaml`
+  - Inline Jinja2-шаблоны (self-contained HTML без внешних зависимостей)
+
+- **Pipeline** — `_web_command()`: парсинг аргументов, запуск Flask-сервера
+- **pyproject.toml** — optional dependency `web` = ["flask>=2.3", "pyyaml>=6.0"]
+
+### Статистика
+
+- 208 тестов, 0 failures
+- Web UI: http://localhost:8090
+
+## Итерация 17: Remediation-действия + UX-улучшения дашборда
+
+### Что сделано
+
+**A. Remediation-действия (3 QA-инцидента)**
+
+| QA | Действие в UI | Конфиг-поле |
+|----|---------------|-------------|
+| QA-1 | Assign domain (dropdown) | `domain_overrides: {name: domain}` |
+| QA-3 | Mark reviewed (кнопка) | `reviewed_systems: [name, ...]` |
+| QA-4 | Promote (dropdown + кнопка) | `promote_children: {name: domain}` |
+
+- `config.py`: поля `domain_overrides`, `reviewed_systems` + `update_config_field()`
+- `builders.py`: Pass 0 в `assign_domains()` (overrides — высший приоритет); `reviewed_systems` в `build_systems()` убирает тег `to_review`
+- `pipeline.py`: прокинуты новые параметры
+
+**B. Видимость подавленных инцидентов**
+
+- `audit_data.py`: поле `suppressed: bool` — инциденты всегда создаются, подавленные помечаются
+- Дашборд: серые зачёркнутые строки с "(suppressed)" и кнопкой Unsuppress
+- Detail: подавленные элементы серым в конце таблицы
+
+**C. Страница ревизии `/remediations`**
+
+- Обзор всех конфиг-решений: domain overrides, reviewed, promoted, suppressed
+- Кнопки Undo для каждого решения
+- Ссылка с дашборда "Review all"
+
+**D. Цветные метрики**
+
+- `metric-ok` (зелёный), `metric-warn` (жёлтый), `metric-crit` (красный), `metric-info` (серый)
+- With Domain: ≥80% ok, 50-80% warn, <50% crit
+- Metadata: ≥50% ok, 20-50% warn, <20% crit
+- Integrations/Deploy: >0 ok, 0 crit
+
+### Статистика
+
+- 223 теста (+15), 0 failures
+- 7 новых POST-маршрутов, страница /remediations
+
+## Бэклог 1.0
+
+- [ ] Валидация иерархии систем/подсистем в Web UI (подтверждение, что мигрирует как система vs подсистема)
+- [ ] Unit-тесты для Flask-маршрутов (`web.py`)
+- [ ] Unit-тесты для `federation.py`

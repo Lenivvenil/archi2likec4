@@ -37,6 +37,13 @@ class ConvertConfig:
 
     # Audit suppress-list: system names to exclude from AUDIT.md (accepted risks)
     audit_suppress: list[str] = field(default_factory=list)
+    # Audit suppress by incident category: QA-IDs to hide entirely (e.g. ["QA-5", "QA-6"])
+    audit_suppress_incidents: list[str] = field(default_factory=list)
+
+    # Domain overrides: system name → domain c4_id (highest priority in assign_domains)
+    domain_overrides: dict[str, str] = field(default_factory=dict)
+    # Reviewed systems: strip to_review tag during build
+    reviewed_systems: list[str] = field(default_factory=list)
 
     # CLI flags
     strict: bool = False
@@ -123,6 +130,13 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
 
     if 'audit_suppress' in data and isinstance(data['audit_suppress'], list):
         config.audit_suppress = [str(s) for s in data['audit_suppress']]
+    if 'audit_suppress_incidents' in data and isinstance(data['audit_suppress_incidents'], list):
+        config.audit_suppress_incidents = [str(s) for s in data['audit_suppress_incidents']]
+
+    if 'domain_overrides' in data and isinstance(data['domain_overrides'], dict):
+        config.domain_overrides = {str(k): str(v) for k, v in data['domain_overrides'].items()}
+    if 'reviewed_systems' in data and isinstance(data['reviewed_systems'], list):
+        config.reviewed_systems = [str(s) for s in data['reviewed_systems']]
 
     if 'strict' in data:
         val = data['strict']
@@ -132,3 +146,59 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             config.strict = val.lower() in ('true', '1', 'yes')
         else:
             config.strict = bool(val)
+
+
+def save_suppress(
+    config_path: Path,
+    suppress_names: list[str],
+    suppress_incidents: list[str],
+) -> None:
+    """Update audit_suppress and audit_suppress_incidents in YAML config file.
+
+    Creates the file if it does not exist.  Preserves all other keys.
+    """
+    import yaml  # type: ignore[import-untyped]
+
+    data: dict = {}
+    if config_path.exists():
+        with open(config_path, 'r', encoding='utf-8') as fh:
+            data = yaml.safe_load(fh) or {}
+
+    if suppress_names:
+        data['audit_suppress'] = sorted(set(suppress_names))
+    else:
+        data.pop('audit_suppress', None)
+
+    if suppress_incidents:
+        data['audit_suppress_incidents'] = sorted(set(suppress_incidents))
+    else:
+        data.pop('audit_suppress_incidents', None)
+
+    with open(config_path, 'w', encoding='utf-8') as fh:
+        yaml.dump(data, fh, default_flow_style=False, allow_unicode=True, sort_keys=False)
+
+
+def update_config_field(
+    config_path: Path,
+    field_name: str,
+    value: dict | list | str | int | float | bool | None,
+) -> None:
+    """Update a single field in YAML config file.
+
+    Creates the file if it does not exist.  Preserves all other keys.
+    If *value* is an empty dict/list or ``None``, removes the key.
+    """
+    import yaml  # type: ignore[import-untyped]
+
+    data: dict = {}
+    if config_path.exists():
+        with open(config_path, 'r', encoding='utf-8') as fh:
+            data = yaml.safe_load(fh) or {}
+
+    if value is None or value == {} or value == []:
+        data.pop(field_name, None)
+    else:
+        data[field_name] = value
+
+    with open(config_path, 'w', encoding='utf-8') as fh:
+        yaml.dump(data, fh, default_flow_style=False, allow_unicode=True, sort_keys=False)

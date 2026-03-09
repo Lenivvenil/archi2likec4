@@ -83,6 +83,24 @@ quality_gates:
 #   - LegacySystem
 #   - DeprecatedApp
 
+# Suppress entire incident categories by QA-ID.
+# audit_suppress_incidents:
+#   - QA-5
+#   - QA-6
+
+# ── Domain overrides ────────────────────────────────────────────────
+# Manually assign systems to domains (highest priority, overrides view membership).
+# Format: system_name: domain_c4_id
+# domain_overrides:
+#   AD: platform
+#   LegacyApp: products
+
+# ── Reviewed systems ──────────────────────────────────────────────
+# Systems reviewed externally — strip the to_review tag during build.
+# reviewed_systems:
+#   - OldSystem
+#   - MigratedApp
+
 # ── Behaviour flags ───────────────────────────────────────────────────
 # Treat quality-gate warnings as errors (exit 1)
 strict: false

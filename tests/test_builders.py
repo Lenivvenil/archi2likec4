@@ -801,3 +801,67 @@ class TestDeploymentMap:
         result = build_deployment_map(systems, [parent], rels, {'efs': 'channels'})
         assert len(result) == 1
         assert result[0] == ('channels.efs', 'srv.pg')
+
+
+class TestAssignDomainsOverrides:
+    """Tests for domain_overrides (Pass 0) in assign_domains."""
+
+    def test_override_assigns_domain(self):
+        domains = [DomainInfo(c4_id='products', name='Products', archi_ids=set())]
+        sys = System(c4_id='crm', name='CRM', archi_id='s-1', metadata={})
+        result = assign_domains(
+            [sys], domains, promote_children={}, extra_domain_patterns=[],
+            domain_overrides={'CRM': 'products'},
+        )
+        assert sys.domain == 'products'
+        assert sys in result['products']
+
+    def test_override_beats_view_membership(self):
+        domains = [
+            DomainInfo(c4_id='channels', name='Channels', archi_ids={'s-1'}),
+            DomainInfo(c4_id='products', name='Products', archi_ids=set()),
+        ]
+        sys = System(c4_id='crm', name='CRM', archi_id='s-1', metadata={})
+        result = assign_domains(
+            [sys], domains, promote_children={}, extra_domain_patterns=[],
+            domain_overrides={'CRM': 'products'},
+        )
+        assert sys.domain == 'products'  # override beats view
+
+    def test_override_creates_new_domain_key(self):
+        domains = []
+        sys = System(c4_id='crm', name='CRM', archi_id='s-1', metadata={})
+        result = assign_domains(
+            [sys], domains, promote_children={}, extra_domain_patterns=[],
+            domain_overrides={'CRM': 'new_domain'},
+        )
+        assert sys.domain == 'new_domain'
+        assert 'new_domain' in result
+
+    def test_no_overrides_is_noop(self):
+        domains = [DomainInfo(c4_id='channels', name='Channels', archi_ids={'s-1'})]
+        sys = System(c4_id='crm', name='CRM', archi_id='s-1', metadata={})
+        result = assign_domains(
+            [sys], domains, promote_children={}, extra_domain_patterns=[],
+            domain_overrides=None,
+        )
+        assert sys.domain == 'channels'
+
+
+class TestReviewedSystemsInBuild:
+    """Tests for reviewed_systems tag stripping in build_systems."""
+
+    def test_reviewed_strips_to_review(self):
+        comps = [AppComponent(archi_id='id-1', name='Legacy', source_folder='!РАЗБОР')]
+        systems, _ = build_systems(comps, promote_children={}, reviewed_systems=['Legacy'])
+        assert 'to_review' not in systems[0].tags
+
+    def test_non_reviewed_keeps_tag(self):
+        comps = [AppComponent(archi_id='id-1', name='Legacy', source_folder='!РАЗБОР')]
+        systems, _ = build_systems(comps, promote_children={}, reviewed_systems=[])
+        assert 'to_review' in systems[0].tags
+
+    def test_reviewed_noop_if_no_tag(self):
+        comps = [AppComponent(archi_id='id-1', name='Normal', source_folder='')]
+        systems, _ = build_systems(comps, promote_children={}, reviewed_systems=['Normal'])
+        assert systems[0].tags == []

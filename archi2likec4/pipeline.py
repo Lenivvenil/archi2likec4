@@ -143,6 +143,7 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
         parsed.components,
         promote_children=config.promote_children,
         promote_warn_threshold=config.promote_warn_threshold,
+        reviewed_systems=config.reviewed_systems,
     )
     total_subsystems = sum(len(s.subsystems) for s in systems)
     logger.info('%d systems, %d subsystems', len(systems), total_subsystems)
@@ -185,7 +186,7 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     logger.info('Assigning systems to domains...')
     domain_systems = assign_domains(
         systems, parsed.domains_info, config.promote_children,
-        config.extra_domain_patterns)
+        config.extra_domain_patterns, domain_overrides=config.domain_overrides)
     for d_id, d_sys_list in domain_systems.items():
         if d_sys_list:
             logger.info('%s: %d systems', d_id, len(d_sys_list))
@@ -442,6 +443,15 @@ def _generate(
 # ── CLI entry point ──────────────────────────────────────────────────────
 
 def main():
+    import sys as _sys
+
+    # Subcommand dispatch (before argparse — backward compatible)
+    if len(_sys.argv) > 1 and _sys.argv[1] == 'web':
+        _sys.argv.pop(1)
+        from .web import run_web_cli
+        run_web_cli()
+        return
+
     import argparse
 
     parser = argparse.ArgumentParser(
@@ -487,7 +497,8 @@ def main():
     if config.verbose:
         logging.getLogger().setLevel(logging.DEBUG)
 
-    logger.info('archi2likec4 v0.6.0')
+    from . import __version__
+    logger.info('archi2likec4 v%s', __version__)
     logger.info('Input:  %s', config.model_root)
     logger.info('Output: %s', config.output_dir)
 
