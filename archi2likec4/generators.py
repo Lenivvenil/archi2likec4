@@ -18,6 +18,7 @@ from .models import (
     System,
     _STANDARD_KEYS,
 )
+from .i18n import get_audit_label, get_msg
 from .utils import escape_str
 
 if TYPE_CHECKING:
@@ -170,6 +171,14 @@ specification {
     style {
       shape cylinder
       color archi-tech-light
+    }
+  }
+
+  element infraLocation {
+    style {
+      shape rectangle
+      color archi-tech
+      border dashed
     }
   }
 
@@ -433,6 +442,7 @@ def generate_solution_views(
     sys_domain: dict[str, str],
     relationships: list[RawRelationship] | None = None,
     promoted_archi_to_c4: dict[str, list[str]] | None = None,
+    tech_archi_to_c4: dict[str, str] | None = None,
 ) -> tuple[dict[str, str], int, int]:
     """Generate solution view .c4 files.
 
@@ -493,7 +503,7 @@ def generate_solution_views(
                     unresolved += 1
             total_unresolved += unresolved
 
-            if not c4_paths:
+            if not c4_paths and sv.view_type != 'deployment':
                 continue
 
             # Deduplicate paths
@@ -506,7 +516,8 @@ def generate_solution_views(
                     suffix += 1
                 view_id = f'{view_id}_{suffix}'
             used_view_ids.add(view_id)
-            view_type_label = 'Functional' if sv.view_type == 'functional' else 'Integration'
+            view_type_labels = {'functional': 'Functional', 'integration': 'Integration', 'deployment': 'Deployment'}
+            view_type_label = view_type_labels.get(sv.view_type, sv.view_type.title())
             solution_label = sv.name.split('.', 1)[-1] if '.' in sv.name else sv.name
             title = f'{view_type_label} Architecture: {solution_label}'
 
@@ -613,6 +624,26 @@ def generate_solution_views(
                     lines[-1] = lines[-1][:-1]
                 lines.append(f"  }}")
 
+            elif sv.view_type == 'deployment':
+                # Deployment view: resolve element IDs via tech_archi_to_c4
+                resolved_paths: list[str] = []
+                for aid in sv.element_archi_ids:
+                    if tech_archi_to_c4 and aid in tech_archi_to_c4:
+                        resolved_paths.append(tech_archi_to_c4[aid])
+                    elif aid in archi_to_c4:
+                        resolved_paths.append(archi_to_c4[aid])
+                resolved_unique = list(dict.fromkeys(resolved_paths))
+                if resolved_unique:
+                    lines.append(f"  view {view_id} {{")
+                    lines.append(f"    title '{escape_str(title)}'")
+                    lines.append(f"    include")
+                    for rp in resolved_unique:
+                        lines.append(f"      {rp},")
+                        lines.append(f"      {rp}.*,")
+                    if lines[-1].endswith(','):
+                        lines[-1] = lines[-1][:-1]
+                    lines.append(f"  }}")
+
             lines.append('')
 
         lines.append('}')
@@ -684,6 +715,21 @@ def generate_deployment_mapping_c4(mapping: list[tuple[str, str]]) -> str:
     return '\n'.join(lines)
 
 
+def generate_datastore_mapping_c4(links: list[tuple[str, str]]) -> str:
+    """Generate deployment/datastore-mapping.c4 with dataStore→dataEntity relationships."""
+    lines = [
+        '// ── DataStore → DataEntity (persistence layer) ─────────────',
+        'model {',
+        '',
+    ]
+    for store_path, entity_id in sorted(links):
+        lines.append(f'  {store_path} -[persists]-> {entity_id}')
+    lines.append('')
+    lines.append('}')
+    lines.append('')
+    return '\n'.join(lines)
+
+
 def generate_deployment_view() -> str:
     """Generate views/deployment-architecture.c4."""
     return """\
@@ -693,8 +739,10 @@ views {
     title 'Deployment Architecture'
 
     include
+      element.kind = infraLocation,
       element.kind = infraNode,
-      element.kind = infraSoftware
+      element.kind = infraSoftware,
+      element.kind = dataStore
   }
 
 }
@@ -736,6 +784,7 @@ def generate_audit_md(
     """
     from . import __version__
 
+    lang: str = getattr(config, 'language', 'ru')
     systems: list[System] = built.systems  # type: ignore[attr-defined]
     # Flat list of all systems + subsystems for metadata/doc checks
     all_sys: list[System | Subsystem] = []
@@ -754,9 +803,9 @@ def generate_audit_md(
     # ── Header ────────────────────────────────────────────────────────
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
     header = (
-        '# Реестр инцидентов качества ArchiMate-модели\n\n'
-        f'> Автоматически сгенерировано archi2likec4 v{__version__}, {now}.\n'
-        '> Исправьте находки в ArchiMate-модели и перезапустите конвертер.\n'
+        f'# {get_audit_label("title", lang)}\n\n'
+        f'> {get_audit_label("auto_generated", lang, version=__version__, date=now)}\n'
+        f'> {get_audit_label("fix_prompt", lang)}\n'
     )
 
     # ── Summary ───────────────────────────────────────────────────────
@@ -777,17 +826,18 @@ def generate_audit_md(
     deployment_map: list = built.deployment_map  # type: ignore[attr-defined]
     mapped_sys_paths = {pair[0] for pair in deployment_map}
 
+    _L = lambda k: get_audit_label(k, lang)  # noqa: E731
     summary = (
-        '## Сводка\n\n'
-        '| Метрика | Значение |\n'
+        f'## {_L("summary_heading")}\n\n'
+        f'| {_L("metric")} | {_L("value")} |\n'
         '|---------|----------|\n'
-        f'| Систем | {total_sys} |\n'
-        f'| Подсистем | {sum(len(s.subsystems) for s in systems)} |\n'
-        f'| Заполненность карточек | {meta_pct}% |\n'
-        f'| Систем с доменом | {assigned_count} / {total_sys} ({round(assigned_count / total_sys * 100) if total_sys else 0}%) |\n'
-        f'| Интеграций | {len(built.integrations)} |\n'  # type: ignore[attr-defined]
-        f'| Data entities | {len(built.entities)} |\n'  # type: ignore[attr-defined]
-        f'| Deployment mappings | {len(deployment_map)} |\n'
+        f'| {_L("systems")} | {total_sys} |\n'
+        f'| {_L("subsystems")} | {sum(len(s.subsystems) for s in systems)} |\n'
+        f'| {_L("meta_completeness")} | {meta_pct}% |\n'
+        f'| {_L("domain_assigned")} | {assigned_count} / {total_sys} ({round(assigned_count / total_sys * 100) if total_sys else 0}%) |\n'
+        f'| {_L("integrations")} | {len(built.integrations)} |\n'  # type: ignore[attr-defined]
+        f'| {_L("data_entities")} | {len(built.entities)} |\n'  # type: ignore[attr-defined]
+        f'| {_L("deploy_mappings")} | {len(deployment_map)} |\n'
     )
 
     # ── QA-1: Unassigned systems ──────────────────────────────────────
@@ -1035,6 +1085,50 @@ def generate_audit_md(
             '|---|---------|-------|\n'
             f'{table}\n'
         )
+
+    # ── QA-10: Deployment hierarchy issues ─────────────────────────
+    deployment_nodes: list[DeploymentNode] = built.deployment_nodes  # type: ignore[attr-defined]
+    if deployment_nodes:
+        from .builders import _flatten_deployment_nodes
+        all_dn = _flatten_deployment_nodes(deployment_nodes)
+        qa10_issues: list[tuple[str, str, str]] = []  # (name, kind, issue)
+
+        for dn in deployment_nodes:
+            if dn.kind == 'infraSoftware':
+                qa10_issues.append((dn.name, dn.kind, 'SystemSoftware как root-нод'))
+
+        locations = [dn for dn in all_dn if dn.kind == 'infraLocation']
+        if locations:
+            for loc in locations:
+                if not loc.children:
+                    qa10_issues.append((loc.name, loc.kind, 'Location без дочерних нод'))
+            location_child_ids: set[str] = set()
+            for loc in locations:
+                for child in loc.children:
+                    location_child_ids.add(child.archi_id)
+            for dn in deployment_nodes:
+                if dn.kind == 'infraNode' and dn.archi_id not in location_child_ids:
+                    qa10_issues.append((dn.name, dn.kind, 'Root Node без привязки к Location'))
+
+        if qa10_issues:
+            qa_num += 1
+            rows = []
+            for i, (name, kind, issue) in enumerate(qa10_issues, 1):
+                rows.append(f'| {i} | {name} | {kind} | {issue} |')
+            table = '\n'.join(rows)
+            sections.append(
+                f'## QA-{qa_num}. [Medium] Проблемы иерархии развёртывания ({len(qa10_issues)})\n\n'
+                f'**Проблема:** {len(qa10_issues)} проблем в deployment-топологии.\n\n'
+                '**Влияние:** Deployment view показывает неструктурированную топологию — '
+                'невозможно определить физическое размещение.\n\n'
+                '**Рекомендация:**\n'
+                '1. SystemSoftware должен быть вложен в Node (AggregationRelationship)\n'
+                '2. Location должен содержать хотя бы один Node\n'
+                '3. Root Node должен быть вложен в Location\n\n'
+                '| # | Элемент | Kind | Проблема |\n'
+                '|---|---------|------|----------|\n'
+                f'{table}\n'
+            )
 
     # ── Assemble ──────────────────────────────────────────────────────
     suppress_note = (f' Исключено из отчёта (audit_suppress): {suppressed_total} элементов.'

@@ -3,16 +3,20 @@
 import pytest
 from pathlib import Path
 
-from archi2likec4.config import ConvertConfig, load_config, _apply_yaml
-from archi2likec4.models import PROMOTE_CHILDREN, PROMOTE_WARN_THRESHOLD, DOMAIN_RENAMES
+from archi2likec4.config import (
+    ConvertConfig, load_config, _apply_yaml,
+    _DEFAULT_PROMOTE_CHILDREN, _DEFAULT_DOMAIN_RENAMES,
+    _DEFAULT_EXTRA_DOMAIN_PATTERNS,
+)
+from archi2likec4.models import PROMOTE_WARN_THRESHOLD
 
 
 class TestConvertConfigDefaults:
-    """Default config should match models.py constants."""
+    """Default config should match config.py constants."""
 
     def test_promote_children_defaults(self):
         config = ConvertConfig()
-        assert config.promote_children == dict(PROMOTE_CHILDREN)
+        assert config.promote_children == dict(_DEFAULT_PROMOTE_CHILDREN)
 
     def test_promote_warn_threshold_default(self):
         config = ConvertConfig()
@@ -20,7 +24,7 @@ class TestConvertConfigDefaults:
 
     def test_domain_renames_defaults(self):
         config = ConvertConfig()
-        assert config.domain_renames == dict(DOMAIN_RENAMES)
+        assert config.domain_renames == dict(_DEFAULT_DOMAIN_RENAMES)
 
     def test_quality_gate_defaults(self):
         config = ConvertConfig()
@@ -47,7 +51,7 @@ class TestLoadConfig:
         # Change to tmp_path so auto-detect doesn't find a stale .archi2likec4.yaml
         monkeypatch.chdir(tmp_path)
         config = load_config(None)
-        assert config.promote_children == dict(PROMOTE_CHILDREN)
+        assert config.promote_children == dict(_DEFAULT_PROMOTE_CHILDREN)
 
     def test_yaml_root_list_raises(self, tmp_path):
         """YAML file with list at root must raise ValueError."""
@@ -130,13 +134,13 @@ class TestApplyYaml:
         config = ConvertConfig()
         _apply_yaml(config, {'unknown_key': 42, 'another': 'value'})
         # Should not raise, defaults unchanged
-        assert config.promote_children == dict(PROMOTE_CHILDREN)
+        assert config.promote_children == dict(_DEFAULT_PROMOTE_CHILDREN)
 
     def test_invalid_type_ignored(self):
         config = ConvertConfig()
         # promote_children expects dict — string should be ignored
         _apply_yaml(config, {'promote_children': 'not a dict'})
-        assert config.promote_children == dict(PROMOTE_CHILDREN)
+        assert config.promote_children == dict(_DEFAULT_PROMOTE_CHILDREN)
 
     def test_domain_renames_invalid_shape_string(self):
         """String value instead of [id, name] must raise ValueError."""
@@ -312,6 +316,24 @@ class TestMutableDefaults:
         c2 = ConvertConfig()
         c1.extra_domain_patterns[0]['patterns'].append('MUTATED')
         assert 'MUTATED' not in c2.extra_domain_patterns[0]['patterns']
+
+
+class TestLanguageConfig:
+    """language config option."""
+
+    def test_default_ru(self):
+        config = ConvertConfig()
+        assert config.language == 'ru'
+
+    def test_yaml_en(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'language': 'en'})
+        assert config.language == 'en'
+
+    def test_invalid_language_ignored(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'language': 'fr'})
+        assert config.language == 'ru'  # unchanged
 
 
 class TestDomainOverrides:

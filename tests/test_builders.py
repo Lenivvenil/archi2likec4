@@ -29,6 +29,7 @@ from archi2likec4.builders import (
     build_deployment_topology,
     build_integrations,
     build_systems,
+    build_tech_archi_to_c4_map,
 )
 
 
@@ -214,10 +215,11 @@ class TestAssignDomains:
         assert sys.domain == 'unassigned'
 
     def test_extra_domain_patterns(self):
-        """Systems matching EXTRA_DOMAIN_PATTERNS should be assigned."""
+        """Systems matching extra_domain_patterns should be assigned."""
         domains = []
         sys = System(c4_id='elk', name='ELK', archi_id='sys-1')
-        result = assign_domains([sys], domains)
+        patterns = [{'c4_id': 'platform', 'name': 'Platform', 'patterns': ['ELK', 'Grafana']}]
+        result = assign_domains([sys], domains, extra_domain_patterns=patterns)
         # ELK matches 'platform' pattern
         assert sys.domain == 'platform'
 
@@ -665,7 +667,7 @@ class TestDeploymentTopology:
         assert roots[0].kind == 'infraNode'
         assert len(roots[0].children) == 1
         assert roots[0].children[0].name == 'PostgreSQL'
-        assert roots[0].children[0].kind == 'infraSoftware'
+        assert roots[0].children[0].kind == 'dataStore'
 
     def test_cluster_node_software_chain(self):
         """TechnologyCollaboration→Node→SystemSoftware: 2-level tree."""
@@ -705,11 +707,11 @@ class TestDeploymentTopology:
         assert len(roots) == 2
 
     def test_kind_assignment(self):
-        """Node→infraNode, SystemSoftware→infraSoftware, Device→infraNode."""
+        """Node→infraNode, non-DB SystemSoftware→infraSoftware, Device→infraNode."""
         elems = [
             TechElement(archi_id='n-1', name='Srv', tech_type='Node'),
             TechElement(archi_id='d-1', name='Power', tech_type='Device'),
-            TechElement(archi_id='sw-1', name='PG', tech_type='SystemSoftware'),
+            TechElement(archi_id='sw-1', name='Nginx', tech_type='SystemSoftware'),
             TechElement(archi_id='ts-1', name='Eureka', tech_type='TechnologyService'),
             TechElement(archi_id='a-1', name='app.war', tech_type='Artifact'),
         ]
@@ -717,7 +719,7 @@ class TestDeploymentTopology:
         by_name = {r.name: r for r in roots}
         assert by_name['Srv'].kind == 'infraNode'
         assert by_name['Power'].kind == 'infraNode'
-        assert by_name['PG'].kind == 'infraSoftware'
+        assert by_name['Nginx'].kind == 'infraSoftware'
         assert by_name['Eureka'].kind == 'infraSoftware'
         assert by_name['app.war'].kind == 'infraSoftware'
 
@@ -865,3 +867,144 @@ class TestReviewedSystemsInBuild:
         comps = [AppComponent(archi_id='id-1', name='Normal', source_folder='')]
         systems, _ = build_systems(comps, promote_children={}, reviewed_systems=['Normal'])
         assert systems[0].tags == []
+
+
+# ── Location → infraLocation ────────────────────────────────────────────
+
+class TestLocationKind:
+    def test_location_becomes_infra_location(self):
+        """Location tech_type should produce infraLocation kind."""
+        elems = [
+            TechElement(archi_id='loc-1', name='HQ Datacenter', tech_type='Location'),
+        ]
+        roots = build_deployment_topology(elems, [])
+        assert len(roots) == 1
+        assert roots[0].kind == 'infraLocation'
+
+    def test_location_with_child_node(self):
+        """Location → Node aggregation creates proper hierarchy."""
+        elems = [
+            TechElement(archi_id='loc-1', name='HQ', tech_type='Location'),
+            TechElement(archi_id='n-1', name='Server 1', tech_type='Node'),
+        ]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AggregationRelationship', name='',
+                source_type='Location', source_id='loc-1',
+                target_type='Node', target_id='n-1',
+            ),
+        ]
+        roots = build_deployment_topology(elems, rels)
+        assert len(roots) == 1
+        assert roots[0].kind == 'infraLocation'
+        assert len(roots[0].children) == 1
+        assert roots[0].children[0].kind == 'infraNode'
+
+
+# ── build_tech_archi_to_c4_map ──────────────────────────────────────────
+
+class TestBuildTechArchiToC4Map:
+    def test_basic_mapping(self):
+        child = DeploymentNode(c4_id='pg', name='PostgreSQL', archi_id='sw-1',
+                               tech_type='SystemSoftware', kind='infraSoftware')
+        parent = DeploymentNode(c4_id='srv', name='Server', archi_id='n-1',
+                                tech_type='Node', children=[child])
+        result = build_tech_archi_to_c4_map([parent])
+        assert result['n-1'] == 'srv'
+        assert result['sw-1'] == 'srv.pg'
+
+
+# ── dataStore detection ─────────────────────────────────────────────────
+
+class TestDataStoreDetection:
+    def test_postgresql_becomes_datastore(self):
+        elems = [TechElement(archi_id='sw-1', name='PostgreSQL 15', tech_type='SystemSoftware')]
+        roots = build_deployment_topology(elems, [])
+        assert roots[0].kind == 'dataStore'
+
+    def test_oracle_becomes_datastore(self):
+        elems = [TechElement(archi_id='sw-1', name='Oracle DB', tech_type='SystemSoftware')]
+        roots = build_deployment_topology(elems, [])
+        assert roots[0].kind == 'dataStore'
+
+    def test_redis_becomes_datastore(self):
+        elems = [TechElement(archi_id='sw-1', name='Redis Cluster', tech_type='SystemSoftware')]
+        roots = build_deployment_topology(elems, [])
+        assert roots[0].kind == 'dataStore'
+
+    def test_mongo_becomes_datastore(self):
+        elems = [TechElement(archi_id='sw-1', name='Mongo DB', tech_type='SystemSoftware')]
+        roots = build_deployment_topology(elems, [])
+        assert roots[0].kind == 'dataStore'
+
+    def test_nginx_stays_infrasoftware(self):
+        elems = [TechElement(archi_id='sw-1', name='Nginx', tech_type='SystemSoftware')]
+        roots = build_deployment_topology(elems, [])
+        assert roots[0].kind == 'infraSoftware'
+
+    def test_eureka_stays_infrasoftware(self):
+        elems = [TechElement(archi_id='sw-1', name='Eureka', tech_type='TechnologyService')]
+        roots = build_deployment_topology(elems, [])
+        assert roots[0].kind == 'infraSoftware'
+
+    def test_node_never_datastore(self):
+        """Even if Node name contains 'database', it stays infraNode."""
+        elems = [TechElement(archi_id='n-1', name='Database Server', tech_type='Node')]
+        roots = build_deployment_topology(elems, [])
+        assert roots[0].kind == 'infraNode'
+
+    def test_stage_db_becomes_datastore(self):
+        elems = [TechElement(archi_id='sw-1', name='Stage DB', tech_type='SystemSoftware')]
+        roots = build_deployment_topology(elems, [])
+        assert roots[0].kind == 'dataStore'
+
+
+# ── build_datastore_entity_links ─────────────────────────────────────────
+
+from archi2likec4.builders import build_datastore_entity_links
+from archi2likec4.models import DataEntity
+
+class TestBuildDatastoreEntityLinks:
+    def test_access_relationship_creates_link(self):
+        """AccessRelationship SystemSoftware→DataObject creates dataStore→entity link."""
+        child = DeploymentNode(c4_id='pg', name='PostgreSQL', archi_id='sw-1',
+                               tech_type='SystemSoftware', kind='dataStore')
+        parent = DeploymentNode(c4_id='srv', name='Server', archi_id='n-1',
+                                tech_type='Node', children=[child])
+        entities = [DataEntity(c4_id='de_users', name='Users', archi_id='do-1')]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='',
+                source_type='SystemSoftware', source_id='sw-1',
+                target_type='DataObject', target_id='do-1',
+            ),
+        ]
+        result = build_datastore_entity_links([parent], entities, rels)
+        assert len(result) == 1
+        assert result[0] == ('srv.pg', 'de_users')
+
+    def test_no_access_relationships(self):
+        child = DeploymentNode(c4_id='pg', name='PostgreSQL', archi_id='sw-1',
+                               tech_type='SystemSoftware', kind='dataStore')
+        entities = [DataEntity(c4_id='de_users', name='Users', archi_id='do-1')]
+        result = build_datastore_entity_links([child], entities, [])
+        assert result == []
+
+    def test_empty_inputs(self):
+        assert build_datastore_entity_links([], [], []) == []
+
+    def test_reverse_direction(self):
+        """DataObject→SystemSoftware direction also works."""
+        node = DeploymentNode(c4_id='redis', name='Redis', archi_id='sw-1',
+                              tech_type='SystemSoftware', kind='dataStore')
+        entities = [DataEntity(c4_id='de_cache', name='Cache', archi_id='do-1')]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='',
+                source_type='DataObject', source_id='do-1',
+                target_type='SystemSoftware', target_id='sw-1',
+            ),
+        ]
+        result = build_datastore_entity_links([node], entities, rels)
+        assert len(result) == 1
+        assert result[0] == ('redis', 'de_cache')

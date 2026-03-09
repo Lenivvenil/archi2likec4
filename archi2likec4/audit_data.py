@@ -2,6 +2,7 @@
 
 from dataclasses import dataclass, field
 
+from .i18n import get_msg, get_qa10_issue
 from .models import System, Subsystem, _STANDARD_KEYS
 
 
@@ -58,7 +59,9 @@ def compute_audit_incidents(
     Returns (summary, incidents) where incidents only includes non-empty ones.
     Filters by config.audit_suppress (system names) and
     config.audit_suppress_incidents (QA-IDs to skip entirely).
+    Uses config.language ('ru'|'en') for incident text.
     """
+    lang: str = getattr(config, 'language', 'ru')
     systems: list[System] = built.systems  # type: ignore[attr-defined]
 
     # Flat list of all systems + subsystems
@@ -106,21 +109,11 @@ def compute_audit_incidents(
         incidents.append(AuditIncident(
             qa_id='QA-1',
             severity='Critical',
-            title='Системы без домена',
+            title=get_msg('QA-1', 'title', lang),
             count=len(filtered),
-            description=(
-                f'{len(filtered)} систем не размещены ни на одной диаграмме '
-                'в functional_areas/. Конвертер помещает их в домен «unassigned».'
-            ),
-            impact=(
-                'Системы не отображаются в доменных views, невозможно '
-                'понять их бизнес-принадлежность.'
-            ),
-            remediation=(
-                '1. Откройте Archi → Views → functional_areas\n'
-                '2. Для каждой системы определите целевой домен\n'
-                '3. Перетащите элемент на соответствующую диаграмму домена'
-            ),
+            description=get_msg('QA-1', 'description', lang, count=len(filtered)),
+            impact=get_msg('QA-1', 'impact', lang),
+            remediation=get_msg('QA-1', 'remediation', lang),
             affected=[
                 {'name': s.name, 'tags': ', '.join(s.tags) if s.tags else ''}
                 for s in sorted(filtered, key=lambda x: x.name)
@@ -160,21 +153,12 @@ def compute_audit_incidents(
         incidents.append(AuditIncident(
             qa_id='QA-2',
             severity='High',
-            title='Незаполненные карточки систем',
+            title=get_msg('QA-2', 'title', lang),
             count=all_tbd_count,
-            description=(
-                f'{all_tbd_count} из {len(all_sys)} систем/подсистем не имеют '
-                'ни одного заполненного свойства (CI, Criticality, LC stage и др.).'
-            ),
-            impact=(
-                'Метаданные в архитектурном портале отображаются как '
-                '«TBD» — невозможно оценить критичность, ответственных, стадию ЖЦ.'
-            ),
-            remediation=(
-                '1. Откройте элемент в Archi → вкладка Properties\n'
-                '2. Заполните как минимум: CI, Criticality, Dev team\n'
-                '3. Приоритет — системы с наибольшим числом пустых полей'
-            ),
+            description=get_msg('QA-2', 'description', lang,
+                                count=all_tbd_count, total=len(all_sys)),
+            impact=get_msg('QA-2', 'impact', lang),
+            remediation=get_msg('QA-2', 'remediation', lang),
             affected=sys_tbd[:20],
             suppressed_count=0,
             suppressed=('QA-2' in suppress_incidents),
@@ -186,21 +170,11 @@ def compute_audit_incidents(
             incidents.append(AuditIncident(
                 qa_id='QA-3',
                 severity='High',
-                title='Системы на разборе',
+                title=get_msg('QA-3', 'title', lang),
                 count=len(to_review),
-                description=(
-                    'Эти системы находятся в папке !РАЗБОР — '
-                    'их статус в модели не определён.'
-                ),
-                impact=(
-                    'Системы помечены тегом #to_review и требуют '
-                    'решения: оставить в модели или удалить.'
-                ),
-                remediation=(
-                    '1. Для каждой системы определите, является ли она актуальной\n'
-                    '2. Если актуальна — переместите из !РАЗБОР в правильную папку\n'
-                    '3. Если не актуальна — удалите элемент из модели'
-                ),
+                description=get_msg('QA-3', 'description', lang),
+                impact=get_msg('QA-3', 'impact', lang),
+                remediation=get_msg('QA-3', 'remediation', lang),
                 affected=[
                     {'name': s.name, 'domain': s.domain or 'unassigned'}
                     for s in sorted(to_review, key=lambda x: x.name)
@@ -222,22 +196,12 @@ def compute_audit_incidents(
         incidents.append(AuditIncident(
                 qa_id='QA-4',
                 severity='Medium',
-                title='Кандидаты на декомпозицию',
+                title=get_msg('QA-4', 'title', lang),
                 count=len(candidates),
-                description=(
-                    f'{len(candidates)} систем имеют ≥{promote_threshold} '
-                    'подсистем — вероятно, их дочерние компоненты являются '
-                    'самостоятельными микросервисами.'
-                ),
-                impact=(
-                    'Интеграции всех подсистем схлопываются в одну стрелку '
-                    'родителя, теряется детализация.'
-                ),
-                remediation=(
-                    '1. Добавьте систему в promote_children в .archi2likec4.yaml\n'
-                    '2. Укажите целевой домен: promote_children: { "Parent": "domain" }\n'
-                    '3. Перезапустите конвертер — подсистемы станут самостоятельными системами'
-                ),
+                description=get_msg('QA-4', 'description', lang,
+                                    count=len(candidates), threshold=promote_threshold),
+                impact=get_msg('QA-4', 'impact', lang),
+                remediation=get_msg('QA-4', 'remediation', lang),
                 affected=[
                     {'name': name, 'subsystem_count': cnt}
                     for name, cnt in candidates
@@ -252,17 +216,11 @@ def compute_audit_incidents(
             incidents.append(AuditIncident(
                 qa_id='QA-5',
                 severity='Medium',
-                title='Системы без документации',
+                title=get_msg('QA-5', 'title', lang),
                 count=len(no_docs),
-                description='Эти системы не имеют описания в поле documentation.',
-                impact=(
-                    'В архитектурном портале отсутствует описание назначения '
-                    'системы — затруднено понимание её роли.'
-                ),
-                remediation=(
-                    '1. Откройте элемент в Archi → поле Documentation\n'
-                    '2. Добавьте краткое описание назначения системы (1-2 предложения)'
-                ),
+                description=get_msg('QA-5', 'description', lang),
+                impact=get_msg('QA-5', 'impact', lang),
+                remediation=get_msg('QA-5', 'remediation', lang),
                 affected=[
                     {'name': s.name, 'domain': s.domain or 'unassigned'}
                     for s in show
@@ -276,21 +234,11 @@ def compute_audit_incidents(
             incidents.append(AuditIncident(
                 qa_id='QA-6',
                 severity='Low',
-                title='Осиротевшие функции',
+                title=get_msg('QA-6', 'title', lang),
                 count=orphan_fns,
-                description=(
-                    f'{orphan_fns} ApplicationFunction не имеют привязки '
-                    'к родительскому ApplicationComponent.'
-                ),
-                impact=(
-                    'Функции не отображаются ни в одной системе — '
-                    'потеряна часть функциональной архитектуры.'
-                ),
-                remediation=(
-                    '1. Найдите осиротевшие функции в Archi (--verbose)\n'
-                    '2. Добавьте CompositionRelationship к целевому ApplicationComponent\n'
-                    '3. Или переместите XML-файл функции в папку целевого компонента'
-                ),
+                description=get_msg('QA-6', 'description', lang, count=orphan_fns),
+                impact=get_msg('QA-6', 'impact', lang),
+                remediation=get_msg('QA-6', 'remediation', lang),
                 suppressed=('QA-6' in suppress_incidents),
             ))
 
@@ -306,21 +254,12 @@ def compute_audit_incidents(
         incidents.append(AuditIncident(
                 qa_id='QA-7',
                 severity='Critical',
-                title='Потерянные интеграции',
+                title=get_msg('QA-7', 'title', lang),
                 count=skipped_intg,
-                description=(
-                    f'{skipped_intg} из {total_flow_rels} интеграционных связей '
-                    f'({pct}%) не удалось разрешить — один или оба endpoint не найдены.'
-                ),
-                impact=(
-                    'Часть интеграций между системами не отображается — '
-                    'неполная картина взаимодействий.'
-                ),
-                remediation=(
-                    '1. Запустите конвертер с --verbose для детального лога\n'
-                    '2. Проверьте, что source и target — валидные ApplicationComponent\n'
-                    '3. Убедитесь, что связи не ведут на удалённые элементы'
-                ),
+                description=get_msg('QA-7', 'description', lang,
+                                    skipped=skipped_intg, total=total_flow_rels, pct=pct),
+                impact=get_msg('QA-7', 'impact', lang),
+                remediation=get_msg('QA-7', 'remediation', lang),
                 suppressed=('QA-7' in suppress_incidents),
             ))
 
@@ -331,22 +270,13 @@ def compute_audit_incidents(
         incidents.append(AuditIncident(
                 qa_id='QA-8',
                 severity='High',
-                title='Покрытие solution views',
+                title=get_msg('QA-8', 'title', lang),
                 count=sv_unresolved,
-                description=(
-                    f'{sv_unresolved} из {sv_total} элементов на solution-диаграммах '
-                    f'не удалось сопоставить с C4-моделью (разрешено {sv_resolved}, '
-                    f'не разрешено {sv_unresolved}).'
-                ),
-                impact=(
-                    'Solution views могут отображать неполную картину — '
-                    'часть элементов диаграмм теряется при конвертации.'
-                ),
-                remediation=(
-                    '1. Проверьте, что все элементы — валидные ApplicationComponent\n'
-                    '2. Удалите элементы других типов (BusinessService и т.д.)\n'
-                    '3. Убедитесь, что элементы не «призраки» удалённых компонентов'
-                ),
+                description=get_msg('QA-8', 'description', lang,
+                                    unresolved=sv_unresolved, total=sv_total,
+                                    resolved=sv_resolved),
+                impact=get_msg('QA-8', 'impact', lang),
+                remediation=get_msg('QA-8', 'remediation', lang),
                 suppressed=('QA-8' in suppress_incidents),
             ))
 
@@ -359,23 +289,70 @@ def compute_audit_incidents(
         incidents.append(AuditIncident(
                 qa_id='QA-9',
                 severity='Medium',
-                title='Системы без инфраструктурной привязки',
+                title=get_msg('QA-9', 'title', lang),
                 count=len(unmapped),
-                description=(
-                    f'{len(unmapped)} систем не имеют связи с инфраструктурными '
-                    'нодами (Node, SystemSoftware).'
-                ),
-                impact='На deployment view не видно, где развёрнуты эти системы.',
-                remediation=(
-                    '1. Откройте систему в Archi\n'
-                    '2. Создайте RealizationRelationship к целевому Node\n'
-                    '3. Или добавьте AssignmentRelationship'
-                ),
+                description=get_msg('QA-9', 'description', lang, count=len(unmapped)),
+                impact=get_msg('QA-9', 'impact', lang),
+                remediation=get_msg('QA-9', 'remediation', lang),
                 affected=[
                     {'name': s.name, 'domain': s.domain}
                     for s in show
                 ],
                 suppressed=('QA-9' in suppress_incidents),
+            ))
+
+    # ── QA-10: Deployment hierarchy issues ─────────────────────────
+    deployment_nodes: list = built.deployment_nodes  # type: ignore[attr-defined]
+    if deployment_nodes:
+        from .builders import _flatten_deployment_nodes
+        all_dn = _flatten_deployment_nodes(deployment_nodes)
+
+        qa10_affected: list[dict] = []
+
+        # Check 1: SystemSoftware as root node ("floating software")
+        root_archi_ids = {dn.archi_id for dn in deployment_nodes}
+        for dn in deployment_nodes:
+            if dn.kind in ('infraSoftware', 'dataStore'):
+                qa10_affected.append({
+                    'name': dn.name, 'kind': dn.kind,
+                    'issue': get_qa10_issue('floating_sw', lang),
+                })
+
+        # Check if locations exist in model
+        locations = [dn for dn in all_dn if dn.kind == 'infraLocation']
+        if locations:
+            # Check 2: Location without children
+            for loc in locations:
+                if not loc.children:
+                    qa10_affected.append({
+                        'name': loc.name, 'kind': loc.kind,
+                        'issue': get_qa10_issue('empty_location', lang),
+                    })
+
+            # Check 3: Root Node not under Location
+            location_child_ids: set[str] = set()
+            for loc in locations:
+                for child in loc.children:
+                    location_child_ids.add(child.archi_id)
+            for dn in deployment_nodes:
+                if dn.kind == 'infraNode' and dn.archi_id not in location_child_ids:
+                    qa10_affected.append({
+                        'name': dn.name, 'kind': dn.kind,
+                        'issue': get_qa10_issue('root_no_location', lang),
+                    })
+
+        if qa10_affected:
+            incidents.append(AuditIncident(
+                qa_id='QA-10',
+                severity='Medium',
+                title=get_msg('QA-10', 'title', lang),
+                count=len(qa10_affected),
+                description=get_msg('QA-10', 'description', lang,
+                                    count=len(qa10_affected)),
+                impact=get_msg('QA-10', 'impact', lang),
+                remediation=get_msg('QA-10', 'remediation', lang),
+                affected=qa10_affected,
+                suppressed=('QA-10' in suppress_incidents),
             ))
 
     return summary, incidents

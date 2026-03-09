@@ -14,6 +14,7 @@ from .parsers import (
     parse_application_interfaces,
     parse_data_objects,
     parse_domain_mapping,
+    parse_location_elements,
     parse_relationships,
     parse_solution_views,
     parse_technology_elements,
@@ -30,10 +31,13 @@ from .builders import (
     build_deployment_topology,
     build_integrations,
     build_systems,
+    build_tech_archi_to_c4_map,
+    build_datastore_entity_links,
 )
 from .generators import (
     generate_audit_md,
     generate_deployment_c4,
+    generate_datastore_mapping_c4,
     generate_deployment_mapping_c4,
     generate_deployment_view,
     generate_domain_c4,
@@ -82,6 +86,8 @@ class BuildResult(NamedTuple):
     domains_info: list  # original parsed DomainInfo list
     deployment_nodes: list
     deployment_map: list
+    tech_archi_to_c4: dict
+    datastore_entity_links: list
 
 
 # ── Phases ───────────────────────────────────────────────────────────────
@@ -117,12 +123,18 @@ def _parse(model_root: Path, config: ConvertConfig) -> ParseResult:
     solution_views = parse_solution_views(model_root)
     func_views = sum(1 for v in solution_views if v.view_type == 'functional')
     integ_views = sum(1 for v in solution_views if v.view_type == 'integration')
-    logger.info('Found %d solution views (%d functional, %d integration)',
-                len(solution_views), func_views, integ_views)
+    deploy_views = sum(1 for v in solution_views if v.view_type == 'deployment')
+    logger.info('Found %d solution views (%d functional, %d integration, %d deployment)',
+                len(solution_views), func_views, integ_views, deploy_views)
 
     logger.info('Parsing Technology layer...')
     tech_elements = parse_technology_elements(model_root)
     logger.info('Found %d technology elements', len(tech_elements))
+
+    logger.info('Parsing Location elements...')
+    location_elements = parse_location_elements(model_root)
+    logger.info('Found %d Location elements', len(location_elements))
+    tech_elements = tech_elements + location_elements
 
     return ParseResult(
         components=components,
@@ -219,10 +231,19 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     logger.info('%d top-level deployment nodes, %d total',
                 len(deployment_nodes), len(all_dn))
 
+    # Build tech archi_id → c4_path map (for deployment solution views)
+    tech_archi_to_c4 = build_tech_archi_to_c4_map(deployment_nodes)
+    logger.info('%d elements in tech archi→c4 map', len(tech_archi_to_c4))
+
     logger.info('Building deployment mapping...')
     deployment_map = build_deployment_map(
         systems, deployment_nodes, parsed.relationships, sys_domain)
     logger.info('%d app→infrastructure deployment mappings', len(deployment_map))
+
+    logger.info('Building dataStore→dataEntity links...')
+    datastore_entity_links = build_datastore_entity_links(
+        deployment_nodes, entities, parsed.relationships)
+    logger.info('%d dataStore→dataEntity persistence links', len(datastore_entity_links))
 
     return BuildResult(
         systems=systems,
@@ -241,6 +262,8 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
         domains_info=parsed.domains_info,
         deployment_nodes=deployment_nodes,
         deployment_map=deployment_map,
+        tech_archi_to_c4=tech_archi_to_c4,
+        datastore_entity_links=datastore_entity_links,
     )
 
 
@@ -254,6 +277,7 @@ def _validate(built: BuildResult, config: ConvertConfig) -> tuple[int, int, dict
         built.solution_views, built.archi_to_c4, built.sys_domain,
         built.relationships,
         promoted_archi_to_c4=built.promoted_archi_to_c4,
+        tech_archi_to_c4=built.tech_archi_to_c4,
     )
 
     # Gate 1: Solution view unresolved ratio
@@ -412,6 +436,11 @@ def _generate(
         if built.deployment_map:
             (deployment_dir / 'mapping.c4').write_text(
                 generate_deployment_mapping_c4(built.deployment_map), encoding='utf-8')
+            file_count += 1
+        if built.datastore_entity_links:
+            (deployment_dir / 'datastore-mapping.c4').write_text(
+                generate_datastore_mapping_c4(built.datastore_entity_links),
+                encoding='utf-8')
             file_count += 1
         (views_dir / 'deployment-architecture.c4').write_text(
             generate_deployment_view(), encoding='utf-8')

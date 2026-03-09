@@ -8,6 +8,64 @@ from pathlib import Path
 
 logger = logging.getLogger('archi2likec4.web')
 
+# ── Web UI i18n ─────────────────────────────────────────────────────────
+
+_UI_STRINGS: dict[str, dict[str, str]] = {
+    'title': {'ru': 'Аудит качества', 'en': 'Quality Audit'},
+    'dashboard': {'ru': 'Панель аудита качества', 'en': 'Quality Audit Dashboard'},
+    'systems': {'ru': 'Системы', 'en': 'Systems'},
+    'subsystems': {'ru': 'Подсистемы', 'en': 'Subsystems'},
+    'metadata': {'ru': 'Метаданные', 'en': 'Metadata'},
+    'with_domain': {'ru': 'С доменом', 'en': 'With Domain'},
+    'integrations': {'ru': 'Интеграции', 'en': 'Integrations'},
+    'deploy_maps': {'ru': 'Deploy-маппинги', 'en': 'Deploy Maps'},
+    'suppressed': {'ru': 'Скрыто', 'en': 'Suppressed'},
+    'remediations': {'ru': 'Ремедиации', 'en': 'Remediations'},
+    'review_all': {'ru': 'Обзор всех', 'en': 'Review all'},
+    'incidents': {'ru': 'Инциденты', 'en': 'Incidents'},
+    'severity': {'ru': 'Серьёзность', 'en': 'Severity'},
+    'incident': {'ru': 'Инцидент', 'en': 'Incident'},
+    'count': {'ru': 'Кол-во', 'en': 'Count'},
+    'actions': {'ru': 'Действия', 'en': 'Actions'},
+    'details': {'ru': 'Подробнее', 'en': 'Details'},
+    'suppress': {'ru': 'Скрыть', 'en': 'Suppress'},
+    'unsuppress': {'ru': 'Показать', 'en': 'Unsuppress'},
+    'no_incidents': {'ru': 'Инцидентов качества не найдено.', 'en': 'No quality incidents found.'},
+    'hierarchy': {'ru': 'Иерархия', 'en': 'Hierarchy'},
+    'refresh': {'ru': 'Обновить', 'en': 'Refresh'},
+    'back': {'ru': 'Назад к панели', 'en': 'Back to dashboard'},
+    'problem': {'ru': 'Проблема', 'en': 'Problem'},
+    'impact': {'ru': 'Влияние', 'en': 'Impact'},
+    'remediation': {'ru': 'Рекомендация', 'en': 'Remediation'},
+    'affected': {'ru': 'Затронутые элементы', 'en': 'Affected Elements'},
+    'action': {'ru': 'Действие', 'en': 'Action'},
+    'assign': {'ru': 'Назначить', 'en': 'Assign'},
+    'mark_reviewed': {'ru': 'Проверено', 'en': 'Mark reviewed'},
+    'promote': {'ru': 'Промоутить', 'en': 'Promote'},
+    'undo': {'ru': 'Отменить', 'en': 'Undo'},
+    'hidden_by_suppress': {'ru': 'элемент(ов) скрыто через audit_suppress.', 'en': 'element(s) hidden by audit_suppress.'},
+    'remed_review': {'ru': 'Обзор ремедиаций', 'en': 'Remediations Review'},
+    'remed_subtitle': {'ru': 'Все конфиг-решения для этой конвертации', 'en': 'All config-driven decisions for this conversion'},
+    'domain_overrides': {'ru': 'Назначения доменов', 'en': 'Domain Overrides'},
+    'reviewed_systems': {'ru': 'Проверенные системы', 'en': 'Reviewed Systems'},
+    'promoted_children': {'ru': 'Промоутированные', 'en': 'Promoted Children'},
+    'suppressed_systems': {'ru': 'Скрытые системы', 'en': 'Suppressed Systems'},
+    'suppressed_incidents': {'ru': 'Скрытые инциденты', 'en': 'Suppressed Incidents'},
+    'no_remed': {'ru': 'Ремедиации ещё не настроены.', 'en': 'No remediations configured yet.'},
+    'system_hierarchy': {'ru': 'Иерархия систем', 'en': 'System Hierarchy'},
+    'system': {'ru': 'Система', 'en': 'System'},
+    'domain': {'ru': 'Домен', 'en': 'Domain'},
+    'parent': {'ru': 'Родитель', 'en': 'Parent'},
+    'dark_mode': {'ru': 'Тёмная тема', 'en': 'Dark mode'},
+    'light_mode': {'ru': 'Светлая тема', 'en': 'Light mode'},
+}
+
+
+def _ui(lang: str = 'ru') -> dict[str, str]:
+    """Build a flat dict of UI strings for the given language."""
+    return {k: v.get(lang, v.get('ru', k)) for k, v in _UI_STRINGS.items()}
+
+
 # ── Jinja2 templates (inline) ──────────────────────────────────────────
 
 _SEVERITY_COLORS = {
@@ -67,51 +125,101 @@ pre { white-space: pre-wrap; font-size: 0.85em; color: #555; }
 .suppressed-row { opacity: 0.45; }
 .section-block { background: #fff; border: 1px solid #dee2e6; border-radius: 6px;
                  padding: 16px; margin-bottom: 16px; }
+.theme-toggle { position: fixed; top: 12px; right: 16px; cursor: pointer;
+                background: #e9ecef; border: 1px solid #dee2e6; border-radius: 6px;
+                padding: 4px 10px; font-size: 0.8em; z-index: 100; }
+/* Dark theme */
+[data-theme="dark"] { color-scheme: dark; }
+[data-theme="dark"] body { background: #1a1a2e; color: #e0e0e0; }
+[data-theme="dark"] .metric { background: #16213e; border-color: #334155; }
+[data-theme="dark"] table { background: #16213e; border-color: #334155; }
+[data-theme="dark"] th { background: #0f3460; color: #e0e0e0; }
+[data-theme="dark"] td { border-color: #334155; }
+[data-theme="dark"] tr:hover { background: #1a1a3e; }
+[data-theme="dark"] .suppress-bar { background: #332b00; border-color: #665600; color: #e0e0e0; }
+[data-theme="dark"] .remed-bar { background: #003320; border-color: #006644; color: #e0e0e0; }
+[data-theme="dark"] .suppress-item { background: #334155; color: #e0e0e0; }
+[data-theme="dark"] .btn { background: #16213e; border-color: #334155; color: #e0e0e0; }
+[data-theme="dark"] .btn:hover { background: #0f3460; }
+[data-theme="dark"] a { color: #5dadec; }
+[data-theme="dark"] .subtitle { color: #999; }
+[data-theme="dark"] .metric-label { color: #999; }
+[data-theme="dark"] .detail-block { background: #16213e; border-color: #334155; }
+[data-theme="dark"] .detail-block strong { color: #bbb; }
+[data-theme="dark"] pre { color: #bbb; }
+[data-theme="dark"] .section-block { background: #16213e; border-color: #334155; }
+[data-theme="dark"] .hier-domain h3 { background: #0f3460; color: #e0e0e0; }
+[data-theme="dark"] .hier-sys { border-color: #334155; background: #16213e !important; }
+[data-theme="dark"] .hier-sub { color: #999; }
+[data-theme="dark"] .theme-toggle { background: #16213e; border-color: #334155; color: #e0e0e0; }
+"""
+
+_THEME_JS = """\
+<script>
+(function() {
+  var t = localStorage.getItem('theme') || 'light';
+  document.documentElement.setAttribute('data-theme', t);
+  document.addEventListener('DOMContentLoaded', function() {
+    var btn = document.getElementById('theme-toggle');
+    if (btn) {
+      btn.textContent = t === 'dark' ? '☀️' : '🌙';
+      btn.addEventListener('click', function() {
+        t = t === 'dark' ? 'light' : 'dark';
+        document.documentElement.setAttribute('data-theme', t);
+        localStorage.setItem('theme', t);
+        btn.textContent = t === 'dark' ? '☀️' : '🌙';
+      });
+    }
+  });
+})();
+</script>
 """
 
 _DASHBOARD_TEMPLATE = """\
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ lang }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>archi2likec4 — Quality Audit</title>
+  <title>archi2likec4 — {{ t.title }}</title>
   <style>""" + _BASE_CSS + """</style>
+  """ + _THEME_JS + """
 </head>
 <body>
-  <h1>archi2likec4 — Quality Audit Dashboard</h1>
+  <button id="theme-toggle" class="theme-toggle"></button>
+  <h1>archi2likec4 — {{ t.dashboard }}</h1>
   <div class="subtitle">v{{ version }}</div>
 
   <div class="metrics">
     <div class="metric {{ health.systems }}">
       <div class="metric-value">{{ summary.total_systems }}</div>
-      <div class="metric-label">Systems</div>
+      <div class="metric-label">{{ t.systems }}</div>
     </div>
     <div class="metric {{ health.subsystems }}">
       <div class="metric-value">{{ summary.total_subsystems }}</div>
-      <div class="metric-label">Subsystems</div>
+      <div class="metric-label">{{ t.subsystems }}</div>
     </div>
     <div class="metric {{ health.meta }}">
       <div class="metric-value">{{ summary.meta_completeness_pct }}%</div>
-      <div class="metric-label">Metadata</div>
+      <div class="metric-label">{{ t.metadata }}</div>
     </div>
     <div class="metric {{ health.domain }}">
       <div class="metric-value">{{ summary.assigned_count }}/{{ summary.total_systems }}</div>
-      <div class="metric-label">With Domain</div>
+      <div class="metric-label">{{ t.with_domain }}</div>
     </div>
     <div class="metric {{ health.intg }}">
       <div class="metric-value">{{ summary.total_integrations }}</div>
-      <div class="metric-label">Integrations</div>
+      <div class="metric-label">{{ t.integrations }}</div>
     </div>
     <div class="metric {{ health.deploy }}">
       <div class="metric-value">{{ summary.deployment_mappings }}</div>
-      <div class="metric-label">Deploy Maps</div>
+      <div class="metric-label">{{ t.deploy_maps }}</div>
     </div>
   </div>
 
   {% if suppress_names or suppress_incidents_list %}
   <div class="suppress-bar">
-    <strong>Suppressed:</strong>
+    <strong>{{ t.suppressed }}:</strong>
     {% for name in suppress_names %}
       <span class="suppress-item">
         {{ name }}
@@ -135,23 +243,23 @@ _DASHBOARD_TEMPLATE = """\
 
   {% if remed_total > 0 %}
   <div class="remed-bar">
-    <strong>Remediations:</strong>
+    <strong>{{ t.remediations }}:</strong>
     {% if remed_domain > 0 %}{{ remed_domain }} domain override{{ 's' if remed_domain != 1 }}{% endif %}
     {% if remed_reviewed > 0 %}{% if remed_domain > 0 %}, {% endif %}{{ remed_reviewed }} reviewed{% endif %}
-    &rarr; <a href="/remediations">Review all</a>
+    &rarr; <a href="/remediations">{{ t.review_all }}</a>
   </div>
   {% endif %}
 
-  <h2>Incidents ({{ active_count }}{% if suppressed_count > 0 %}, {{ suppressed_count }} suppressed{% endif %})</h2>
+  <h2>{{ t.incidents }} ({{ active_count }}{% if suppressed_count > 0 %}, {{ suppressed_count }} {{ t.suppressed|lower }}{% endif %})</h2>
   {% if incidents %}
   <table>
     <thead>
       <tr>
         <th>ID</th>
-        <th>Severity</th>
-        <th>Incident</th>
-        <th style="text-align:right">Count</th>
-        <th>Actions</th>
+        <th>{{ t.severity }}</th>
+        <th>{{ t.incident }}</th>
+        <th style="text-align:right">{{ t.count }}</th>
+        <th>{{ t.actions }}</th>
       </tr>
     </thead>
     <tbody>
@@ -162,20 +270,20 @@ _DASHBOARD_TEMPLATE = """\
         <td>
           {% if inc.suppressed %}<s>{% endif %}
           <a href="/incident/{{ inc.qa_id }}">{{ inc.title }}</a>
-          {% if inc.suppressed %}</s> <small>(suppressed)</small>{% endif %}
+          {% if inc.suppressed %}</s> <small>({{ t.suppressed|lower }})</small>{% endif %}
         </td>
         <td style="text-align:right">{{ inc.count }}</td>
         <td>
           {% if inc.suppressed %}
             <form method="post" action="/unsuppress/incident" style="display:inline">
               <input type="hidden" name="qa_id" value="{{ inc.qa_id }}">
-              <button type="submit" class="btn btn-success">Unsuppress</button>
+              <button type="submit" class="btn btn-success">{{ t.unsuppress }}</button>
             </form>
           {% else %}
-            <a href="/incident/{{ inc.qa_id }}" class="btn">Details</a>
+            <a href="/incident/{{ inc.qa_id }}" class="btn">{{ t.details }}</a>
             <form method="post" action="/suppress/incident" style="display:inline">
               <input type="hidden" name="qa_id" value="{{ inc.qa_id }}">
-              <button type="submit" class="btn">Suppress</button>
+              <button type="submit" class="btn">{{ t.suppress }}</button>
             </form>
           {% endif %}
         </td>
@@ -184,12 +292,13 @@ _DASHBOARD_TEMPLATE = """\
     </tbody>
   </table>
   {% else %}
-  <p>No quality incidents found.</p>
+  <p>{{ t.no_incidents }}</p>
   {% endif %}
 
   <div class="subtitle" style="margin-top:20px">
     Config: {{ config_path }} |
-    <a href="/">Refresh</a>
+    <a href="/hierarchy">{{ t.hierarchy }}</a> |
+    <a href="/">{{ t.refresh }}</a>
   </div>
 </body>
 </html>
@@ -197,15 +306,17 @@ _DASHBOARD_TEMPLATE = """\
 
 _DETAIL_TEMPLATE = """\
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ lang }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{{ incident.qa_id }} — {{ incident.title }}</title>
   <style>""" + _BASE_CSS + """</style>
+  """ + _THEME_JS + """
 </head>
 <body>
-  <div class="back"><a href="/">&larr; Back to dashboard</a></div>
+  <button id="theme-toggle" class="theme-toggle"></button>
+  <div class="back"><a href="/">&larr; {{ t.back }}</a></div>
 
   <h1>
     {{ incident.qa_id }}
@@ -216,14 +327,14 @@ _DETAIL_TEMPLATE = """\
   </h1>
 
   <div class="detail-block">
-    <p><strong>Problem:</strong> {{ incident.description }}</p>
-    <p><strong>Impact:</strong> {{ incident.impact }}</p>
-    <p><strong>Remediation:</strong></p>
+    <p><strong>{{ t.problem }}:</strong> {{ incident.description }}</p>
+    <p><strong>{{ t.impact }}:</strong> {{ incident.impact }}</p>
+    <p><strong>{{ t.remediation }}:</strong></p>
     <pre>{{ incident.remediation }}</pre>
   </div>
 
   {% if incident.affected %}
-  <h2>Affected Elements ({{ incident.affected|length }}{% if incident.count > incident.affected|length %} of {{ incident.count }}{% endif %})</h2>
+  <h2>{{ t.affected }} ({{ incident.affected|length }}{% if incident.count > incident.affected|length %} of {{ incident.count }}{% endif %})</h2>
   <table>
     <thead>
       <tr>
@@ -231,7 +342,7 @@ _DETAIL_TEMPLATE = """\
         {% for key in columns %}
         <th>{{ key }}</th>
         {% endfor %}
-        <th>Action</th>
+        <th>{{ t.action }}</th>
       </tr>
     </thead>
     <tbody>
@@ -249,13 +360,13 @@ _DETAIL_TEMPLATE = """\
             <select name="domain" class="btn">
               {% for d in available_domains %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
             </select>
-            <button type="submit" class="btn btn-success">Assign</button>
+            <button type="submit" class="btn btn-success">{{ t.assign }}</button>
           </form>
           {% elif incident.qa_id == 'QA-3' and 'name' in item %}
           <form method="post" action="/mark-reviewed" style="display:inline">
             <input type="hidden" name="name" value="{{ item['name'] }}">
             <input type="hidden" name="redirect" value="/incident/QA-3">
-            <button type="submit" class="btn btn-success">Mark reviewed</button>
+            <button type="submit" class="btn btn-success">{{ t.mark_reviewed }}</button>
           </form>
           {% elif incident.qa_id == 'QA-4' and 'name' in item %}
           <form method="post" action="/promote-system" style="display:inline">
@@ -264,14 +375,14 @@ _DETAIL_TEMPLATE = """\
             <select name="domain" class="btn">
               {% for d in available_domains %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
             </select>
-            <button type="submit" class="btn btn-success">Promote</button>
+            <button type="submit" class="btn btn-success">{{ t.promote }}</button>
           </form>
           {% endif %}
           {% if 'name' in item %}
           <form method="post" action="/suppress/system" style="display:inline">
             <input type="hidden" name="name" value="{{ item['name'] }}">
             <input type="hidden" name="redirect" value="/incident/{{ incident.qa_id }}">
-            <button type="submit" class="btn">Suppress</button>
+            <button type="submit" class="btn">{{ t.suppress }}</button>
           </form>
           {% endif %}
         </td>
@@ -283,12 +394,12 @@ _DETAIL_TEMPLATE = """\
 
   {% if incident.suppressed_count > 0 %}
   <p style="margin-top:12px;color:#666;font-size:0.85em">
-    {{ incident.suppressed_count }} element(s) hidden by audit_suppress.
+    {{ incident.suppressed_count }} {{ t.hidden_by_suppress }}
   </p>
   {% endif %}
 
   <div class="subtitle" style="margin-top:20px">
-    <a href="/">&larr; Back to dashboard</a>
+    <a href="/">&larr; {{ t.back }}</a>
   </div>
 </body>
 </html>
@@ -296,23 +407,25 @@ _DETAIL_TEMPLATE = """\
 
 _REMEDIATIONS_TEMPLATE = """\
 <!DOCTYPE html>
-<html lang="ru">
+<html lang="{{ lang }}">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>archi2likec4 — Remediations Review</title>
+  <title>archi2likec4 — {{ t.remed_review }}</title>
   <style>""" + _BASE_CSS + """</style>
+  """ + _THEME_JS + """
 </head>
 <body>
-  <div class="back"><a href="/">&larr; Back to dashboard</a></div>
-  <h1>Remediations Review</h1>
-  <div class="subtitle">All config-driven decisions for this conversion</div>
+  <button id="theme-toggle" class="theme-toggle"></button>
+  <div class="back"><a href="/">&larr; {{ t.back }}</a></div>
+  <h1>{{ t.remed_review }}</h1>
+  <div class="subtitle">{{ t.remed_subtitle }}</div>
 
   {% if domain_overrides %}
   <div class="section-block">
-    <h2>Domain Overrides ({{ domain_overrides|length }}) <small style="color:#999">QA-1</small></h2>
+    <h2>{{ t.domain_overrides }} ({{ domain_overrides|length }}) <small style="color:#999">QA-1</small></h2>
     <table>
-      <thead><tr><th>#</th><th>System</th><th>&rarr; Domain</th><th>Action</th></tr></thead>
+      <thead><tr><th>#</th><th>{{ t.system }}</th><th>&rarr; {{ t.domain }}</th><th>{{ t.action }}</th></tr></thead>
       <tbody>
         {% for name, domain in domain_overrides.items() %}
         <tr>
@@ -323,7 +436,7 @@ _REMEDIATIONS_TEMPLATE = """\
             <form method="post" action="/undo-assign-domain" style="display:inline">
               <input type="hidden" name="name" value="{{ name }}">
               <input type="hidden" name="redirect" value="/remediations">
-              <button type="submit" class="btn btn-danger">Undo</button>
+              <button type="submit" class="btn btn-danger">{{ t.undo }}</button>
             </form>
           </td>
         </tr>
@@ -335,9 +448,9 @@ _REMEDIATIONS_TEMPLATE = """\
 
   {% if reviewed_systems %}
   <div class="section-block">
-    <h2>Reviewed Systems ({{ reviewed_systems|length }}) <small style="color:#999">QA-3</small></h2>
+    <h2>{{ t.reviewed_systems }} ({{ reviewed_systems|length }}) <small style="color:#999">QA-3</small></h2>
     <table>
-      <thead><tr><th>#</th><th>System</th><th>Action</th></tr></thead>
+      <thead><tr><th>#</th><th>{{ t.system }}</th><th>{{ t.action }}</th></tr></thead>
       <tbody>
         {% for name in reviewed_systems %}
         <tr>
@@ -347,7 +460,7 @@ _REMEDIATIONS_TEMPLATE = """\
             <form method="post" action="/undo-mark-reviewed" style="display:inline">
               <input type="hidden" name="name" value="{{ name }}">
               <input type="hidden" name="redirect" value="/remediations">
-              <button type="submit" class="btn btn-danger">Undo</button>
+              <button type="submit" class="btn btn-danger">{{ t.undo }}</button>
             </form>
           </td>
         </tr>
@@ -359,9 +472,9 @@ _REMEDIATIONS_TEMPLATE = """\
 
   {% if promote_children %}
   <div class="section-block">
-    <h2>Promoted Children ({{ promote_children|length }}) <small style="color:#999">QA-4</small></h2>
+    <h2>{{ t.promoted_children }} ({{ promote_children|length }}) <small style="color:#999">QA-4</small></h2>
     <table>
-      <thead><tr><th>#</th><th>Parent</th><th>&rarr; Domain</th><th>Action</th></tr></thead>
+      <thead><tr><th>#</th><th>{{ t.parent }}</th><th>&rarr; {{ t.domain }}</th><th>{{ t.action }}</th></tr></thead>
       <tbody>
         {% for name, domain in promote_children.items() %}
         <tr>
@@ -372,7 +485,7 @@ _REMEDIATIONS_TEMPLATE = """\
             <form method="post" action="/undo-promote" style="display:inline">
               <input type="hidden" name="name" value="{{ name }}">
               <input type="hidden" name="redirect" value="/remediations">
-              <button type="submit" class="btn btn-danger">Undo</button>
+              <button type="submit" class="btn btn-danger">{{ t.undo }}</button>
             </form>
           </td>
         </tr>
@@ -384,9 +497,9 @@ _REMEDIATIONS_TEMPLATE = """\
 
   {% if suppress_names %}
   <div class="section-block">
-    <h2>Suppressed Systems ({{ suppress_names|length }}) <small style="color:#999">All QA</small></h2>
+    <h2>{{ t.suppressed_systems }} ({{ suppress_names|length }}) <small style="color:#999">All QA</small></h2>
     <table>
-      <thead><tr><th>#</th><th>System</th><th>Action</th></tr></thead>
+      <thead><tr><th>#</th><th>{{ t.system }}</th><th>{{ t.action }}</th></tr></thead>
       <tbody>
         {% for name in suppress_names %}
         <tr>
@@ -396,7 +509,7 @@ _REMEDIATIONS_TEMPLATE = """\
             <form method="post" action="/unsuppress/system" style="display:inline">
               <input type="hidden" name="name" value="{{ name }}">
               <input type="hidden" name="redirect" value="/remediations">
-              <button type="submit" class="btn btn-danger">Unsuppress</button>
+              <button type="submit" class="btn btn-danger">{{ t.unsuppress }}</button>
             </form>
           </td>
         </tr>
@@ -408,9 +521,9 @@ _REMEDIATIONS_TEMPLATE = """\
 
   {% if suppress_incidents_list %}
   <div class="section-block">
-    <h2>Suppressed Incidents ({{ suppress_incidents_list|length }})</h2>
+    <h2>{{ t.suppressed_incidents }} ({{ suppress_incidents_list|length }})</h2>
     <table>
-      <thead><tr><th>#</th><th>QA-ID</th><th>Action</th></tr></thead>
+      <thead><tr><th>#</th><th>QA-ID</th><th>{{ t.action }}</th></tr></thead>
       <tbody>
         {% for qid in suppress_incidents_list %}
         <tr>
@@ -420,7 +533,7 @@ _REMEDIATIONS_TEMPLATE = """\
             <form method="post" action="/unsuppress/incident" style="display:inline">
               <input type="hidden" name="qa_id" value="{{ qid }}">
               <input type="hidden" name="redirect" value="/remediations">
-              <button type="submit" class="btn btn-danger">Unsuppress</button>
+              <button type="submit" class="btn btn-danger">{{ t.unsuppress }}</button>
             </form>
           </td>
         </tr>
@@ -431,11 +544,78 @@ _REMEDIATIONS_TEMPLATE = """\
   {% endif %}
 
   {% if not domain_overrides and not reviewed_systems and not promote_children and not suppress_names and not suppress_incidents_list %}
-  <p>No remediations configured yet.</p>
+  <p>{{ t.no_remed }}</p>
   {% endif %}
 
   <div class="subtitle" style="margin-top:20px">
-    <a href="/">&larr; Back to dashboard</a>
+    <a href="/">&larr; {{ t.back }}</a>
+  </div>
+</body>
+</html>
+"""
+
+
+_HIERARCHY_TEMPLATE = """\
+<!DOCTYPE html>
+<html lang="{{ lang }}">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>archi2likec4 — {{ t.system_hierarchy }}</title>
+  <style>""" + _BASE_CSS + """
+  .hier-domain { margin-bottom: 20px; }
+  .hier-domain h3 { background: #e9ecef; padding: 8px 12px; border-radius: 6px 6px 0 0;
+                     margin: 0; font-size: 0.95em; }
+  .hier-sys { padding: 6px 12px; border: 1px solid #dee2e6; border-top: none; font-size: 0.9em; }
+  .hier-sys:last-child { border-radius: 0 0 6px 6px; }
+  .hier-sub { margin-left: 24px; color: #555; font-size: 0.85em; }
+  .hier-fn-count { color: #999; font-size: 0.8em; }
+  .hier-tag { font-size: 0.7em; padding: 1px 6px; border-radius: 3px; color: #fff; margin-left: 4px; }
+  .tag-promoted { background: #6f42c1; }
+  .tag-to_review { background: #fd7e14; }
+  .tag-external { background: #6c757d; }
+  </style>
+  """ + _THEME_JS + """
+</head>
+<body>
+  <button id="theme-toggle" class="theme-toggle"></button>
+  <div class="back"><a href="/">&larr; {{ t.back }}</a></div>
+  <h1>{{ t.system_hierarchy }}</h1>
+  <div class="subtitle">{{ total_systems }} {{ t.systems|lower }}, {{ total_subsystems }} {{ t.subsystems|lower }}</div>
+
+  {% for domain_id, systems in domain_groups.items() %}
+  <div class="hier-domain">
+    <h3>{{ domain_id }} ({{ systems|length }})</h3>
+    {% for sys in systems %}
+    <div class="hier-sys" style="background:#fff">
+      <strong>{{ sys.name }}</strong>
+      <code style="color:#999;font-size:0.8em">{{ sys.c4_id }}</code>
+      {% if sys.name.split('.')[0] in promoted_parents %}
+        <span class="hier-tag tag-promoted">promoted</span>
+      {% endif %}
+      {% for tag in sys.tags %}
+        <span class="hier-tag tag-{{ tag }}">{{ tag }}</span>
+      {% endfor %}
+      {% if sys.functions %}
+        <span class="hier-fn-count">{{ sys.functions|length }} fn</span>
+      {% endif %}
+      {% if sys.subsystems %}
+      {% for sub in sys.subsystems|sort(attribute='name') %}
+        <div class="hier-sub">
+          &#x2514; {{ sub.name }} <code style="color:#bbb;font-size:0.8em">{{ sub.c4_id }}</code>
+          {% if sub.functions %}
+            <span class="hier-fn-count">{{ sub.functions|length }} fn</span>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% endif %}
+    </div>
+    {% endfor %}
+  </div>
+  {% endfor %}
+
+  <div class="subtitle" style="margin-top:20px">
+    <a href="/">&larr; {{ t.back }}</a>
   </div>
 </body>
 </html>
@@ -512,6 +692,7 @@ def run_web(
     @app.route('/')
     def dashboard():
         config, summary, incidents, available_domains = _load_data()
+        lang = getattr(config, 'language', 'ru')
         active_count = sum(1 for i in incidents if not i.suppressed)
         suppressed_count = sum(1 for i in incidents if i.suppressed)
         remed_domain = len(config.domain_overrides)
@@ -519,6 +700,7 @@ def run_web(
         remed_total = remed_domain + remed_reviewed
         return render_template_string(
             _DASHBOARD_TEMPLATE,
+            t=_ui(lang), lang=lang,
             version=__version__,
             summary=summary,
             incidents=incidents,
@@ -537,12 +719,14 @@ def run_web(
     @app.route('/incident/<qa_id>')
     def incident_detail(qa_id):
         config, summary, incidents, available_domains = _load_data()
+        lang = getattr(config, 'language', 'ru')
         incident = next((i for i in incidents if i.qa_id == qa_id), None)
         if incident is None:
             return redirect('/')
         columns = _get_columns(incident)
         return render_template_string(
             _DETAIL_TEMPLATE,
+            t=_ui(lang), lang=lang,
             incident=incident,
             columns=columns,
             severity_colors=_SEVERITY_COLORS,
@@ -552,8 +736,10 @@ def run_web(
     @app.route('/remediations')
     def remediations():
         config = load_config(config_path)
+        lang = getattr(config, 'language', 'ru')
         return render_template_string(
             _REMEDIATIONS_TEMPLATE,
+            t=_ui(lang), lang=lang,
             domain_overrides=config.domain_overrides,
             reviewed_systems=sorted(config.reviewed_systems),
             promote_children=config.promote_children,
@@ -680,7 +866,38 @@ def run_web(
             logger.info('Undone promote for %s', name)
         return redirect(redirect_to)
 
-    print(f'archi2likec4 web UI: http://127.0.0.1:{port}')
+    @app.route('/hierarchy')
+    def hierarchy():
+        config, summary, incidents, available_domains = _load_data()
+        lang = getattr(config, 'language', 'ru')
+        # Get built data for hierarchy display
+        from .pipeline import _parse, _build
+        cfg = load_config(config_path)
+        cfg.model_root = model_root
+        cfg.output_dir = output_dir
+        parsed = _parse(model_root, cfg)
+        built = _build(parsed, cfg)
+
+        # Group systems by domain
+        domain_groups: dict[str, list] = {}
+        for domain_id, sys_list in sorted(built.domain_systems.items()):
+            if sys_list:
+                domain_groups[domain_id] = sorted(sys_list, key=lambda s: s.name)
+
+        # Promoted info
+        promoted_parents = set(cfg.promote_children.keys())
+
+        return render_template_string(
+            _HIERARCHY_TEMPLATE,
+            t=_ui(lang), lang=lang,
+            version=__version__,
+            domain_groups=domain_groups,
+            promoted_parents=promoted_parents,
+            total_systems=summary.total_systems,
+            total_subsystems=summary.total_subsystems,
+        )
+
+    logger.info('archi2likec4 web UI: http://127.0.0.1:%d', port)
     app.run(host='127.0.0.1', port=port, debug=False)
 
 

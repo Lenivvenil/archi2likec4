@@ -10,13 +10,18 @@ from pathlib import Path
 import pytest
 
 from archi2likec4.parsers import (
+    _detect_special_folder,
     _extract_ref_id,
+    _find_parent_component,
     _is_in_trash,
     parse_application_components,
     parse_application_functions,
     parse_application_interfaces,
     parse_data_objects,
+    parse_domain_mapping,
+    parse_location_elements,
     parse_relationships,
+    parse_solution_views,
     parse_technology_elements,
 )
 
@@ -374,4 +379,260 @@ class TestRelationshipsExpanded:
             target_id='ac-1', target_type='archimate:ApplicationComponent',
         )
         result = parse_relationships(tmp_path)
+        assert len(result) == 0
+
+    def test_application_service_realization_captured(self, tmp_path):
+        """RealizationRelationship ApplicationService→Node should be parsed."""
+        rel_dir = tmp_path / 'relations'
+        rel_dir.mkdir()
+        _write_relationship(
+            rel_dir / 'RealizationRelationship_r1.xml',
+            rel_type='RealizationRelationship', rel_id='r-1', name='',
+            source_id='as-1', source_type='archimate:ApplicationService',
+            target_id='n-1', target_type='archimate:Node',
+        )
+        result = parse_relationships(tmp_path)
+        assert len(result) == 1
+        assert result[0].source_type == 'ApplicationService'
+        assert result[0].target_type == 'Node'
+
+    def test_location_aggregation_captured(self, tmp_path):
+        """AggregationRelationship Location→Node should be parsed."""
+        rel_dir = tmp_path / 'relations'
+        rel_dir.mkdir()
+        _write_relationship(
+            rel_dir / 'AggregationRelationship_r1.xml',
+            rel_type='AggregationRelationship', rel_id='r-1', name='',
+            source_id='loc-1', source_type='archimate:Location',
+            target_id='n-1', target_type='archimate:Node',
+        )
+        result = parse_relationships(tmp_path)
+        assert len(result) == 1
+        assert result[0].source_type == 'Location'
+
+
+# ── parse_location_elements ─────────────────────────────────────────────
+
+class TestParseLocationElements:
+    def test_parse_location(self, tmp_path):
+        other_dir = tmp_path / 'other'
+        other_dir.mkdir()
+        xml_path = other_dir / 'Location_loc1.xml'
+        xml_path.write_text(
+            '<archimate:Location xmlns:archimate="http://www.archimatetool.com/archimate"'
+            ' name="Основной ЦОД" id="loc-1" documentation="HQ datacenter"/>',
+            encoding='utf-8',
+        )
+        result = parse_location_elements(tmp_path)
+        assert len(result) == 1
+        assert result[0].name == 'Основной ЦОД'
+        assert result[0].tech_type == 'Location'
+        assert result[0].archi_id == 'loc-1'
+
+    def test_no_other_dir(self, tmp_path):
+        result = parse_location_elements(tmp_path)
+        assert result == []
+
+
+# ── parse_solution_views: deployment patterns ────────────────────────────
+
+def _write_diagram(path, diagram_name, elements=None):
+    """Write an ArchimateDiagramModel XML with given name and optional element refs."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    el_xml = ''
+    for eid in (elements or []):
+        el_xml += (f'<child><archimateElement '
+                   f'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+                   f'xsi:type="archimate:Node" href="x.xml#{eid}"/></child>')
+    path.write_text(
+        f'<archimate:ArchimateDiagramModel '
+        f'xmlns:archimate="http://www.archimatetool.com/archimate" '
+        f'name="{diagram_name}" id="v-1">{el_xml}'
+        f'</archimate:ArchimateDiagramModel>',
+        encoding='utf-8',
+    )
+
+
+class TestParseSolutionViewsDeployment:
+    def test_english_deployment_pattern(self, tmp_path):
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_d1.xml',
+            'deployment_architecture.Payment_Service',
+            elements=['n-1'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 1
+        assert result[0].view_type == 'deployment'
+        assert result[0].solution == 'payment_service'
+
+    def test_russian_deployment_pattern(self, tmp_path):
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_d2.xml',
+            'Схема развёртывания.Платёжный сервис',
+            elements=['n-1'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 1
+        assert result[0].view_type == 'deployment'
+
+
+# ── _detect_special_folder ──────────────────────────────────────────────
+
+class TestDetectSpecialFolder:
+    def test_no_special_folder(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        xml = app_dir / 'ApplicationComponent_x.xml'
+        xml.touch()
+        assert _detect_special_folder(xml) == ''
+
+    def test_special_folder_detected(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        special = app_dir / 'review'
+        _write_folder_xml(special, '!РАЗБОР')
+        xml = special / 'ApplicationComponent_x.xml'
+        xml.touch()
+        assert _detect_special_folder(xml) == '!РАЗБОР'
+
+    def test_nested_special_folder(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        special = app_dir / 'ext'
+        _write_folder_xml(special, '!External_services')
+        nested = special / 'sub'
+        nested.mkdir()
+        xml = nested / 'ApplicationComponent_x.xml'
+        xml.touch()
+        assert _detect_special_folder(xml) == '!External_services'
+
+
+# ── _find_parent_component ──────────────────────────────────────────────
+
+class TestFindParentComponent:
+    def test_finds_single_parent(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        sys_dir = app_dir / 'systems'
+        sys_dir.mkdir(parents=True)
+        _write_component(
+            sys_dir / 'ApplicationComponent_sys1.xml',
+            archi_id='sys-1', name='CRM',
+        )
+        fn_xml = sys_dir / 'ApplicationFunction_fn1.xml'
+        fn_xml.touch()
+        assert _find_parent_component(fn_xml, app_dir) == 'sys-1'
+
+    def test_no_parent(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        fn_xml = app_dir / 'ApplicationFunction_fn1.xml'
+        fn_xml.touch()
+        assert _find_parent_component(fn_xml, app_dir) == ''
+
+    def test_ambiguous_multiple_parents(self, tmp_path):
+        """Multiple components in same dir without matching folder name → skip."""
+        app_dir = tmp_path / 'application'
+        sys_dir = app_dir / 'systems'
+        sys_dir.mkdir(parents=True)
+        _write_component(sys_dir / 'ApplicationComponent_a.xml', 'id-a', 'A')
+        _write_component(sys_dir / 'ApplicationComponent_b.xml', 'id-b', 'B')
+        fn_xml = sys_dir / 'ApplicationFunction_fn1.xml'
+        fn_xml.touch()
+        # Ambiguous: 2 components, no folder name match → walks up, no parent
+        assert _find_parent_component(fn_xml, app_dir) == ''
+
+
+# ── parse_domain_mapping ────────────────────────────────────────────────
+
+class TestParseDomainMapping:
+    def test_basic_domain(self, tmp_path):
+        """Domain mapping from functional_areas diagram."""
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa_folder'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'channels_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+        diagram_path = domain_dir / 'ArchimateDiagramModel_v1.xml'
+        diagram_path.parent.mkdir(parents=True, exist_ok=True)
+        diagram_path.write_text(
+            f'<archimate:ArchimateDiagramModel {_NS_DECL} name="Channels view" id="v-1">'
+            f'<child><archimateElement xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+            f'xsi:type="archimate:ApplicationComponent" href="x.xml#sys-1"/></child>'
+            f'</archimate:ArchimateDiagramModel>',
+            encoding='utf-8',
+        )
+        result = parse_domain_mapping(tmp_path, domain_renames={})
+        assert len(result) == 1
+        assert result[0].name == 'Channels'
+        assert 'sys-1' in result[0].archi_ids
+
+    def test_no_diagrams_dir(self, tmp_path):
+        result = parse_domain_mapping(tmp_path)
+        assert result == []
+
+    def test_no_functional_areas(self, tmp_path):
+        diagrams = tmp_path / 'diagrams'
+        other = diagrams / 'other'
+        _write_folder_xml(other, 'other_views')
+        result = parse_domain_mapping(tmp_path)
+        assert result == []
+
+
+# ── parse_solution_views: functional/integration ────────────────────────
+
+class TestParseSolutionViewsFuncInteg:
+    def test_functional_view(self, tmp_path):
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_f1.xml',
+            'functional_architecture.AutoRepay',
+            elements=['sys-1'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 1
+        assert result[0].view_type == 'functional'
+        assert result[0].solution == 'autorepay'
+
+    def test_integration_view(self, tmp_path):
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_i1.xml',
+            'integration_architecture.PaymentFlow',
+            elements=['sys-1', 'sys-2'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 1
+        assert result[0].view_type == 'integration'
+
+    def test_typo_functional_pattern(self, tmp_path):
+        """fucntional_architecture (common typo) should be matched."""
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_f1.xml',
+            'fucntional_architecture.SomeService',
+            elements=['sys-1'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 1
+        assert result[0].view_type == 'functional'
+
+    def test_trash_diagram_skipped(self, tmp_path):
+        diagrams_dir = tmp_path / 'diagrams'
+        trash = diagrams_dir / 'old'
+        _write_folder_xml(trash, 'Trash')
+        _write_diagram(
+            trash / 'ArchimateDiagramModel_f1.xml',
+            'functional_architecture.Deleted',
+            elements=['sys-1'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 0
+
+    def test_unrecognized_name_skipped(self, tmp_path):
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_f1.xml',
+            'random_diagram_name',
+        )
+        result = parse_solution_views(tmp_path)
         assert len(result) == 0

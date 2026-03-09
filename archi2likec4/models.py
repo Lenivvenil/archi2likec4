@@ -31,46 +31,17 @@ NS = {'archimate': 'http://www.archimatetool.com/archimate'}
 
 
 # ── Domain rebranding ──────────────────────────────────────────────────
+# Empty defaults — organization-specific values are in config.py
 
-DOMAIN_RENAMES: dict[str, tuple[str, str]] = {
-    # old_c4_id: (new_c4_id, new_display_name)
-    'banking_operations': ('products', 'Products'),
-    'customer_service_management': ('customer_service', 'Customer Service'),
-}
+DOMAIN_RENAMES: dict[str, tuple[str, str]] = {}
 
-# Additional domains not present in functional_areas views.
-EXTRA_DOMAIN_PATTERNS: list[dict] = [
-    {
-        'c4_id': 'external_exchange',
-        'name': 'External Exchange',
-        'patterns': [
-            'ASBT', 'EBP', 'EGOV', 'Korona', 'MasterCard', 'Ria',
-            'VisaDirect', 'ЗАГС', 'Ofd', 'GrossInsurance', 'WingsInsurance',
-            'PaymentHub', 'Compensation',
-        ],
-    },
-    {
-        'c4_id': 'platform',
-        'name': 'Platform',
-        'patterns': [
-            'ELK', 'Grafana', 'HA Proxy', 'Hadoop', 'IBM ESB', 'IBM MQ',
-            'Kubernetes', 'Mongo DB', 'Oracle', 'Postgres', 'Prometheus',
-            'Rabbit MQ', 'SFTP', 'SMS gateway', 'SMTP Server', 'Stage DB',
-            'WAF', 'Zabix', 'Zipkin', 'Confluence', 'Jira', 'Jasper Server',
-            'API Mngt', 'Файловое Хранилище S3', 'ЭФС API Gateway',
-            'API Gateway клиента', 'Сервер ЭЦП',
-        ],
-    },
-]
+EXTRA_DOMAIN_PATTERNS: list[dict] = []
 
 
 # ── Subsystem promotion ──────────────────────────────────────────────────
 # Parents whose dot-children should become standalone systems.
 # Format: {parent_name: fallback_domain}
-PROMOTE_CHILDREN: dict[str, str] = {
-    'EFS': 'channels',
-    'EFS_PLT': 'customer_service',
-}
+PROMOTE_CHILDREN: dict[str, str] = {}
 
 # Warn about parents with ≥ this many subsystems not listed in PROMOTE_CHILDREN
 PROMOTE_WARN_THRESHOLD: int = 10
@@ -204,7 +175,7 @@ class DataAccess:
 class SolutionView:
     """A solution-level view extracted from an Archi diagram."""
     name: str              # "Auto_Repayment_1.0.0"
-    view_type: str         # "functional" | "integration"
+    view_type: str         # "functional" | "integration" | "deployment"
     solution: str          # solution slug for c4_id
     element_archi_ids: list[str] = field(default_factory=list)
     relationship_archi_ids: list[str] = field(default_factory=list)
@@ -228,6 +199,6 @@ class DeploymentNode:
     name: str
     archi_id: str
     tech_type: str          # ArchiMate type
-    kind: str = 'infraNode' # LikeC4 element kind: infraNode | infraSoftware
+    kind: str = 'infraNode' # LikeC4 element kind: infraNode | infraSoftware | infraLocation | dataStore
     documentation: str = ''
     children: list['DeploymentNode'] = field(default_factory=list)

@@ -1162,61 +1162,75 @@ output/
 
 ## Бэклог релиза 1.0
 
-### Блокеры (MUST)
+### Блокеры (MUST) — ✅ DONE
 
-**B1. Документация — убрать legacy-шум**
-- README.md: убрать `convert.py`, оставить только `python -m archi2likec4` и `archi2likec4`
+**B1. ✅ Документация — убрать legacy-шум**
+- README.md: `convert.py` → `archi2likec4` / `python -m archi2likec4`
 - CONTRIBUTING.md: аналогично
-- Проверить, нужен ли `convert.py` — если да, документировать как legacy wrapper
+- `convert.py` оставлен как legacy wrapper (не документирован)
 
-**B2. pyproject.toml — готовность к публикации**
-- Classifier: `Development Status :: 4 - Beta` → `5 - Production/Stable`
-- Добавить `readme = "README.md"`
-- Добавить `[project.urls]` (Homepage, Repository)
-- Синхронизировать версию `__init__.py` ↔ `pyproject.toml` → `1.0.0`
+**B2. ✅ pyproject.toml — готовность к публикации**
+- Classifier: `Development Status :: 5 - Production/Stable`
+- Добавлен `readme = "README.md"`
+- Добавлен `[project.urls]` (Homepage, Repository)
+- Версия `1.0.0` в `__init__.py` и `pyproject.toml`
 
-**B3. Тесты — покрытие audit_data.py**
-- Сейчас 9 тестов покрывают только QA-1, QA-7, suppress
-- Добавить тесты для QA-2 (metadata gaps), QA-3 (to_review), QA-4 (promote candidates), QA-5 (no docs), QA-6 (orphan functions), QA-8 (solution views), QA-9 (no infra mapping)
-- ~14 новых тестов
+**B3. ✅ Тесты — покрытие audit_data.py**
+- Добавлены тесты: QA-2 (4 теста), QA-3 (3), QA-4 (3), QA-5 (3), QA-6 (2), QA-8 (3), QA-9 (4)
+- Итого 22 новых теста (было 7, стало 29)
 
-**B4. Тесты — conftest.py**
-- `_MockConfig` и `_MockBuilt` дублируются в `test_generators.py` и `test_audit_data.py`
-- Вынести в `tests/conftest.py` как shared fixtures
+**B4. ✅ Тесты — conftest.py**
+- `MockConfig` и `MockBuilt` вынесены в `tests/helpers.py`
+- `tests/conftest.py` импортирует и предоставляет как fixtures
 
-**B5. Тесты — web.py**
-- 710 строк с 15+ маршрутами, 0 тестов
-- Flask test client: дашборд, detail-страницы, POST-маршруты suppress/assign/promote
-- ~15 тестов
+**B5. ✅ Тесты — web.py**
+- 18 тестов: dashboard (5), incident detail (5), remediations (3), helpers (5)
+- Flask test client с мокированным pipeline
 
-### Рекомендуемые (SHOULD)
+### Рекомендуемые (SHOULD) — ✅ DONE
 
-**S1. Новая фича: валидация иерархии систем/подсистем в Web UI**
-- Человек должен явно видеть и подтверждать, что мигрирует как система vs подсистема
-- Отдельная страница `/hierarchy` или раздел на дашборде
+**S1. ✅ Валидация иерархии систем/подсистем в Web UI**
+- Страница `/hierarchy` — системы/подсистемы сгруппированы по доменам
+- 5 тестов в test_web.py
 
-**S2. print() → logger в web.py**
-- Startup message использует `print()` вместо `logger.info()`
+**S2. ✅ print() → logger в web.py**
+- `print()` заменён на `logger.info()` в startup message
 
-**S3. py.typed маркер**
-- PEP 561: пустой файл `archi2likec4/py.typed` для type checker discovery
+**S3. ✅ py.typed маркер**
+- PEP 561: пустой файл `archi2likec4/py.typed`
 
-### Можно отложить (COULD)
+### Можно отложить (COULD) — ✅ DONE
 
-**C1. CHANGELOG.md**
-- История релизов отдельным файлом (сейчас всё в NOTES.md)
+**C1. ✅ CHANGELOG.md**
+- История релизов в CHANGELOG.md
 
-**C2. Расширение тестов парсера**
-- `parse_domain_mapping()`, `parse_solution_views()` — только через e2e
-- Helper-функции (`_detect_special_folder`, `_find_parent_component`) без unit-тестов
+**C2. ✅ Расширение тестов парсера**
+- 16 новых тестов: `_detect_special_folder` (3), `_find_parent_component` (3), `parse_domain_mapping` (3), `parse_solution_views` (5+2 deployment)
 
-**C3. CLI-тесты**
-- `main()`, `--strict`, `--dry-run` комбинации
-- Тесты error-handling (missing model dir, invalid XML)
+**C3. ✅ CLI-тесты**
+- 11 тестов: args (5), error handling (5), web subcommand (1)
+
+### Пост-1.0 бэклог — ✅ DONE
+
+**P1. ✅ dataStore на deployment-диаграмме**
+- SystemSoftware с именем БД (PostgreSQL, Oracle, Redis, MongoDB и т.д.) → `kind='dataStore'`
+- Regex-паттерн `_DATASTORE_PATTERNS` в builders.py для автоматического распознавания
+- `build_datastore_entity_links()` — связка dataStore ↔ dataEntity через AccessRelationship
+- deployment/datastore-mapping.c4 с `persists` relationships
+- deployment view включает `element.kind = dataStore`
+- 12 новых тестов
+
+**P2. ✅ i18n (ru/en) + отвязка от банка**
+- `archi2likec4/i18n.py` — каталог сообщений ru/en для 10 QA-инцидентов + audit заголовки
+- `config.language: str = 'ru'` — выбор языка через YAML или по умолчанию
+- Банко-специфичные константы перенесены из models.py → config.py:
+  - `_DEFAULT_DOMAIN_RENAMES`, `_DEFAULT_EXTRA_DOMAIN_PATTERNS`, `_DEFAULT_PROMOTE_CHILDREN`
+  - models.py теперь содержит пустые дефолты (универсальный конвертер)
+- audit_data.py полностью на i18n (get_msg, get_qa10_issue)
+- generators.py — header + summary AUDIT.md на i18n (get_audit_label)
+- 19 новых тестов (i18n, language config, dataStore)
 
 ### Не делаем (WON'T для 1.0)
 
-- i18n (English translations) — проект для конкретного банка
 - Async/threading — модели до 10K систем, sequential достаточно
 - Business/Strategy layer ArchiMate — только Application + Technology
-- dataStore builder — используем dataEntity

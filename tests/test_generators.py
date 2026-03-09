@@ -16,6 +16,7 @@ from archi2likec4.models import (
 from archi2likec4.generators import (
     generate_audit_md,
     generate_deployment_c4,
+    generate_datastore_mapping_c4,
     generate_deployment_mapping_c4,
     generate_deployment_view,
     generate_domain_c4,
@@ -326,6 +327,7 @@ class TestGenerateSpec_InfraKinds:
         spec = generate_spec()
         assert 'element infraNode' in spec
         assert 'element infraSoftware' in spec
+        assert 'element infraLocation' in spec
         assert 'archi-tech' in spec
 
     def test_spec_includes_deployed_on(self):
@@ -387,52 +389,47 @@ class TestGenerateDeploymentView:
     def test_view_content(self):
         content = generate_deployment_view()
         assert 'view deployment_architecture' in content
+        assert 'infraLocation' in content
         assert 'infraNode' in content
         assert 'infraSoftware' in content
+        assert 'dataStore' in content
+
+
+class TestGenerateDatastoreMapping:
+    def test_generates_persists_relationships(self):
+        links = [('srv.pg', 'de_users'), ('srv.pg', 'de_orders')]
+        content = generate_datastore_mapping_c4(links)
+        assert 'persists' in content
+        assert 'srv.pg -[persists]-> de_users' in content
+        assert 'srv.pg -[persists]-> de_orders' in content
+
+    def test_empty_links(self):
+        content = generate_datastore_mapping_c4([])
+        assert 'persists' not in content
 
 
 # ── generate_audit_md ───────────────────────────────────────────────────
 
-class _MockConfig:
-    """Minimal config mock for audit tests."""
-    def __init__(self, promote_children=None, promote_warn_threshold=10,
-                 audit_suppress=None):
-        self.promote_children = promote_children or {}
-        self.promote_warn_threshold = promote_warn_threshold
-        self.audit_suppress = audit_suppress or []
-
-
-class _MockBuilt:
-    """Minimal BuildResult mock for audit tests."""
-    def __init__(self, systems=None, domain_systems=None, integrations=None,
-                 entities=None, deployment_map=None, orphan_fns=0,
-                 relationships=None):
-        self.systems = systems or []
-        self.domain_systems = domain_systems or {}
-        self.integrations = integrations or []
-        self.entities = entities or []
-        self.deployment_map = deployment_map or []
-        self.orphan_fns = orphan_fns
-        self.relationships = relationships or []
+from tests.helpers import MockConfig, MockBuilt
 
 
 class TestGenerateAuditMd:
     def test_summary_present(self):
-        built = _MockBuilt(systems=[
+        built = MockBuilt(systems=[
             System(c4_id='efs', name='EFS', archi_id='s1', metadata={}, domain='channels'),
         ])
-        result = generate_audit_md(built, 0, 0, _MockConfig())
+        result = generate_audit_md(built, 0, 0, MockConfig())
         assert '## Сводка' in result
         assert '| Систем | 1 |' in result
 
     def test_unassigned_listed(self):
         s1 = System(c4_id='ad', name='AD', archi_id='s1', metadata={}, domain='unassigned')
         s2 = System(c4_id='efs', name='EFS', archi_id='s2', metadata={}, domain='channels')
-        built = _MockBuilt(
+        built = MockBuilt(
             systems=[s1, s2],
             domain_systems={'unassigned': [s1], 'channels': [s2]},
         )
-        result = generate_audit_md(built, 0, 0, _MockConfig())
+        result = generate_audit_md(built, 0, 0, MockConfig())
         assert '[Critical] Системы без домена (1)' in result
         assert '| 1 | AD |' in result
 
@@ -444,19 +441,19 @@ class TestGenerateAuditMd:
         meta_empty = {k: 'TBD' for k in meta_full}
         s_good = System(c4_id='a', name='A', archi_id='s1', metadata=dict(meta_full), domain='d')
         s_bad = System(c4_id='b', name='B', archi_id='s2', metadata=dict(meta_empty), domain='d')
-        built = _MockBuilt(systems=[s_good, s_bad])
-        result = generate_audit_md(built, 0, 0, _MockConfig())
+        built = MockBuilt(systems=[s_good, s_bad])
+        result = generate_audit_md(built, 0, 0, MockConfig())
         assert '[High] Незаполненные карточки' in result
         assert '| 1 | B |' in result
 
     def test_to_review_listed(self):
         s = System(c4_id='x', name='ReviewMe', archi_id='s1', metadata={},
                    tags=['to_review'], domain='unassigned')
-        built = _MockBuilt(
+        built = MockBuilt(
             systems=[s],
             domain_systems={'unassigned': [s]},
         )
-        result = generate_audit_md(built, 0, 0, _MockConfig())
+        result = generate_audit_md(built, 0, 0, MockConfig())
         assert '[High] Системы на разборе (1)' in result
         assert 'ReviewMe' in result
 
@@ -465,8 +462,8 @@ class TestGenerateAuditMd:
                 for i in range(12)]
         s = System(c4_id='big', name='BigParent', archi_id='s1',
                    metadata={}, subsystems=subs, domain='d')
-        built = _MockBuilt(systems=[s])
-        result = generate_audit_md(built, 0, 0, _MockConfig(promote_warn_threshold=10))
+        built = MockBuilt(systems=[s])
+        result = generate_audit_md(built, 0, 0, MockConfig(promote_warn_threshold=10))
         assert '[Medium] Кандидаты на декомпозицию (1)' in result
         assert 'BigParent' in result
         assert '| 1 | BigParent | 12 |' in result
@@ -478,57 +475,96 @@ class TestGenerateAuditMd:
         ]}
         s = System(c4_id='a', name='A', archi_id='s1', metadata=dict(meta),
                    domain='d', documentation='Has docs')
-        built = _MockBuilt(systems=[s], domain_systems={'d': [s]})
-        result = generate_audit_md(built, 0, 0, _MockConfig())
+        built = MockBuilt(systems=[s], domain_systems={'d': [s]})
+        result = generate_audit_md(built, 0, 0, MockConfig())
         assert 'Системы без домена' not in result
         assert 'Системы на разборе' not in result
         assert 'Осиротевшие функции' not in result
 
     def test_no_infra_mapping(self):
         s = System(c4_id='efs', name='EFS', archi_id='s1', metadata={}, domain='channels')
-        built = _MockBuilt(systems=[s], deployment_map=[])
-        result = generate_audit_md(built, 0, 0, _MockConfig())
+        built = MockBuilt(systems=[s], deployment_map=[])
+        result = generate_audit_md(built, 0, 0, MockConfig())
         assert '[Medium] Системы без инфраструктурной привязки' in result
         assert 'EFS' in result
 
     def test_orphan_fns_shown(self):
-        built = _MockBuilt(orphan_fns=3)
-        result = generate_audit_md(built, 0, 0, _MockConfig())
+        built = MockBuilt(orphan_fns=3)
+        result = generate_audit_md(built, 0, 0, MockConfig())
         assert '[Low] Осиротевшие функции (3)' in result
 
     def test_solution_view_coverage(self):
-        built = _MockBuilt()
-        result = generate_audit_md(built, 100, 500, _MockConfig())
+        built = MockBuilt()
+        result = generate_audit_md(built, 100, 500, MockConfig())
         assert '[High] Покрытие solution views (80%)' in result
         assert '100 из 500' in result
 
     def test_suppress_excludes_from_unassigned(self):
         s1 = System(c4_id='ad', name='AD', archi_id='s1', metadata={}, domain='unassigned')
         s2 = System(c4_id='legacy', name='Legacy', archi_id='s2', metadata={}, domain='unassigned')
-        built = _MockBuilt(
+        built = MockBuilt(
             systems=[s1, s2],
             domain_systems={'unassigned': [s1, s2]},
         )
-        result = generate_audit_md(built, 0, 0, _MockConfig(audit_suppress=['Legacy']))
+        result = generate_audit_md(built, 0, 0, MockConfig(audit_suppress=['Legacy']))
         assert '[Critical] Системы без домена (1)' in result
         assert 'AD' in result
         assert 'Legacy' not in result.split('Сводка')[1]  # not in incident tables
 
     def test_suppress_hides_section_when_all_suppressed(self):
         s = System(c4_id='ad', name='AD', archi_id='s1', metadata={}, domain='unassigned')
-        built = _MockBuilt(
+        built = MockBuilt(
             systems=[s],
             domain_systems={'unassigned': [s]},
         )
-        result = generate_audit_md(built, 0, 0, _MockConfig(audit_suppress=['AD']))
+        result = generate_audit_md(built, 0, 0, MockConfig(audit_suppress=['AD']))
         assert 'Системы без домена' not in result
 
     def test_suppress_footer_count(self):
         s = System(c4_id='ad', name='AD', archi_id='s1', metadata={}, domain='unassigned')
-        built = _MockBuilt(
+        built = MockBuilt(
             systems=[s],
             domain_systems={'unassigned': [s]},
         )
-        result = generate_audit_md(built, 0, 0, _MockConfig(audit_suppress=['AD']))
+        result = generate_audit_md(built, 0, 0, MockConfig(audit_suppress=['AD']))
         assert 'audit_suppress' in result
         assert '1 элементов' in result
+
+    def test_qa10_floating_software(self):
+        sw = DeploymentNode(c4_id='pg', name='PostgreSQL', archi_id='sw-1',
+                            tech_type='SystemSoftware', kind='infraSoftware')
+        built = MockBuilt(deployment_nodes=[sw])
+        result = generate_audit_md(built, 0, 0, MockConfig())
+        assert '[Medium] Проблемы иерархии развёртывания' in result
+        assert 'PostgreSQL' in result
+        assert 'root-нод' in result
+
+    def test_qa10_clean_hierarchy(self):
+        """No QA-10 when all nodes are properly nested."""
+        child = DeploymentNode(c4_id='srv', name='Server', archi_id='n-1',
+                               tech_type='Node', kind='infraNode')
+        parent = DeploymentNode(c4_id='dc', name='DC', archi_id='loc-1',
+                                tech_type='Location', kind='infraLocation',
+                                children=[child])
+        built = MockBuilt(deployment_nodes=[parent])
+        result = generate_audit_md(built, 0, 0, MockConfig())
+        assert 'Проблемы иерархии развёртывания' not in result
+
+
+class TestSolutionViewDeployment:
+    def test_deployment_view_with_tech_map(self):
+        sv = SolutionView(
+            name='deployment_architecture.PaymentSvc',
+            view_type='deployment',
+            solution='payment_svc',
+            element_archi_ids=['n-1', 'sw-1'],
+        )
+        tech_archi_to_c4 = {'n-1': 'server_1', 'sw-1': 'server_1.pg'}
+        files, unresolved, total = generate_solution_views(
+            [sv], {}, {}, tech_archi_to_c4=tech_archi_to_c4)
+        assert 'payment_svc' in files
+        content = files['payment_svc']
+        assert 'Deployment' in content
+        assert 'server_1' in content
+        assert unresolved == 2  # not in archi_to_c4
+        assert total == 2

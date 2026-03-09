@@ -1,14 +1,52 @@
-"""Configuration: YAML file → dataclass, CLI defaults."""
+"""Configuration: YAML file → dataclass, CLI defaults.
+
+Organization-specific defaults (domain renames, extra patterns, promote
+children) live here rather than in models.py so they can be overridden
+via .archi2likec4.yaml without touching source code.
+"""
 
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from .models import (
-    DOMAIN_RENAMES,
-    EXTRA_DOMAIN_PATTERNS,
-    PROMOTE_CHILDREN,
-    PROMOTE_WARN_THRESHOLD,
-)
+from .models import PROMOTE_WARN_THRESHOLD
+
+
+# ── Organization-specific defaults ──────────────────────────────────────
+# Override these in .archi2likec4.yaml for your organization.
+
+_DEFAULT_DOMAIN_RENAMES: dict[str, tuple[str, str]] = {
+    'banking_operations': ('products', 'Products'),
+    'customer_service_management': ('customer_service', 'Customer Service'),
+}
+
+_DEFAULT_EXTRA_DOMAIN_PATTERNS: list[dict] = [
+    {
+        'c4_id': 'external_exchange',
+        'name': 'External Exchange',
+        'patterns': [
+            'ASBT', 'EBP', 'EGOV', 'Korona', 'MasterCard', 'Ria',
+            'VisaDirect', 'ЗАГС', 'Ofd', 'GrossInsurance', 'WingsInsurance',
+            'PaymentHub', 'Compensation',
+        ],
+    },
+    {
+        'c4_id': 'platform',
+        'name': 'Platform',
+        'patterns': [
+            'ELK', 'Grafana', 'HA Proxy', 'Hadoop', 'IBM ESB', 'IBM MQ',
+            'Kubernetes', 'Mongo DB', 'Oracle', 'Postgres', 'Prometheus',
+            'Rabbit MQ', 'SFTP', 'SMS gateway', 'SMTP Server', 'Stage DB',
+            'WAF', 'Zabix', 'Zipkin', 'Confluence', 'Jira', 'Jasper Server',
+            'API Mngt', 'Файловое Хранилище S3', 'ЭФС API Gateway',
+            'API Gateway клиента', 'Сервер ЭЦП',
+        ],
+    },
+]
+
+_DEFAULT_PROMOTE_CHILDREN: dict[str, str] = {
+    'EFS': 'channels',
+    'EFS_PLT': 'customer_service',
+}
 
 
 @dataclass
@@ -20,15 +58,15 @@ class ConvertConfig:
 
     # Subsystem promotion
     promote_children: dict[str, str] = field(
-        default_factory=lambda: dict(PROMOTE_CHILDREN))
+        default_factory=lambda: dict(_DEFAULT_PROMOTE_CHILDREN))
     promote_warn_threshold: int = PROMOTE_WARN_THRESHOLD
 
     # Domain configuration
     domain_renames: dict[str, tuple[str, str]] = field(
-        default_factory=lambda: dict(DOMAIN_RENAMES))
+        default_factory=lambda: dict(_DEFAULT_DOMAIN_RENAMES))
     extra_domain_patterns: list[dict] = field(
         default_factory=lambda: [dict(d, patterns=list(d['patterns']))
-                                 for d in EXTRA_DOMAIN_PATTERNS])
+                                 for d in _DEFAULT_EXTRA_DOMAIN_PATTERNS])
 
     # Quality gates
     max_unresolved_ratio: float = 0.5
@@ -44,6 +82,9 @@ class ConvertConfig:
     domain_overrides: dict[str, str] = field(default_factory=dict)
     # Reviewed systems: strip to_review tag during build
     reviewed_systems: list[str] = field(default_factory=list)
+
+    # i18n: language for AUDIT.md and Web UI ('ru' or 'en')
+    language: str = 'ru'
 
     # CLI flags
     strict: bool = False
@@ -137,6 +178,11 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
         config.domain_overrides = {str(k): str(v) for k, v in data['domain_overrides'].items()}
     if 'reviewed_systems' in data and isinstance(data['reviewed_systems'], list):
         config.reviewed_systems = [str(s) for s in data['reviewed_systems']]
+
+    if 'language' in data:
+        lang = str(data['language']).lower()
+        if lang in ('ru', 'en'):
+            config.language = lang
 
     if 'strict' in data:
         val = data['strict']

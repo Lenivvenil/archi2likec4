@@ -6,8 +6,6 @@ import re
 logger = logging.getLogger('archi2likec4')
 
 from .models import (
-    EXTRA_DOMAIN_PATTERNS,
-    PROMOTE_CHILDREN,
     PROMOTE_WARN_THRESHOLD,
     AppComponent,
     AppFunction,
@@ -78,7 +76,7 @@ def build_systems(
     reviewed_systems: list[str] | None = None,
 ) -> tuple[list[System], dict[str, list[str]]]:
     if promote_children is None:
-        promote_children = PROMOTE_CHILDREN
+        promote_children = {}
     if promote_warn_threshold is None:
         promote_warn_threshold = PROMOTE_WARN_THRESHOLD
 
@@ -672,7 +670,7 @@ def assign_domains(
 
     # Second pass: fallback domain for promoted children
     if promote_children is None:
-        promote_children = PROMOTE_CHILDREN
+        promote_children = {}
     still_unassigned: list[System] = []
     for sys in result['unassigned']:
         parent_prefix = sys.name.split('.', 1)[0]
@@ -688,7 +686,7 @@ def assign_domains(
 
     # Third pass: assign unassigned systems to extra domains via pattern matching
     if extra_domain_patterns is None:
-        extra_domain_patterns = EXTRA_DOMAIN_PATTERNS
+        extra_domain_patterns = []
     for extra in extra_domain_patterns:
         extra_id = extra['c4_id']
         patterns_lower = [p.lower() for p in extra['patterns']]
@@ -777,6 +775,14 @@ _INFRA_SW_TYPES = frozenset({
     'SystemSoftware', 'TechnologyService', 'Artifact',
 })
 
+# Patterns to identify database/storage SystemSoftware → dataStore kind
+_DATASTORE_PATTERNS = re.compile(
+    r'(?i)\b(?:postgres|postgresql|oracle|mysql|mariadb|mongo|mongodb|redis'
+    r'|elasticsearch|opensearch|cassandra|clickhouse|sqlite|mssql|sql\s*server'
+    r'|db2|couchdb|dynamodb|memcached|neo4j|influxdb|timescaledb'
+    r'|stage\s*db|database|хранилище)\b'
+)
+
 
 def build_deployment_topology(
     tech_elements: list[TechElement],
@@ -807,7 +813,14 @@ def build_deployment_topology(
             c4_id = f'{c4_id}_{suffix}'
         used_ids.add(c4_id)
 
-        kind = 'infraNode' if te.tech_type in _INFRA_NODE_TYPES else 'infraSoftware'
+        if te.tech_type == 'Location':
+            kind = 'infraLocation'
+        elif te.tech_type in _INFRA_NODE_TYPES:
+            kind = 'infraNode'
+        elif te.tech_type in _INFRA_SW_TYPES and _DATASTORE_PATTERNS.search(te.name):
+            kind = 'dataStore'
+        else:
+            kind = 'infraSoftware'
 
         dn = DeploymentNode(
             c4_id=c4_id,
@@ -863,6 +876,13 @@ def _build_deployment_path_index(
         result[node.archi_id] = path
         result.update(_build_deployment_path_index(node.children, path))
     return result
+
+
+def build_tech_archi_to_c4_map(
+    deployment_nodes: list[DeploymentNode],
+) -> dict[str, str]:
+    """Build archi_id → c4_path for all deployment nodes (public wrapper)."""
+    return _build_deployment_path_index(deployment_nodes)
 
 
 def build_deployment_map(
@@ -926,6 +946,59 @@ def build_deployment_map(
             continue
         seen.add(pair)
         result.append(pair)
+
+    result.sort()
+    return result
+
+
+def build_datastore_entity_links(
+    deployment_nodes: list[DeploymentNode],
+    entities: list[DataEntity],
+    relationships: list[RawRelationship],
+) -> list[tuple[str, str]]:
+    """Build (dataStore_c4_path, dataEntity_c4_id) pairs.
+
+    Links dataStore deployment nodes to DataEntity via relationships where
+    both sides reference the same logical data concept (AccessRelationship
+    between SystemSoftware and DataObject).
+    """
+    if not deployment_nodes or not entities:
+        return []
+
+    all_dn = _flatten_deployment_nodes(deployment_nodes)
+    datastore_nodes = [dn for dn in all_dn if dn.kind == 'dataStore']
+    if not datastore_nodes:
+        return []
+
+    tech_path = _build_deployment_path_index(deployment_nodes)
+    entity_by_archi = {e.archi_id: e for e in entities}
+
+    seen: set[tuple[str, str]] = set()
+    result: list[tuple[str, str]] = []
+
+    for rel in relationships:
+        if rel.rel_type != 'AccessRelationship':
+            continue
+
+        sw_id: str | None = None
+        do_id: str | None = None
+
+        if rel.source_type == 'SystemSoftware' and rel.target_type == 'DataObject':
+            sw_id, do_id = rel.source_id, rel.target_id
+        elif rel.source_type == 'DataObject' and rel.target_type == 'SystemSoftware':
+            sw_id, do_id = rel.target_id, rel.source_id
+        else:
+            continue
+
+        t = tech_path.get(sw_id)
+        entity = entity_by_archi.get(do_id)
+        if not t or not entity:
+            continue
+
+        pair = (t, entity.c4_id)
+        if pair not in seen:
+            seen.add(pair)
+            result.append(pair)
 
     result.sort()
     return result

@@ -1,18 +1,23 @@
 [project]
 name = "archi2likec4"
-version = "0.6.0"
+version = "1.0.0"
 description = "Convert coArchi XML (ArchiMate) to LikeC4 .c4 files"
+readme = "README.md"
 requires-python = ">=3.10"
 license = {text = "MIT"}
 authors = [{name = "archi2likec4 contributors"}]
 keywords = ["archimate", "likec4", "coarchi", "architecture", "converter"]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
     "Topic :: Software Development :: Documentation",
 ]
 dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/Lenivvenil/archi2likec4"
+Repository = "https://github.com/Lenivvenil/archi2likec4.git"
 
 [project.optional-dependencies]
 federation = ["pyyaml>=6.0"]

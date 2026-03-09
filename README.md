@@ -48,12 +48,12 @@ archi2likec4/
 
 ```bash
 # Стандартный запуск (модель в architectural_repository/model, выход в output/)
-python convert.py
+archi2likec4
 
 # Указать пути
-python convert.py /path/to/model /path/to/output
+archi2likec4 /path/to/model /path/to/output
 
-# Через модуль
+# Через модуль (альтернатива)
 python -m archi2likec4
 
 # Просмотр результата

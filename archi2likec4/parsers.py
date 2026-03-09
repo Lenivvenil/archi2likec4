@@ -338,10 +338,13 @@ def parse_relationships(model_root: Path) -> list[RawRelationship]:
         # Application layer
         'archimate:ApplicationComponent', 'archimate:ApplicationInterface',
         'archimate:DataObject', 'archimate:ApplicationFunction',
+        'archimate:ApplicationService',
         # Technology layer
         'archimate:Node', 'archimate:SystemSoftware', 'archimate:Device',
         'archimate:TechnologyCollaboration', 'archimate:TechnologyService',
         'archimate:Artifact', 'archimate:CommunicationNetwork', 'archimate:Path',
+        # Other
+        'archimate:Location',
     }
 
     results: list[RawRelationship] = []
@@ -459,6 +462,35 @@ def parse_domain_mapping(
     return domains
 
 
+def parse_location_elements(model_root: Path) -> list[TechElement]:
+    """Parse Location elements from model/other/ directory."""
+    other_dir = model_root / 'other'
+    if not other_dir.is_dir():
+        return []
+
+    results: list[TechElement] = []
+    for xml_path in sorted(other_dir.rglob('Location_*.xml')):
+        if xml_path.name == 'folder.xml':
+            continue
+        if _is_in_trash(xml_path, other_dir):
+            continue
+        try:
+            tree = ET.parse(xml_path)
+        except ET.ParseError:
+            continue
+        root = tree.getroot()
+        name = root.get('name', '').strip()
+        archi_id = root.get('id', '')
+        documentation = root.get('documentation', '')
+        if not name:
+            continue
+        results.append(TechElement(
+            archi_id=archi_id, name=name,
+            tech_type='Location', documentation=documentation,
+        ))
+    return results
+
+
 def parse_solution_views(model_root: Path) -> list[SolutionView]:
     """Parse solution-level views (functional_architecture, integration_architecture).
 
@@ -475,6 +507,8 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
     # Also handle Russian patterns
     func_pat_ru = re.compile(r'^Функциональная архитектура[.\s]+(.+)$', re.IGNORECASE)
     integ_pat_ru = re.compile(r'^Интеграционная архитектура[.\s]+(.+)$', re.IGNORECASE)
+    deploy_pat = re.compile(r'^(?:deployment_architecture|deployment_target)\.(.+)$', re.IGNORECASE)
+    deploy_pat_ru = re.compile(r'^Схема разв[её]ртывания[.\s]+(.+)$', re.IGNORECASE)
 
     results: list[SolutionView] = []
     seen_names: dict[str, int] = {}  # dedup_key → index in results
@@ -497,7 +531,8 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
         view_type = ''
         solution_name = ''
         for pat, vtype in [(func_pat, 'functional'), (integ_pat, 'integration'),
-                           (func_pat_ru, 'functional'), (integ_pat_ru, 'integration')]:
+                           (func_pat_ru, 'functional'), (integ_pat_ru, 'integration'),
+                           (deploy_pat, 'deployment'), (deploy_pat_ru, 'deployment')]:
             m = pat.match(diagram_name)
             if m:
                 view_type = vtype

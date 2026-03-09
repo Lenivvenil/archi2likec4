@@ -28,16 +28,19 @@ python3 -m pytest tests/ -v
 
 ```bash
 # With defaults (model in architectural_repository/model, output in output/)
-python3 convert.py
+archi2likec4
 
 # With custom paths
-python3 convert.py /path/to/model /path/to/output
+archi2likec4 /path/to/model /path/to/output
 
 # With config file
-python3 convert.py --config .archi2likec4.yaml
+archi2likec4 --config .archi2likec4.yaml
 
 # Dry run (validate only, no file generation)
-python3 convert.py --dry-run
+archi2likec4 --dry-run
+
+# Alternative: via python module
+python3 -m archi2likec4
 ```
 
 ## Configuration
@@ -60,5 +63,5 @@ See the example file for all available options.
 1. Create a feature branch from `main`
 2. Make your changes
 3. Ensure all tests pass: `python3 -m pytest tests/ -v`
-4. Run the converter to verify output: `python3 convert.py`
+4. Run the converter to verify output: `archi2likec4`
 5. Submit a merge request with a clear description
