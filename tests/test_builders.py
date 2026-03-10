@@ -6,6 +6,7 @@ from archi2likec4.models import (
     AppComponent,
     AppFunction,
     AppInterface,
+    AppService,
     DataAccess,
     DataEntity,
     DataObject,
@@ -30,6 +31,7 @@ from archi2likec4.builders import (
     build_integrations,
     build_systems,
     build_tech_archi_to_c4_map,
+    resolve_services,
 )
 
 
@@ -1084,3 +1086,67 @@ class TestDataAccessFunctionToDataObject:
         result = build_data_access([sys], [entity], rels)
         assert len(result) == 1
         assert result[0].system_path == 'efs'
+
+
+# ── resolve_services ──────────────────────────────────────────────────────
+
+class TestResolveServices:
+    def test_unowned_services_become_systems(self):
+        """Unresolved ApplicationService creates standalone System."""
+        systems = [System(c4_id='aim', name='AIM', archi_id='sys-1', metadata={})]
+        services = [AppService(archi_id='svc-1', name='Mastercard')]
+        rels: list[RawRelationship] = []
+
+        svc_path = resolve_services(services, systems, rels)
+        assert 'svc-1' in svc_path
+        assert svc_path['svc-1'] == 'mastercard'
+        assert any(s.c4_id == 'mastercard' for s in systems)
+        assert len(systems) == 2
+
+    def test_owned_service_resolved_to_parent(self):
+        """ApplicationService with RealizationRelationship resolves to parent."""
+        systems = [System(c4_id='aim', name='AIM', archi_id='sys-1', metadata={})]
+        services = [AppService(archi_id='svc-1', name='AIM.InternalSvc')]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='RealizationRelationship', name='',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='ApplicationService', target_id='svc-1',
+            ),
+        ]
+        svc_path = resolve_services(services, systems, rels)
+        assert svc_path['svc-1'] == 'aim'
+        assert len(systems) == 1
+
+    def test_empty_services(self):
+        """Empty services list returns empty map."""
+        systems = [System(c4_id='aim', name='AIM', archi_id='sys-1', metadata={})]
+        result = resolve_services([], systems, [])
+        assert result == {}
+
+    def test_collision_with_existing_system(self):
+        """Service with same name as existing system gets _svc suffix."""
+        systems = [System(c4_id='mastercard', name='Mastercard', archi_id='sys-1', metadata={})]
+        services = [AppService(archi_id='svc-1', name='Mastercard')]
+        svc_path = resolve_services(services, systems, [])
+        assert svc_path['svc-1'] == 'mastercard_svc'
+
+    def test_service_c4_path_used_in_integrations(self):
+        """build_integrations resolves ApplicationService endpoints."""
+        systems = [
+            System(c4_id='aim', name='AIM', archi_id='sys-1', metadata={}),
+            System(c4_id='mastercard', name='Mastercard', archi_id='svc-1', metadata={}),
+        ]
+        service_c4_path = {'svc-1': 'mastercard'}
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='FlowRelationship', name='payment',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='ApplicationService', target_id='svc-1',
+            ),
+        ]
+        intgs, skipped, total = build_integrations(
+            systems, rels, {}, service_c4_path=service_c4_path)
+        assert len(intgs) == 1
+        assert intgs[0].source_path == 'aim'
+        assert intgs[0].target_path == 'mastercard'

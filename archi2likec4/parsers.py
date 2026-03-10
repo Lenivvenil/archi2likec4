@@ -13,6 +13,7 @@ from .models import (
     AppComponent,
     AppFunction,
     AppInterface,
+    AppService,
     DataObject,
     DomainInfo,
     RawRelationship,
@@ -170,6 +171,38 @@ def _extract_folder_path(xml_path: Path, diagrams_dir: Path) -> str:
     return '/'.join(parts)
 
 
+_VIEW_TYPE_FOLDER_NAMES = frozenset({
+    'functional_architecture', 'integration_architecture',
+    'deployment_architecture', 'functional architecture',
+    'integration architecture', 'deployment architecture',
+})
+
+
+def _extract_folder_display_path(xml_path: Path, diagrams_dir: Path) -> str:
+    """Extract human-readable folder path from Archi diagrams folder hierarchy.
+
+    E.g. diagrams/fa/channels/aim/Diagram.xml → "Functional Areas / Channels / AIM"
+    Uses original folder names (not slugs) for LikeC4 view navigation.
+    Strips view-type folder names (functional_architecture, etc.) since they
+    duplicate the view_type label in the title.
+    """
+    parts: list[str] = []
+    current = xml_path.parent
+    while current != diagrams_dir and current != diagrams_dir.parent:
+        folder_xml = current / 'folder.xml'
+        if folder_xml.exists():
+            try:
+                tree = ET.parse(folder_xml)
+                name = tree.getroot().get('name', '').strip()
+                if name and name.lower() not in _VIEW_TYPE_FOLDER_NAMES:
+                    parts.append(name)
+            except ET.ParseError:
+                pass
+        current = current.parent
+    parts.reverse()
+    return ' / '.join(parts)
+
+
 def _extract_all_element_refs(element, element_ids: list[str], relationship_ids: list[str]):
     """Recursively extract all archimateElement and archimateRelationship IDs from a diagram."""
     for child in element:
@@ -246,6 +279,37 @@ def parse_application_interfaces(model_root: Path) -> list[AppInterface]:
         results.append(AppInterface(archi_id=archi_id, name=name, documentation=documentation))
     if parse_errors:
         logger.warning('%d ApplicationInterface XML file(s) could not be parsed', parse_errors)
+    return results
+
+
+def parse_application_services(model_root: Path) -> list[AppService]:
+    """Parse all ApplicationService XML files from application/.
+
+    ApplicationService elements represent external service endpoints
+    (payment systems, government APIs, etc.).
+    """
+    app_dir = model_root / 'application'
+    if not app_dir.is_dir():
+        return []
+    results: list[AppService] = []
+    parse_errors = 0
+    for xml_path in sorted(app_dir.rglob('ApplicationService_*.xml')):
+        if _is_in_trash(xml_path, app_dir):
+            continue
+        try:
+            tree = ET.parse(xml_path)
+        except ET.ParseError:
+            parse_errors += 1
+            continue
+        root = tree.getroot()
+        name = root.get('name', '').strip()
+        archi_id = root.get('id', '')
+        documentation = root.get('documentation', '')
+        if not name:
+            continue
+        results.append(AppService(archi_id=archi_id, name=name, documentation=documentation))
+    if parse_errors:
+        logger.warning('%d ApplicationService XML file(s) could not be parsed', parse_errors)
     return results
 
 
@@ -590,6 +654,7 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
 
         solution_slug = make_id(solution_name)
         folder_path = _extract_folder_path(xml_path, diagrams_dir)
+        folder_display_path = _extract_folder_display_path(xml_path, diagrams_dir)
 
         # Merge duplicates — scoped by folder_path to avoid cross-folder merging
         dedup_key = f'{folder_path}:{view_type}:{solution_name}'
@@ -621,6 +686,7 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
             element_archi_ids=element_ids,
             relationship_archi_ids=relationship_ids,
             folder_path=folder_path,
+            folder_display_path=folder_display_path,
         ))
 
     if parse_errors:

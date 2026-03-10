@@ -1459,6 +1459,111 @@ ArchiMate, Япония).
 
 ---
 
+## Итерация post-1.0: Диагностика и устранение потерь (2026-03-10)
+
+### Контекст
+
+После прогона конвертера на живом coArchi-репозитории банка выявлены
+системные причины неполной конвертации. Ниже — согласованный с архитектором
+анализ и план исправлений.
+
+### Статистика прогона (после Phase 1 fixes)
+
+| Метрика | Значение |
+|---------|----------|
+| Элементов ArchiMate | 2 998 |
+| Связей | 6 381 |
+| Систем | 289, подсистем 94 |
+| Интеграций (resolved) | 456 из 2 762 eligible |
+| Потерянных интеграций | 298 (10.8%) |
+| Data entities | 309, orphan 70 (22.7%) |
+| Solution views | 87, resolution 92.2% |
+| Unassigned systems | 108 (37.4%) |
+| Deployment nodes | 425, mappings 383 |
+
+### Корневые причины потерь — решения архитектора
+
+#### 1. ApplicationService (276 потерянных интеграций, 343 unresolved view refs)
+
+**Факт**: 93% потерянных интеграций — FlowRelationship с ApplicationService
+как endpoint. ApplicationService не парсится и не индексируется.
+
+**Решение архитектора**: ApplicationService НЕ ложится в иерархию L1–L5
+(domain → system → subsystem → function → entity). Обрабатывать аналогично
+ApplicationInterface:
+- Парсить XML-файлы `ApplicationService_*.xml`
+- Резолвить ownership через RealizationRelationship → parent ApplicationComponent
+- Строить `service_c4_path: dict[str, str]` (как `iface_c4_path`)
+- Использовать в `build_integrations()`, `build_data_access()`, `build_archi_to_c4_map()`
+
+**Ожидаемый эффект**: ~276 восстановленных интеграций, 3 orphan entities
+(HUMO/UzCard/MasterCard Cards), ~343 resolved view refs.
+
+#### 2. Unassigned systems (108 штук)
+
+**Факт**: 37.4% систем не на domain views.
+
+**Решение архитектора**: это «псевдосистемы» — подсистемы решений, нарисованные
+подрядчиками до утверждения нотации моделирования. Не баг конвертера, а проблема
+исходных данных. Частично решается через:
+- `domain_overrides` в .archi2likec4.yaml (19 систем через CompositionRelationship)
+- Auto-inherit domain от parent через Composition (future)
+- Ручная расстановка архитектором
+
+#### 3. Orphan data entities (70 штук)
+
+67 из 70 — просто нет AccessRelationship в исходной модели. Проблема полноты
+модели, не конвертера. 3 (HUMO/UzCard/MasterCard Cards) решатся через #1
+(ApplicationService → DataObject access).
+
+#### 4. View hierarchy — плоский список в портале LikeC4
+
+**Факт**: все views отображаются как плоский нечитаемый мегасписок.
+
+**Решение**: LikeC4 строит навигационное дерево через **`/` в title**:
+```
+title 'Функциональные области / Каналы / AIM / Функциональная архитектура'
+```
+Создаёт папки в sidebar. У нас уже есть `folder_path` в SolutionView —
+нужно конвертировать его в читаемые заголовки с `/`.
+
+#### 5. Deployment — отсутствие вложенности в UI
+
+**Факт**: наш код генерирует вложенный deployment (Location → Cluster → Node →
+Software), но в UI может не отображаться корректно.
+
+**Текущее состояние**: формат `model {}` с вложенными infraNode корректен.
+Deployment view включает все элементы по kind. Нужно проверить:
+- Корректность relationship `deployedOn` в LikeC4
+- Достаточность view predicate для отображения вложенности
+
+#### 6. Trash views в output (6 штук)
+
+`_is_in_trash()` проверяет только model tree, а не view/diagrams tree.
+Нужно проверять trash в обоих деревьях.
+
+### План реализации Phase 2
+
+**V2-S1: ApplicationService resolution** (P1)
+- parsers.py: добавить `parse_application_services()` (как parse_application_interfaces)
+- models.py: добавить `AppService` dataclass (как AppInterface)
+- builders.py: добавить `resolve_services()` → `service_c4_path`
+- builders.py: использовать service_c4_path в build_integrations, build_data_access
+- builders.py: добавить services в build_archi_to_c4_map
+- pipeline.py: интегрировать
+- Тесты
+
+**V2-S2: View hierarchy через title** (P1)
+- parsers.py: сохранять human-readable folder names (не slugs)
+- generators.py: генерировать title с `/` разделителями из folder_path
+- Тесты
+
+**V2-S3: Trash filter для diagrams tree** (P2)
+- parsers.py: `_is_in_trash()` для view XML paths тоже
+- Тесты
+
+---
+
 ## Горизонт v3.0 — «Двусторонний мост»
 
 **Видение:** Не только ArchiMate → LikeC4, но и **LikeC4 → ArchiMate**.

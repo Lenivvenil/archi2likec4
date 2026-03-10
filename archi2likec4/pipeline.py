@@ -12,6 +12,7 @@ from .parsers import (
     parse_application_components,
     parse_application_functions,
     parse_application_interfaces,
+    parse_application_services,
     parse_data_objects,
     parse_domain_mapping,
     parse_location_elements,
@@ -33,6 +34,7 @@ from .builders import (
     build_systems,
     build_tech_archi_to_c4_map,
     build_datastore_entity_links,
+    resolve_services,
 )
 from .generators import (
     generate_audit_md,
@@ -62,6 +64,7 @@ class ParseResult(NamedTuple):
     components: list
     functions: list
     interfaces: list
+    services: list
     data_objects: list
     relationships: list
     domains_info: list
@@ -113,6 +116,10 @@ def _parse(model_root: Path, config: ConvertConfig) -> ParseResult:
     interfaces = parse_application_interfaces(model_root)
     logger.info('Found %d ApplicationInterface elements', len(interfaces))
 
+    logger.info('Parsing ApplicationServices...')
+    services = parse_application_services(model_root)
+    logger.info('Found %d ApplicationService elements', len(services))
+
     logger.info('Parsing DataObjects...')
     data_objects = parse_data_objects(model_root)
     logger.info('Found %d DataObject elements', len(data_objects))
@@ -147,6 +154,7 @@ def _parse(model_root: Path, config: ConvertConfig) -> ParseResult:
         components=components,
         functions=functions,
         interfaces=interfaces,
+        services=services,
         data_objects=data_objects,
         relationships=relationships,
         domains_info=domains_info,
@@ -192,9 +200,14 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     linked = sum(1 for s in systems if s.api_interfaces)
     logger.info('%d interfaces attached to %d systems', len(iface_c4_path), linked)
 
+    logger.info('Resolving ApplicationServices...')
+    service_c4_path = resolve_services(parsed.services, systems, parsed.relationships)
+    logger.info('%d ApplicationService(s) resolved', len(service_c4_path))
+
     logger.info('Building integrations...')
     integrations, intg_skipped, intg_total_eligible = build_integrations(
-        systems, parsed.relationships, iface_c4_path, promoted_parents)
+        systems, parsed.relationships, iface_c4_path, promoted_parents,
+        service_c4_path=service_c4_path)
     logger.info('%d unique system-to-system integrations (%d/%d eligible skipped)',
                 len(integrations), intg_skipped, intg_total_eligible)
 
@@ -218,7 +231,8 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     apply_domain_prefix(integrations, data_access, sys_domain)
 
     # Build complete archi_id → c4_path map (for solution views)
-    archi_to_c4 = build_archi_to_c4_map(systems, sys_domain, iface_c4_path, entities=entities)
+    archi_to_c4 = build_archi_to_c4_map(systems, sys_domain, iface_c4_path,
+                                        entities=entities, service_c4_path=service_c4_path)
     logger.info('%d elements in archi→c4 map', len(archi_to_c4))
 
     # Build promoted parent → full c4 paths map (for solution views fan-out)

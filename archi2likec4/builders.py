@@ -10,6 +10,7 @@ from .models import (
     AppComponent,
     AppFunction,
     AppInterface,
+    AppService,
     DataAccess,
     DataEntity,
     DataObject,
@@ -459,11 +460,88 @@ def attach_interfaces(
     return iface_c4_path
 
 
+def resolve_services(
+    services: list[AppService],
+    systems: list[System],
+    relationships: list[RawRelationship],
+) -> dict[str, str]:
+    """Resolve ApplicationService ownership and build service_c4_path.
+
+    Tries relationship-based resolution (Composition/Realization/Assignment)
+    like ApplicationInterface. Unresolved services (typically external endpoints)
+    get their own c4_id as path — they will be created as standalone systems.
+
+    Returns service_c4_path: archi_id → c4_path for resolved services.
+    """
+    if not services:
+        return {}
+
+    comp_index = _build_comp_index(systems)
+    svc_index: dict[str, AppService] = {s.archi_id: s for s in services}
+    svc_owner: dict[str, tuple[System, Subsystem | None]] = {}
+
+    # Phase 1: Try relationship-based ownership resolution
+    for rel in relationships:
+        if rel.rel_type not in ('CompositionRelationship', 'RealizationRelationship',
+                                'AssignmentRelationship'):
+            continue
+        # AppComponent → AppService or AppService → AppComponent
+        if rel.source_type == 'ApplicationComponent' and rel.target_type == 'ApplicationService':
+            if rel.source_id in comp_index and rel.target_id in svc_index:
+                svc_owner[rel.target_id] = comp_index[rel.source_id]
+        elif rel.source_type == 'ApplicationService' and rel.target_type == 'ApplicationComponent':
+            if rel.target_id in comp_index and rel.source_id in svc_index:
+                svc_owner.setdefault(rel.source_id, comp_index[rel.target_id])
+
+    # Phase 2: Build c4_path map
+    service_c4_path: dict[str, str] = {}
+    unresolved_services: list[AppService] = []
+
+    for svc in services:
+        if svc.archi_id in svc_owner:
+            owner_sys, owner_sub = svc_owner[svc.archi_id]
+            if owner_sub:
+                service_c4_path[svc.archi_id] = f'{owner_sys.c4_id}.{owner_sub.c4_id}'
+            else:
+                service_c4_path[svc.archi_id] = owner_sys.c4_id
+        else:
+            unresolved_services.append(svc)
+
+    # Phase 3: Create standalone systems for unresolved services
+    existing_ids = {s.c4_id for s in systems}
+    existing_names = {s.name for s in systems}
+    for svc in unresolved_services:
+        c4_id = make_id(svc.name)
+        # Avoid collisions with existing systems
+        if c4_id in existing_ids:
+            c4_id = f'{c4_id}_svc'
+        if c4_id in existing_ids:
+            continue  # skip — already exists under similar name
+
+        new_sys = System(
+            c4_id=c4_id,
+            name=svc.name,
+            archi_id=svc.archi_id,
+            metadata={'ci': 'TBD', 'criticality': 'TBD', 'full_name': svc.name},
+            domain='external_exchange',
+        )
+        systems.append(new_sys)
+        existing_ids.add(c4_id)
+        service_c4_path[svc.archi_id] = c4_id
+
+    if unresolved_services:
+        logger.info('%d ApplicationService(s) created as standalone systems',
+                    len(unresolved_services))
+
+    return service_c4_path
+
+
 def build_integrations(
     systems: list[System],
     relationships: list[RawRelationship],
     iface_c4_path: dict[str, str],
     promoted_parents: dict[str, list[str]] | None = None,
+    service_c4_path: dict[str, str] | None = None,
 ) -> tuple[list[Integration], int, int]:
     """Build deduplicated system-to-system integrations.
 
@@ -500,6 +578,10 @@ def build_integrations(
             path = iface_c4_path.get(rel.source_id)
             if path:
                 src_paths = [path]
+        elif rel.source_type == 'ApplicationService' and service_c4_path:
+            path = service_c4_path.get(rel.source_id)
+            if path:
+                src_paths = [path]
 
         # Resolve target to one or more c4 paths
         tgt_paths: list[str] = []
@@ -511,6 +593,10 @@ def build_integrations(
                 tgt_paths = list(promoted_parents[rel.target_id])
         elif rel.target_type == 'ApplicationInterface':
             path = iface_c4_path.get(rel.target_id)
+            if path:
+                tgt_paths = [path]
+        elif rel.target_type == 'ApplicationService' and service_c4_path:
+            path = service_c4_path.get(rel.target_id)
             if path:
                 tgt_paths = [path]
 
@@ -699,6 +785,13 @@ def assign_domains(
         remaining = [s for s in systems if id(s) not in override_ids]
 
     for sys in remaining:
+        # Skip systems with pre-assigned domain (e.g. standalone ApplicationService)
+        if sys.domain:
+            if sys.domain not in result:
+                result[sys.domain] = []
+            result[sys.domain].append(sys)
+            continue
+
         # Collect archi IDs for this system (system + duplicates + all subsystems)
         all_ids: set[str] = set()
         if sys.archi_id:
@@ -787,6 +880,7 @@ def build_archi_to_c4_map(
     sys_domain: dict[str, str],
     iface_c4_path: dict[str, str] | None = None,
     entities: list[DataEntity] | None = None,
+    service_c4_path: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """Build a complete archi_id → c4_path mapping for all elements.
 
@@ -819,6 +913,13 @@ def build_archi_to_c4_map(
                 sys_c4_id = iface_path.split('.')[0]
                 domain = sys_domain.get(sys_c4_id, 'unassigned')
                 result[iface_id] = f'{domain}.{iface_path}'
+    # Add services — resolve to their owner system path (like interfaces)
+    if service_c4_path:
+        for svc_id, svc_path in service_c4_path.items():
+            if svc_id not in result:
+                sys_c4_id = svc_path.split('.')[0]
+                domain = sys_domain.get(sys_c4_id, 'unassigned')
+                result[svc_id] = f'{domain}.{svc_path}'
     # Add data entities (top-level, no domain prefix)
     if entities:
         for entity in entities:

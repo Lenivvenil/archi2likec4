@@ -82,6 +82,14 @@ class AppInterface:
 
 
 @dataclass
+class AppService:
+    """Parsed ArchiMate ApplicationService (external service endpoint)."""
+    archi_id: str
+    name: str
+    documentation: str = ''
+
+
+@dataclass
 class DataObject:
     """Parsed ArchiMate DataObject (→ dataEntity in LikeC4)."""
     archi_id: str
@@ -180,6 +188,7 @@ class SolutionView:
     element_archi_ids: list[str] = field(default_factory=list)
     relationship_archi_ids: list[str] = field(default_factory=list)
     folder_path: str = ''  # nested folder path like "functional_areas/channels/aim"
+    folder_display_path: str = ''  # human-readable: "Functional Areas / Channels / AIM"
 
 
 # ── Technology / Deployment ─────────────────────────────────────────────

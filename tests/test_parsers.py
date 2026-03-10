@@ -18,6 +18,7 @@ from archi2likec4.parsers import (
     parse_application_components,
     parse_application_functions,
     parse_application_interfaces,
+    parse_application_services,
     parse_data_objects,
     parse_domain_mapping,
     parse_location_elements,
@@ -184,6 +185,47 @@ class TestParseApplicationInterfaces:
         assert len(result) == 1
         assert result[0].name == 'EFS.API'
         assert result[0].documentation == 'http://api.efs.com'
+
+
+# ── parse_application_services ────────────────────────────────────────────
+
+class TestParseApplicationServices:
+    def test_basic(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        _write_component(
+            app_dir / 'ApplicationService_svc1.xml',
+            archi_id='svc-1', name='Mastercard',
+            documentation='OCTO',
+        )
+        result = parse_application_services(tmp_path)
+        assert len(result) == 1
+        assert result[0].name == 'Mastercard'
+        assert result[0].archi_id == 'svc-1'
+
+    def test_empty_name_skipped(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        _write_component(
+            app_dir / 'ApplicationService_svc2.xml',
+            archi_id='svc-2', name='',
+        )
+        result = parse_application_services(tmp_path)
+        assert len(result) == 0
+
+    def test_trash_skipped(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        trash_dir = app_dir / 'trash_folder'
+        trash_dir.mkdir(parents=True)
+        (trash_dir / 'folder.xml').write_text(
+            '<?xml version="1.0"?><folder:Folder name="trash" '
+            'xmlns:folder="http://www.archimatetool.com/archimate"/>')
+        _write_component(
+            trash_dir / 'ApplicationService_svc3.xml',
+            archi_id='svc-3', name='TrashService',
+        )
+        result = parse_application_services(tmp_path)
+        assert len(result) == 0
 
 
 # ── parse_data_objects ───────────────────────────────────────────────────

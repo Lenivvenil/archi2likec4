@@ -533,7 +533,12 @@ def generate_solution_views(
             view_type_labels = {'functional': 'Functional', 'integration': 'Integration', 'deployment': 'Deployment'}
             view_type_label = view_type_labels.get(sv.view_type, sv.view_type.title())
             solution_label = sv.name.split('.', 1)[-1] if '.' in sv.name else sv.name
-            title = f'{view_type_label} Architecture: {solution_label}'
+            base_title = f'{view_type_label} Architecture: {solution_label}'
+            # Add folder hierarchy to title for LikeC4 navigation tree
+            if sv.folder_display_path:
+                title = f'{sv.folder_display_path} / {base_title}'
+            else:
+                title = base_title
 
             if sv.view_type == 'functional':
                 # Functional view: include specific elements (systems + children)

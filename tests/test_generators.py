@@ -639,6 +639,34 @@ class TestSolutionViewFolderPath:
         files, _, _ = generate_solution_views([sv], archi_to_c4, {'efs': 'channels'})
         assert 'auto_repay' in files
 
+    def test_folder_display_path_in_title(self):
+        """View title should include folder_display_path for LikeC4 navigation."""
+        sv = SolutionView(
+            name='functional_architecture.AutoRepay',
+            view_type='functional',
+            solution='auto_repay',
+            element_archi_ids=['sys-1'],
+            folder_path='functional_areas/channels',
+            folder_display_path='Functional Areas / Channels',
+        )
+        archi_to_c4 = {'sys-1': 'channels.efs'}
+        files, _, _ = generate_solution_views([sv], archi_to_c4, {'efs': 'channels'})
+        content = files['functional_areas/channels/auto_repay']
+        assert 'Functional Areas / Channels / Functional Architecture' in content
+
+    def test_no_folder_display_path_no_prefix(self):
+        """View title without folder_display_path has no prefix."""
+        sv = SolutionView(
+            name='functional_architecture.AutoRepay',
+            view_type='functional',
+            solution='auto_repay',
+            element_archi_ids=['sys-1'],
+        )
+        archi_to_c4 = {'sys-1': 'channels.efs'}
+        files, _, _ = generate_solution_views([sv], archi_to_c4, {'efs': 'channels'})
+        content = files['auto_repay']
+        assert "title 'Functional Architecture: AutoRepay'" in content
+
 
 class TestSolutionViewDataEntity:
     def test_data_entity_resolved_on_functional_view(self):
