@@ -612,6 +612,73 @@ class TestGenerateAuditMd:
         assert 'Системы без инфраструктурной привязки' not in result
 
 
+class TestSolutionViewFolderPath:
+    def test_folder_path_in_file_key(self):
+        """Solution views with folder_path produce nested file keys."""
+        sv = SolutionView(
+            name='functional_architecture.AutoRepay',
+            view_type='functional',
+            solution='auto_repay',
+            element_archi_ids=['sys-1'],
+            folder_path='functional_areas/channels',
+        )
+        archi_to_c4 = {'sys-1': 'channels.efs'}
+        files, _, _ = generate_solution_views([sv], archi_to_c4, {'efs': 'channels'})
+        assert 'functional_areas/channels/auto_repay' in files
+
+    def test_no_folder_path_flat_key(self):
+        """Solution views without folder_path produce flat file keys."""
+        sv = SolutionView(
+            name='functional_architecture.AutoRepay',
+            view_type='functional',
+            solution='auto_repay',
+            element_archi_ids=['sys-1'],
+            folder_path='',
+        )
+        archi_to_c4 = {'sys-1': 'channels.efs'}
+        files, _, _ = generate_solution_views([sv], archi_to_c4, {'efs': 'channels'})
+        assert 'auto_repay' in files
+
+
+class TestSolutionViewDataEntity:
+    def test_data_entity_resolved_on_functional_view(self):
+        """DataEntity (single-segment c4_path) should appear on functional view."""
+        sv = SolutionView(
+            name='functional_architecture.DWH',
+            view_type='functional',
+            solution='dwh',
+            element_archi_ids=['sys-1', 'do-1'],
+        )
+        archi_to_c4 = {
+            'sys-1': 'analytics.dwh',
+            'do-1': 'de_report',
+        }
+        files, unresolved, total = generate_solution_views(
+            [sv], archi_to_c4, {'dwh': 'analytics'})
+        assert 'dwh' in files
+        content = files['dwh']
+        assert 'de_report' in content
+        assert unresolved == 0
+
+    def test_data_entity_on_integration_view(self):
+        """DataEntity should be included on integration view."""
+        sv = SolutionView(
+            name='integration_architecture.DWH',
+            view_type='integration',
+            solution='dwh',
+            element_archi_ids=['sys-1', 'do-1'],
+            relationship_archi_ids=[],
+        )
+        archi_to_c4 = {
+            'sys-1': 'analytics.dwh',
+            'do-1': 'de_report',
+        }
+        files, _, _ = generate_solution_views(
+            [sv], archi_to_c4, {'dwh': 'analytics'}, [])
+        content = files['dwh']
+        assert 'de_report' in content
+
+
 class TestSolutionViewDeployment:
     def test_deployment_view_with_tech_map(self):
         sv = SolutionView(

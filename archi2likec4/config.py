@@ -10,6 +10,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from .models import PROMOTE_WARN_THRESHOLD
+from .utils import sanitize_path_segment
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,9 @@ class ConvertConfig:
     domain_overrides: dict[str, str] = field(default_factory=dict)
     # Reviewed systems: strip to_review tag during build
     reviewed_systems: list[str] = field(default_factory=list)
+
+    # Trash folder names: folder names treated as trash (case-insensitive)
+    trash_folder_names: list[str] | None = None  # None = use DEFAULT_TRASH_NAMES
 
     # i18n: language for AUDIT.md and Web UI ('ru' or 'en')
     language: str = 'ru'
@@ -108,6 +112,7 @@ _KNOWN_YAML_KEYS: set[str] = {
     'quality_gates',
     'audit_suppress', 'audit_suppress_incidents',
     'domain_overrides', 'reviewed_systems',
+    'trash_folder_names',
     'language', 'strict',
 }
 
@@ -164,6 +169,7 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                 raise ValueError(
                     f"extra_domain_patterns[{i}]['c4_id']: expected string, "
                     f"got {type(entry['c4_id']).__name__}")
+            entry['c4_id'] = sanitize_path_segment(entry['c4_id'])
             if not isinstance(entry['name'], str):
                 raise ValueError(
                     f"extra_domain_patterns[{i}]['name']: expected string, "
@@ -209,9 +215,17 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
         if not isinstance(data['domain_overrides'], dict):
             raise ValueError(
                 f"domain_overrides: expected mapping, got {type(data['domain_overrides']).__name__}")
-        config.domain_overrides = {str(k): str(v) for k, v in data['domain_overrides'].items()}
+        config.domain_overrides = {
+            str(k): sanitize_path_segment(str(v))
+            for k, v in data['domain_overrides'].items()
+        }
     if 'reviewed_systems' in data and isinstance(data['reviewed_systems'], list):
         config.reviewed_systems = [str(s) for s in data['reviewed_systems']]
+
+    if 'trash_folder_names' in data:
+        val = data['trash_folder_names']
+        if isinstance(val, list):
+            config.trash_folder_names = [str(s).strip().lower() for s in val]
 
     if 'language' in data:
         lang = str(data['language']).lower()

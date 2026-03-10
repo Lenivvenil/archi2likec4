@@ -684,6 +684,25 @@ def create_app(
         resolved_config_path = Path('.archi2likec4.yaml')
 
     app = Flask(__name__)
+    app.secret_key = __import__('secrets').token_hex(32)
+
+    @app.before_request
+    def _csrf_check():
+        """Reject cross-origin POST requests (Origin/Referer check)."""
+        if request.method != 'POST':
+            return None
+        origin = request.headers.get('Origin') or ''
+        referer = request.headers.get('Referer') or ''
+        host = request.host_url.rstrip('/')
+        if origin:
+            if not origin.startswith(host):
+                from flask import abort
+                abort(403, 'Cross-origin POST rejected')
+        elif referer:
+            if not referer.startswith(host):
+                from flask import abort
+                abort(403, 'Cross-origin POST rejected')
+        return None
 
     def _safe_redirect(url: str) -> str:
         """Validate redirect URL to prevent open redirect attacks."""
@@ -850,8 +869,9 @@ def create_app(
 
     @app.route('/assign-domain', methods=['POST'])
     def assign_domain():
+        from .utils import sanitize_path_segment
         name = request.form.get('name', '').strip()
-        domain = request.form.get('domain', '').strip()
+        domain = sanitize_path_segment(request.form.get('domain', '').strip())
         redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name and domain:
             config = _load_config_safe()

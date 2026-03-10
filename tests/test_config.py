@@ -424,6 +424,32 @@ class TestDomainOverrides:
         with pytest.raises(ValueError, match='domain_overrides.*expected mapping'):
             _apply_yaml(config, {'domain_overrides': 'not-a-dict'})
 
+    def test_path_traversal_sanitized(self):
+        """domain_overrides values with path traversal should be sanitized."""
+        config = ConvertConfig()
+        _apply_yaml(config, {'domain_overrides': {'Sys': '../../etc/passwd'}})
+        val = config.domain_overrides['Sys']
+        assert '..' not in val
+        assert '/' not in val
+
+
+class TestTrashFolderNames:
+    """trash_folder_names config option."""
+
+    def test_default_none(self):
+        config = ConvertConfig()
+        assert config.trash_folder_names is None
+
+    def test_yaml_override(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'trash_folder_names': ['Trash', 'OLD']})
+        assert config.trash_folder_names == ['trash', 'old']
+
+    def test_non_list_ignored(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'trash_folder_names': 'not-a-list'})
+        assert config.trash_folder_names is None
+
 
 class TestReviewedSystems:
     """reviewed_systems config option."""

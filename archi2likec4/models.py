@@ -179,6 +179,7 @@ class SolutionView:
     solution: str          # solution slug for c4_id
     element_archi_ids: list[str] = field(default_factory=list)
     relationship_archi_ids: list[str] = field(default_factory=list)
+    folder_path: str = ''  # nested folder path like "functional_areas/channels/aim"
 
 
 # ── Technology / Deployment ─────────────────────────────────────────────

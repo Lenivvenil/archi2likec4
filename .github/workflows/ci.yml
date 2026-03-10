@@ -27,8 +27,8 @@ jobs:
       - name: Lint with ruff
         run: ruff check archi2likec4/ tests/
 
-      - name: Run tests
-        run: python -m pytest tests/ -v --tb=short
+      - name: Run tests with coverage
+        run: python -m pytest tests/ -v --tb=short --cov=archi2likec4 --cov-fail-under=80
 
   typecheck:
     runs-on: ubuntu-latest

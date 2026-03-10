@@ -51,8 +51,21 @@ def _detect_special_folder(xml_path: Path) -> str:
     return ''
 
 
-def _is_in_trash(xml_path: Path, base_dir: Path) -> bool:
-    """Return True if *xml_path* is inside a folder named 'trash'."""
+DEFAULT_TRASH_NAMES: frozenset[str] = frozenset({'trash', 'archive', 'old', 'deprecated', '_old'})
+
+
+def _is_in_trash(
+    xml_path: Path,
+    base_dir: Path,
+    trash_names: frozenset[str] | None = None,
+) -> bool:
+    """Return True if *xml_path* is inside a folder named 'trash' (or similar).
+
+    *trash_names* defaults to DEFAULT_TRASH_NAMES.  Pass a custom set or
+    ``frozenset({'trash'})`` to restore conservative behaviour.
+    """
+    if trash_names is None:
+        trash_names = DEFAULT_TRASH_NAMES
     current = xml_path.parent
     while current != base_dir:
         folder_xml = current / 'folder.xml'
@@ -61,7 +74,7 @@ def _is_in_trash(xml_path: Path, base_dir: Path) -> bool:
                 tree = ET.parse(folder_xml)
                 root = tree.getroot()
                 name = root.get('name', '').strip().lower()
-                if name == 'trash':
+                if name in trash_names:
                     return True
             except ET.ParseError:
                 logger.debug('Failed to parse folder.xml: %s', folder_xml)
@@ -133,6 +146,28 @@ def _extract_app_component_refs(element, result: set[str]):
                 if archi_id:
                     result.add(archi_id)
         _extract_app_component_refs(child, result)
+
+
+def _extract_folder_path(xml_path: Path, diagrams_dir: Path) -> str:
+    """Build a slug path from folder.xml names between xml_path and diagrams_dir.
+
+    E.g. diagrams/fa/channels/aim/Diagram.xml → "functional_areas/channels/aim"
+    """
+    parts: list[str] = []
+    current = xml_path.parent
+    while current != diagrams_dir and current != diagrams_dir.parent:
+        folder_xml = current / 'folder.xml'
+        if folder_xml.exists():
+            try:
+                tree = ET.parse(folder_xml)
+                name = tree.getroot().get('name', '').strip()
+                if name:
+                    parts.append(make_id(name))
+            except ET.ParseError:
+                logger.debug('Failed to parse folder.xml: %s', folder_xml)
+        current = current.parent
+    parts.reverse()
+    return '/'.join(parts)
 
 
 def _extract_all_element_refs(element, element_ids: list[str], relationship_ids: list[str]):
@@ -554,9 +589,10 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
         _extract_all_element_refs(root, element_ids, relationship_ids)
 
         solution_slug = make_id(solution_name)
+        folder_path = _extract_folder_path(xml_path, diagrams_dir)
 
-        # Merge duplicates instead of discarding
-        dedup_key = f'{view_type}:{solution_name}'
+        # Merge duplicates — scoped by folder_path to avoid cross-folder merging
+        dedup_key = f'{folder_path}:{view_type}:{solution_name}'
         if dedup_key in seen_names:
             existing = results[seen_names[dedup_key]]
             existing_elem_set = set(existing.element_archi_ids)
@@ -584,6 +620,7 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
             solution=unique_slug,
             element_archi_ids=element_ids,
             relationship_archi_ids=relationship_ids,
+            folder_path=folder_path,
         ))
 
     if parse_errors:

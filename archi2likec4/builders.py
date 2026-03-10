@@ -587,6 +587,17 @@ def build_data_access(
     seen: set[tuple[str, str, str]] = set()
     skipped = 0
 
+    # Build function archi_id → parent system c4_id mapping
+    fn_to_sys_path: dict[str, str] = {}
+    for sys in systems:
+        for fn in sys.functions:
+            if fn.archi_id:
+                fn_to_sys_path[fn.archi_id] = sys.c4_id
+        for sub in sys.subsystems:
+            for fn in sub.functions:
+                if fn.archi_id:
+                    fn_to_sys_path[fn.archi_id] = sys.c4_id
+
     for rel in relationships:
         if rel.rel_type != 'AccessRelationship':
             continue
@@ -594,11 +605,24 @@ def build_data_access(
         # Determine component and entity from relationship direction
         comp_id: str | None = None
         entity: DataEntity | None = None
+        is_fn_resolved = False
         if rel.source_type == 'ApplicationComponent' and rel.target_type == 'DataObject':
             comp_id = rel.source_id
             entity = entity_by_archi.get(rel.target_id)
         elif rel.source_type == 'DataObject' and rel.target_type == 'ApplicationComponent':
             comp_id = rel.target_id
+            entity = entity_by_archi.get(rel.source_id)
+        elif rel.source_type == 'ApplicationFunction' and rel.target_type == 'DataObject':
+            fn_sys = fn_to_sys_path.get(rel.source_id)
+            if fn_sys:
+                comp_id = fn_sys
+                is_fn_resolved = True
+            entity = entity_by_archi.get(rel.target_id)
+        elif rel.source_type == 'DataObject' and rel.target_type == 'ApplicationFunction':
+            fn_sys = fn_to_sys_path.get(rel.target_id)
+            if fn_sys:
+                comp_id = fn_sys
+                is_fn_resolved = True
             entity = entity_by_archi.get(rel.source_id)
         else:
             continue
@@ -610,11 +634,15 @@ def build_data_access(
         # Resolve component to c4 paths (fan-out for promoted parents)
         sys_paths: list[str] = []
         if comp_id:
-            path = comp_c4_path.get(comp_id)
-            if path:
-                sys_paths = [path]
-            elif promoted_parents and comp_id in promoted_parents:
-                sys_paths = list(promoted_parents[comp_id])
+            if is_fn_resolved:
+                # comp_id is already a system c4_id (resolved from function)
+                sys_paths = [comp_id]
+            else:
+                path = comp_c4_path.get(comp_id)
+                if path:
+                    sys_paths = [path]
+                elif promoted_parents and comp_id in promoted_parents:
+                    sys_paths = list(promoted_parents[comp_id])
 
         if not sys_paths:
             skipped += 1
@@ -758,6 +786,7 @@ def build_archi_to_c4_map(
     systems: list[System],
     sys_domain: dict[str, str],
     iface_c4_path: dict[str, str] | None = None,
+    entities: list[DataEntity] | None = None,
 ) -> dict[str, str]:
     """Build a complete archi_id → c4_path mapping for all elements.
 
@@ -790,6 +819,11 @@ def build_archi_to_c4_map(
                 sys_c4_id = iface_path.split('.')[0]
                 domain = sys_domain.get(sys_c4_id, 'unassigned')
                 result[iface_id] = f'{domain}.{iface_path}'
+    # Add data entities (top-level, no domain prefix)
+    if entities:
+        for entity in entities:
+            if entity.archi_id and entity.archi_id not in result:
+                result[entity.archi_id] = entity.c4_id
     return result
 
 

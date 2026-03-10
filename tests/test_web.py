@@ -267,3 +267,28 @@ class TestOpenRedirect:
         })
         assert resp.status_code == 302
         assert resp.headers['Location'].endswith('/')
+
+
+# ── CSRF protection ──────────────────────────────────────────────────
+
+class TestCSRF:
+    def test_cross_origin_post_rejected(self, app_client):
+        """POST with foreign Origin header should return 403."""
+        resp = app_client.post('/suppress/system',
+                               data={'name': 'Sys', 'redirect': '/'},
+                               headers={'Origin': 'https://evil.com'})
+        assert resp.status_code == 403
+
+    def test_same_origin_post_allowed(self, app_client):
+        """POST with same-origin Origin header should succeed."""
+        resp = app_client.post('/suppress/system',
+                               data={'name': 'Sys', 'redirect': '/'},
+                               headers={'Origin': 'http://localhost'})
+        assert resp.status_code == 302
+
+    def test_cross_origin_referer_rejected(self, app_client):
+        """POST with foreign Referer (no Origin) should return 403."""
+        resp = app_client.post('/suppress/system',
+                               data={'name': 'Sys', 'redirect': '/'},
+                               headers={'Referer': 'https://evil.com/page'})
+        assert resp.status_code == 403

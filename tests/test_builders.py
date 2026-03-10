@@ -926,6 +926,21 @@ class TestLocationKind:
 
 # ── build_tech_archi_to_c4_map ──────────────────────────────────────────
 
+class TestBuildArchiToC4MapEntities:
+    def test_entities_included_in_map(self):
+        """DataEntity archi_ids should appear in archi_to_c4 map."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1')
+        entity = DataEntity(c4_id='de_account', name='Account', archi_id='do-1')
+        result = build_archi_to_c4_map([sys], {'efs': 'channels'}, entities=[entity])
+        assert result['do-1'] == 'de_account'
+        assert result['sys-1'] == 'channels.efs'
+
+    def test_entities_none_is_noop(self):
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1')
+        result = build_archi_to_c4_map([sys], {'efs': 'channels'}, entities=None)
+        assert 'do-1' not in result
+
+
 class TestBuildTechArchiToC4Map:
     def test_basic_mapping(self):
         child = DeploymentNode(c4_id='pg', name='PostgreSQL', archi_id='sw-1',
@@ -1031,3 +1046,41 @@ class TestBuildDatastoreEntityLinks:
         result = build_datastore_entity_links([node], entities, rels)
         assert len(result) == 1
         assert result[0] == ('redis', 'de_cache')
+
+
+# ── build_data_access: Function→DataObject ──────────────────────────────
+
+class TestDataAccessFunctionToDataObject:
+    def test_function_access_resolves_to_parent_system(self):
+        """AccessRelationship AppFunction→DataObject resolves via parent system."""
+        fn = AppFunction(archi_id='fn-1', name='CreateAccount', c4_id='create_account')
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', functions=[fn])
+        entity = DataEntity(c4_id='de_account', name='Account', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='writes',
+                source_type='ApplicationFunction', source_id='fn-1',
+                target_type='DataObject', target_id='do-1',
+            ),
+        ]
+        result = build_data_access([sys], [entity], rels)
+        assert len(result) == 1
+        assert result[0].system_path == 'efs'
+        assert result[0].entity_id == 'de_account'
+
+    def test_function_in_subsystem_resolves_to_parent_system(self):
+        """Function inside subsystem still resolves to the system c4_id."""
+        fn = AppFunction(archi_id='fn-1', name='DoStuff', c4_id='do_stuff')
+        sub = Subsystem(c4_id='core', name='EFS.Core', archi_id='sub-1', functions=[fn])
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', subsystems=[sub])
+        entity = DataEntity(c4_id='de_data', name='Data', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='',
+                source_type='DataObject', source_id='do-1',
+                target_type='ApplicationFunction', target_id='fn-1',
+            ),
+        ]
+        result = build_data_access([sys], [entity], rels)
+        assert len(result) == 1
+        assert result[0].system_path == 'efs'

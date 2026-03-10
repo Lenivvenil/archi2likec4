@@ -506,6 +506,7 @@ def generate_solution_views(
                         parts = c4_path.split('.')
                         if len(parts) >= 2:
                             system_c4_ids.add(parts[1])
+                        # single-segment paths (e.g. dataEntity) are top-level
                     elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
                         for child_path in promoted_archi_to_c4[aid]:
                             c4_paths.append(child_path)
@@ -536,8 +537,9 @@ def generate_solution_views(
 
             if sv.view_type == 'functional':
                 # Functional view: include specific elements (systems + children)
-                # Find unique system-level paths (domain.system)
+                # Find unique system-level paths (domain.system) and top-level elements
                 system_paths: list[str] = []
+                toplevel_paths: list[str] = []
                 seen_sys: set[str] = set()
                 for p in unique_paths:
                     parts = p.split('.')
@@ -546,8 +548,11 @@ def generate_solution_views(
                         if sys_path not in seen_sys:
                             seen_sys.add(sys_path)
                             system_paths.append(sys_path)
+                    elif len(parts) == 1 and p not in seen_sys:
+                        seen_sys.add(p)
+                        toplevel_paths.append(p)
 
-                if len(system_paths) == 1:
+                if len(system_paths) == 1 and not toplevel_paths:
                     # Scoped view for a single system
                     lines.append(f"  view {view_id} of {system_paths[0]} {{")
                     lines.append(f"    title '{escape_str(title)}'")
@@ -561,6 +566,8 @@ def generate_solution_views(
                     for sp in system_paths:
                         lines.append(f"      {sp},")
                         lines.append(f"      {sp}.*,")
+                    for tp in toplevel_paths:
+                        lines.append(f"      {tp},")
                     # Remove trailing comma from last line
                     if lines[-1].endswith(','):
                         lines[-1] = lines[-1][:-1]
@@ -569,6 +576,7 @@ def generate_solution_views(
             elif sv.view_type == 'integration':
                 # Integration view: system-level with specific relationships from diagram
                 system_paths = []
+                toplevel_paths = []
                 seen_sys = set()
                 for p in unique_paths:
                     parts = p.split('.')
@@ -577,6 +585,9 @@ def generate_solution_views(
                         if sys_path not in seen_sys:
                             seen_sys.add(sys_path)
                             system_paths.append(sys_path)
+                    elif len(parts) == 1 and p not in seen_sys:
+                        seen_sys.add(p)
+                        toplevel_paths.append(p)
 
                 # Resolve diagram relationships to system-level pairs
                 rel_pairs: list[tuple[str, str]] = []
@@ -623,6 +634,8 @@ def generate_solution_views(
                 lines.append(f"    include")
                 for sp in system_paths:
                     lines.append(f"      {sp},")
+                for tp in toplevel_paths:
+                    lines.append(f"      {tp},")
                 if rel_pairs:
                     # Use specific relationship pairs from diagram
                     for src, tgt in rel_pairs:
@@ -653,7 +666,10 @@ def generate_solution_views(
         # Only emit file if it contains at least one view block
         content = '\n'.join(lines)
         if '  view ' in content:
-            files[solution_slug] = content
+            # Use folder_path from first view to build nested file key
+            folder_path = views[0].folder_path if views[0].folder_path else ''
+            file_key = f'{folder_path}/{solution_slug}' if folder_path else solution_slug
+            files[file_key] = content
 
     if total_unresolved:
         _logger = logging.getLogger('archi2likec4')

@@ -11,6 +11,7 @@ import pytest
 
 from archi2likec4.parsers import (
     _detect_special_folder,
+    _extract_folder_path,
     _extract_ref_id,
     _find_parent_component,
     _is_in_trash,
@@ -89,6 +90,27 @@ class TestIsInTrash:
         xml = deep / 'SomeFile.xml'
         xml.touch()
         assert _is_in_trash(xml, base) is True
+
+    @pytest.mark.parametrize('folder_name', ['Archive', 'old', 'Deprecated', '_old'])
+    def test_extended_trash_names(self, tmp_path, folder_name):
+        base = tmp_path / 'application'
+        folder = base / 'subfolder'
+        _write_folder_xml(folder, folder_name)
+        xml = folder / 'SomeFile.xml'
+        xml.touch()
+        assert _is_in_trash(xml, base) is True
+
+    def test_custom_trash_names(self, tmp_path):
+        """Custom trash_names parameter overrides defaults."""
+        base = tmp_path / 'application'
+        folder = base / 'subfolder'
+        _write_folder_xml(folder, 'old')
+        xml = folder / 'SomeFile.xml'
+        xml.touch()
+        # 'old' is NOT in the custom set
+        assert _is_in_trash(xml, base, trash_names=frozenset({'trash'})) is False
+        # 'old' IS in this custom set
+        assert _is_in_trash(xml, base, trash_names=frozenset({'old'})) is True
 
 
 # ── parse_application_components ─────────────────────────────────────────
@@ -636,3 +658,43 @@ class TestParseSolutionViewsFuncInteg:
         )
         result = parse_solution_views(tmp_path)
         assert len(result) == 0
+
+    def test_folder_path_preserved(self, tmp_path):
+        """Solution view folder_path captures parent folder hierarchy."""
+        diagrams_dir = tmp_path / 'diagrams'
+        fa_dir = diagrams_dir / 'fa_folder'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        channels_dir = fa_dir / 'channels_folder'
+        _write_folder_xml(channels_dir, 'Channels')
+        _write_diagram(
+            channels_dir / 'ArchimateDiagramModel_f1.xml',
+            'functional_architecture.AutoRepay',
+            elements=['sys-1'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 1
+        assert 'functional_areas' in result[0].folder_path
+        assert 'channels' in result[0].folder_path
+
+
+# ── _extract_folder_path ──────────────────────────────────────────────
+
+class TestExtractFolderPath:
+    def test_builds_slug_path(self, tmp_path):
+        diagrams_dir = tmp_path / 'diagrams'
+        fa_dir = diagrams_dir / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        ch_dir = fa_dir / 'ch'
+        _write_folder_xml(ch_dir, 'Channels')
+        xml = ch_dir / 'ArchimateDiagramModel_x.xml'
+        xml.touch()
+        result = _extract_folder_path(xml, diagrams_dir)
+        assert result == 'functional_areas/channels'
+
+    def test_no_folders(self, tmp_path):
+        diagrams_dir = tmp_path / 'diagrams'
+        diagrams_dir.mkdir()
+        xml = diagrams_dir / 'ArchimateDiagramModel_x.xml'
+        xml.touch()
+        result = _extract_folder_path(xml, diagrams_dir)
+        assert result == ''

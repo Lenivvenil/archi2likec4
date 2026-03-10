@@ -2,7 +2,7 @@
 
 import pytest
 
-from archi2likec4.utils import build_metadata, escape_str, make_id, transliterate
+from archi2likec4.utils import build_metadata, escape_str, make_id, sanitize_path_segment, transliterate
 from archi2likec4.models import AppComponent
 
 
@@ -78,6 +78,32 @@ class TestMakeId:
         # Dots become underscores
         result = make_id('EFS.Core')
         assert result == 'efs_core'
+
+
+# ── sanitize_path_segment ────────────────────────────────────────────────
+
+class TestSanitizePathSegment:
+    def test_normal_string(self):
+        assert sanitize_path_segment('channels') == 'channels'
+
+    def test_path_traversal(self):
+        assert '..' not in sanitize_path_segment('../../etc/passwd')
+
+    def test_slashes_replaced(self):
+        result = sanitize_path_segment('foo/bar\\baz')
+        assert '/' not in result
+        assert '\\' not in result
+
+    def test_empty_returns_invalid(self):
+        assert sanitize_path_segment('') == 'invalid'
+        assert sanitize_path_segment('...') == 'invalid'
+
+    def test_null_bytes_stripped(self):
+        assert '\x00' not in sanitize_path_segment('foo\x00bar')
+
+    def test_leading_dots_stripped(self):
+        result = sanitize_path_segment('.hidden')
+        assert not result.startswith('.')
 
 
 # ── escape_str ───────────────────────────────────────────────────────────

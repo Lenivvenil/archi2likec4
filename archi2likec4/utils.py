@@ -41,6 +41,26 @@ def make_id(name: str, prefix: str = '') -> str:
     return text
 
 
+def sanitize_path_segment(segment: str) -> str:
+    """Sanitize a string for safe use as a filesystem path segment.
+
+    Strips path separators, parent-directory references, and null bytes.
+    Returns a safe slug or 'invalid' if nothing remains.
+    """
+    # Remove null bytes and strip whitespace
+    segment = segment.replace('\x00', '').strip()
+    # Collapse path separators and parent refs
+    segment = segment.replace('/', '_').replace('\\', '_')
+    segment = segment.replace('..', '_')
+    # Remove leading dots (hidden files)
+    segment = segment.lstrip('.')
+    # Strip residual underscores/dots left after sanitization
+    segment = segment.strip('_.')
+    if not segment:
+        return 'invalid'
+    return segment
+
+
 def escape_str(text: str) -> str:
     text = text.replace('&#xD;', '').replace('&#xA;', '')
     text = text.replace('\\', '\\\\')

@@ -113,6 +113,10 @@ def federate(filter_name=None):
             print(f"  ERROR: Project missing required 'name' or 'repo': {project!r}")
             errors += 1
             continue
+        if not isinstance(name, str):
+            print(f"  ERROR: Project 'name' must be a string, got {type(name).__name__}: {name!r}")
+            errors += 1
+            continue
         if "/" in name or "\\" in name or ".." in name:
             print(f"  ERROR: Invalid project name: {name!r}")
             errors += 1

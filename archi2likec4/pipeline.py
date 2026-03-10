@@ -96,6 +96,11 @@ class BuildResult(NamedTuple):
 
 def _parse(model_root: Path, config: ConvertConfig) -> ParseResult:
     """Phase 1: parse all XML sources."""
+    # Apply custom trash folder names if configured
+    if config.trash_folder_names is not None:
+        from . import parsers as _parsers_mod
+        _parsers_mod.DEFAULT_TRASH_NAMES = frozenset(config.trash_folder_names)
+
     logger.info('Parsing ApplicationComponents...')
     components = parse_application_components(model_root)
     logger.info('Found %d ApplicationComponent elements', len(components))
@@ -213,7 +218,7 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     apply_domain_prefix(integrations, data_access, sys_domain)
 
     # Build complete archi_id → c4_path map (for solution views)
-    archi_to_c4 = build_archi_to_c4_map(systems, sys_domain, iface_c4_path)
+    archi_to_c4 = build_archi_to_c4_map(systems, sys_domain, iface_c4_path, entities=entities)
     logger.info('%d elements in archi→c4 map', len(archi_to_c4))
 
     # Build promoted parent → full c4 paths map (for solution views fan-out)
@@ -394,6 +399,8 @@ def _generate(
     view_count = 0
     system_detail_count = 0
 
+    from .utils import sanitize_path_segment
+
     for domain_id, domain_sys_list in built.domain_systems.items():
         if not domain_sys_list:
             continue
@@ -401,8 +408,10 @@ def _generate(
         if not d_info:
             continue
 
+        safe_domain_id = sanitize_path_segment(domain_id)
+
         # Domain model file
-        (domains_dir / f'{domain_id}.c4').write_text(
+        (domains_dir / f'{safe_domain_id}.c4').write_text(
             generate_domain_c4(domain_id, d_info.name, domain_sys_list),
             encoding='utf-8')
         file_count += 1
@@ -418,7 +427,7 @@ def _generate(
                 system_detail_count += 1
 
         # Domain view files
-        domain_views_dir = views_domains_dir / domain_id
+        domain_views_dir = views_domains_dir / safe_domain_id
         domain_views_dir.mkdir(exist_ok=True)
         (domain_views_dir / 'functional.c4').write_text(
             generate_domain_functional_view(domain_id, d_info.name),
@@ -432,8 +441,10 @@ def _generate(
         view_count += 1
 
     # Solution views (already generated in _validate)
-    for sol_slug, content in solution_view_files.items():
-        (views_solutions_dir / f'{sol_slug}.c4').write_text(content, encoding='utf-8')
+    for sol_key, content in solution_view_files.items():
+        sol_path = views_solutions_dir / f'{sol_key}.c4'
+        sol_path.parent.mkdir(parents=True, exist_ok=True)
+        sol_path.write_text(content, encoding='utf-8')
         file_count += 1
         view_count += 1
     logger.info('%d solution view files generated', len(solution_view_files))
