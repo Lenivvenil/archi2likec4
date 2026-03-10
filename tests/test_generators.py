@@ -355,6 +355,21 @@ class TestGenerateSpec_InfraKinds:
         spec = generate_spec()
         assert 'relationship deployedOn' in spec
 
+    def test_infra_software_not_cylinder(self):
+        """infraSoftware should be rectangle, not cylinder (cylinders are for dataStore only)."""
+        spec = generate_spec()
+        # dataStore should be cylinder
+        assert 'element dataStore' in spec
+        # infraSoftware should NOT be cylinder (was changed from cylinder to rectangle)
+        lines = spec.split('\n')
+        in_infra_sw = False
+        for line in lines:
+            if 'element infraSoftware' in line:
+                in_infra_sw = True
+            elif in_infra_sw and 'shape' in line:
+                assert 'rectangle' in line, f'infraSoftware should be rectangle, got: {line}'
+                break
+
     def test_spec_includes_infra_tags(self):
         spec = generate_spec()
         assert 'tag infrastructure' in spec
@@ -724,3 +739,28 @@ class TestSolutionViewDeployment:
         assert 'server_1' in content
         assert unresolved == 0  # resolved via tech_archi_to_c4
         assert total == 2
+
+    def test_deployment_view_excludes_functions(self):
+        """Deployment views should not include appFunction elements."""
+        sv = SolutionView(
+            name='deployment_architecture.AIM',
+            view_type='deployment',
+            solution='aim_prod',
+            element_archi_ids=['n-1', 'fn-1', 'comp-1'],
+        )
+        tech_archi_to_c4 = {'n-1': 'server_1'}
+        archi_to_c4 = {
+            'fn-1': 'channels.aim.rest_api.fn_auth',
+            'comp-1': 'channels.aim.rest_api',
+        }
+        fn_archi_ids = {'fn-1'}
+        files, unresolved, total = generate_solution_views(
+            [sv], archi_to_c4, {}, tech_archi_to_c4=tech_archi_to_c4,
+            fn_archi_ids=fn_archi_ids)
+        assert 'aim_prod' in files
+        content = files['aim_prod']
+        # Function should NOT appear
+        assert 'fn_auth' not in content
+        # Subsystem and infra node should appear
+        assert 'rest_api' in content
+        assert 'server_1' in content

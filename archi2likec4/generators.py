@@ -172,7 +172,7 @@ specification {
 
   element infraSoftware {
     style {
-      shape cylinder
+      shape rectangle
       color archi-tech-light
     }
   }
@@ -446,6 +446,7 @@ def generate_solution_views(
     relationships: list[RawRelationship] | None = None,
     promoted_archi_to_c4: dict[str, list[str]] | None = None,
     tech_archi_to_c4: dict[str, str] | None = None,
+    fn_archi_ids: set[str] | None = None,
 ) -> tuple[dict[str, str], int, int]:
     """Generate solution view .c4 files.
 
@@ -489,8 +490,11 @@ def generate_solution_views(
 
             if sv.view_type == 'deployment':
                 # Deployment views resolve via tech_archi_to_c4, not archi_to_c4
+                # Skip appFunction elements — only systems/subsystems are relevant
                 total_elements += len(sv.element_archi_ids)
                 for aid in sv.element_archi_ids:
+                    if fn_archi_ids and aid in fn_archi_ids:
+                        continue  # skip functions on deployment views
                     if tech_archi_to_c4 and aid in tech_archi_to_c4:
                         c4_paths.append(tech_archi_to_c4[aid])
                     elif aid in archi_to_c4:

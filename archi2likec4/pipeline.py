@@ -296,12 +296,24 @@ def _validate(built: BuildResult, config: ConvertConfig) -> tuple[int, int, dict
     warnings = 0
     errors = 0
 
+    # Build set of appFunction archi_ids to exclude from deployment views
+    fn_archi_ids: set[str] = set()
+    for sys in built.systems:
+        for fn in sys.functions:
+            if fn.archi_id:
+                fn_archi_ids.add(fn.archi_id)
+        for sub in sys.subsystems:
+            for fn in sub.functions:
+                if fn.archi_id:
+                    fn_archi_ids.add(fn.archi_id)
+
     # Generate solution views (needed for both validation and output)
     solution_view_files, sv_unresolved, sv_total = generate_solution_views(
         built.solution_views, built.archi_to_c4, built.sys_domain,
         built.relationships,
         promoted_archi_to_c4=built.promoted_archi_to_c4,
         tech_archi_to_c4=built.tech_archi_to_c4,
+        fn_archi_ids=fn_archi_ids,
     )
 
     # Gate 1: Solution view unresolved ratio
