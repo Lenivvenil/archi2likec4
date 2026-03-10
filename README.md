@@ -148,7 +148,7 @@ graph LR
   B -. "BuildResult" .-> V
 ```
 
-Четыре фазы, данные передаются через типизированные `NamedTuple`. Нет глобального состояния.
+Четыре фазы, данные передаются через типизированные `NamedTuple`. Глобальное состояние изолировано между запусками.
 
 ```
 archi2likec4/
@@ -169,7 +169,7 @@ archi2likec4/
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest tests/ -v   # 359+ тестов
+python -m pytest tests/ -v   # 413+ тестов
 ```
 
 Python >= 3.10. Базовая конвертация — zero dependencies (stdlib only).

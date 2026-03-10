@@ -491,12 +491,15 @@ def generate_solution_views(
             if sv.view_type == 'deployment':
                 # Deployment views resolve via tech_archi_to_c4, not archi_to_c4
                 # Skip appFunction elements — only systems/subsystems are relevant
-                total_elements += len(sv.element_archi_ids)
-                for aid in sv.element_archi_ids:
-                    if fn_archi_ids and aid in fn_archi_ids:
-                        continue  # skip functions on deployment views
+                infra_c4_paths: set[str] = set()  # paths needing .* wildcard
+                relevant_ids = [aid for aid in sv.element_archi_ids
+                                if not (fn_archi_ids and aid in fn_archi_ids)]
+                total_elements += len(relevant_ids)
+                for aid in relevant_ids:
                     if tech_archi_to_c4 and aid in tech_archi_to_c4:
-                        c4_paths.append(tech_archi_to_c4[aid])
+                        path = tech_archi_to_c4[aid]
+                        c4_paths.append(path)
+                        infra_c4_paths.add(path)
                     elif aid in archi_to_c4:
                         c4_paths.append(archi_to_c4[aid])
                     else:
@@ -663,7 +666,11 @@ def generate_solution_views(
                     lines.append(f"    include")
                     for rp in resolved_unique:
                         lines.append(f"      {rp},")
-                        lines.append(f"      {rp}.*,")
+                        # Wildcard only for infra elements (resolved via tech_archi_to_c4)
+                        # App elements (domain.system.subsystem) must NOT expand
+                        # to children — that pulls in appFunction noise
+                        if rp in infra_c4_paths:
+                            lines.append(f"      {rp}.*,")
                     if lines[-1].endswith(','):
                         lines[-1] = lines[-1][:-1]
                     lines.append(f"  }}")

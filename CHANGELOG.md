@@ -4,6 +4,22 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **PyPI publish workflow**: `.github/workflows/publish.yml` — trusted OIDC publishing on GitHub Release (TestPyPI → PyPI)
+- **ApplicationService resolution**: parse, resolve ownership, integrate into views and integrations
+- **View hierarchy navigation**: folder-based `/` titles for LikeC4 sidebar tree
+- **Deployment diagram fixes**: infraSoftware shape (rectangle), appFunction exclusion
+
+### Fixed
+- **[P1] Deployment view unresolved ratio**: appFunction elements no longer inflate `total_elements` denominator, giving accurate unresolved metrics
+- **[P1] Trash filter state leak**: `DEFAULT_TRASH_NAMES` mutation now wrapped in try/finally to restore default between runs (critical for web process)
+- **[P2] CSRF hardening**: POST without Origin or Referer header now rejected (403), closing blind CSRF vector
+- **[P2] Domain sanitization in /promote-system**: `sanitize_path_segment()` now applied consistently (was missing vs /assign-domain)
+- **[P2] C4 identifier validation in domain_renames**: new_id must match `^[a-z_][a-z0-9_-]*$` to prevent syntactically invalid .c4 output
+
+### Changed
+- Test count: 369 → 413
+
 ## [1.0.0] — 2026-03-09
 
 ### Added

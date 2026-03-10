@@ -201,6 +201,18 @@ class TestApplyYaml:
         with pytest.raises(ValueError, match="domain_renames\\['y'\\]"):
             _apply_yaml(config, {'domain_renames': {'y': ['a', 'b', 'c']}})
 
+    def test_domain_renames_invalid_c4_id(self):
+        """new_id that is not a valid C4 identifier must raise ValueError."""
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match="not a valid C4 identifier"):
+            _apply_yaml(config, {'domain_renames': {'old': ['Has Spaces!', 'Name']}})
+
+    def test_domain_renames_c4_id_starts_with_digit(self):
+        """new_id starting with digit must raise ValueError."""
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match="not a valid C4 identifier"):
+            _apply_yaml(config, {'domain_renames': {'old': ['123bad', 'Name']}})
+
     def test_full_yaml_file(self, tmp_path):
         """Load a complete YAML config file."""
         yaml_content = """\

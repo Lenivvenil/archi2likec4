@@ -246,7 +246,7 @@ class TestOpenRedirect:
         resp = app_client.post('/suppress/system', data={
             'name': 'TestSys',
             'redirect': 'https://evil.com/steal',
-        })
+        }, headers={'Origin': 'http://localhost'})
         assert resp.status_code == 302
         assert resp.headers['Location'].endswith('/')
 
@@ -255,7 +255,7 @@ class TestOpenRedirect:
         resp = app_client.post('/suppress/system', data={
             'name': 'TestSys',
             'redirect': '/incident/QA-1',
-        })
+        }, headers={'Origin': 'http://localhost'})
         assert resp.status_code == 302
         assert '/incident/QA-1' in resp.headers['Location']
 
@@ -264,7 +264,7 @@ class TestOpenRedirect:
         resp = app_client.post('/suppress/system', data={
             'name': 'TestSys',
             'redirect': '//evil.example/steal',
-        })
+        }, headers={'Origin': 'http://localhost'})
         assert resp.status_code == 302
         assert resp.headers['Location'].endswith('/')
 
@@ -291,4 +291,10 @@ class TestCSRF:
         resp = app_client.post('/suppress/system',
                                data={'name': 'Sys', 'redirect': '/'},
                                headers={'Referer': 'https://evil.com/page'})
+        assert resp.status_code == 403
+
+    def test_post_without_origin_or_referer_rejected(self, app_client):
+        """POST without Origin or Referer header should return 403."""
+        resp = app_client.post('/suppress/system',
+                               data={'name': 'Sys', 'redirect': '/'})
         assert resp.status_code == 403

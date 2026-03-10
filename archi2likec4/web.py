@@ -702,6 +702,10 @@ def create_app(
             if not referer.startswith(host):
                 from flask import abort
                 abort(403, 'Cross-origin POST rejected')
+        else:
+            # No Origin or Referer — reject to prevent blind CSRF
+            from flask import abort
+            abort(403, 'POST without Origin/Referer header rejected')
         return None
 
     def _safe_redirect(url: str) -> str:
@@ -917,8 +921,9 @@ def create_app(
 
     @app.route('/promote-system', methods=['POST'])
     def promote_system():
+        from .utils import sanitize_path_segment
         name = request.form.get('name', '').strip()
-        domain = request.form.get('domain', '').strip()
+        domain = sanitize_path_segment(request.form.get('domain', '').strip())
         redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name and domain:
             config = _load_config_safe()

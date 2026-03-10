@@ -6,11 +6,14 @@ via .archi2likec4.yaml without touching source code.
 """
 
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .models import PROMOTE_WARN_THRESHOLD
 from .utils import sanitize_path_segment
+
+_C4_ID_RE = re.compile(r'^[a-z_][a-z0-9_-]*$')
 
 logger = logging.getLogger(__name__)
 
@@ -150,6 +153,10 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             if not isinstance(v[0], str) or not isinstance(v[1], str):
                 raise ValueError(
                     f"domain_renames['{k}']: values must be strings, got {v!r}")
+            if not _C4_ID_RE.match(v[0]):
+                raise ValueError(
+                    f"domain_renames['{k}']: new_id '{v[0]}' is not a valid C4 identifier "
+                    f"(must match {_C4_ID_RE.pattern})")
             renames[k] = tuple(v)
         config.domain_renames = renames
     if 'extra_domain_patterns' in data:

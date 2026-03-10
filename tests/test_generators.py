@@ -764,3 +764,9 @@ class TestSolutionViewDeployment:
         # Subsystem and infra node should appear
         assert 'rest_api' in content
         assert 'server_1' in content
+        # total_elements should exclude skipped functions (2 relevant, not 3)
+        assert total == 2
+        assert unresolved == 0
+        # Infra element should have .* wildcard, app element should NOT
+        assert 'server_1.*' in content
+        assert 'rest_api.*' not in content

@@ -99,56 +99,60 @@ class BuildResult(NamedTuple):
 
 def _parse(model_root: Path, config: ConvertConfig) -> ParseResult:
     """Phase 1: parse all XML sources."""
-    # Apply custom trash folder names if configured
+    # Apply custom trash folder names for this run (restore default afterward)
+    from . import parsers as _parsers_mod
+    _original_trash_names = _parsers_mod.DEFAULT_TRASH_NAMES
     if config.trash_folder_names is not None:
-        from . import parsers as _parsers_mod
         _parsers_mod.DEFAULT_TRASH_NAMES = frozenset(config.trash_folder_names)
 
-    logger.info('Parsing ApplicationComponents...')
-    components = parse_application_components(model_root)
-    logger.info('Found %d ApplicationComponent elements', len(components))
+    try:
+        logger.info('Parsing ApplicationComponents...')
+        components = parse_application_components(model_root)
+        logger.info('Found %d ApplicationComponent elements', len(components))
 
-    logger.info('Parsing ApplicationFunctions...')
-    functions = parse_application_functions(model_root)
-    logger.info('Found %d ApplicationFunction elements', len(functions))
+        logger.info('Parsing ApplicationFunctions...')
+        functions = parse_application_functions(model_root)
+        logger.info('Found %d ApplicationFunction elements', len(functions))
 
-    logger.info('Parsing ApplicationInterfaces...')
-    interfaces = parse_application_interfaces(model_root)
-    logger.info('Found %d ApplicationInterface elements', len(interfaces))
+        logger.info('Parsing ApplicationInterfaces...')
+        interfaces = parse_application_interfaces(model_root)
+        logger.info('Found %d ApplicationInterface elements', len(interfaces))
 
-    logger.info('Parsing ApplicationServices...')
-    services = parse_application_services(model_root)
-    logger.info('Found %d ApplicationService elements', len(services))
+        logger.info('Parsing ApplicationServices...')
+        services = parse_application_services(model_root)
+        logger.info('Found %d ApplicationService elements', len(services))
 
-    logger.info('Parsing DataObjects...')
-    data_objects = parse_data_objects(model_root)
-    logger.info('Found %d DataObject elements', len(data_objects))
+        logger.info('Parsing DataObjects...')
+        data_objects = parse_data_objects(model_root)
+        logger.info('Found %d DataObject elements', len(data_objects))
 
-    logger.info('Parsing relationships...')
-    relationships = parse_relationships(model_root)
-    logger.info('Found %d relevant relationships', len(relationships))
+        logger.info('Parsing relationships...')
+        relationships = parse_relationships(model_root)
+        logger.info('Found %d relevant relationships', len(relationships))
 
-    logger.info('Parsing domain mapping from views...')
-    domains_info = parse_domain_mapping(model_root, config.domain_renames)
-    for d in domains_info:
-        logger.info('%s: %d AppComponent refs on views', d.name, len(d.archi_ids))
+        logger.info('Parsing domain mapping from views...')
+        domains_info = parse_domain_mapping(model_root, config.domain_renames)
+        for d in domains_info:
+            logger.info('%s: %d AppComponent refs on views', d.name, len(d.archi_ids))
 
-    logger.info('Parsing solution views...')
-    solution_views = parse_solution_views(model_root)
-    func_views = sum(1 for v in solution_views if v.view_type == 'functional')
-    integ_views = sum(1 for v in solution_views if v.view_type == 'integration')
-    deploy_views = sum(1 for v in solution_views if v.view_type == 'deployment')
-    logger.info('Found %d solution views (%d functional, %d integration, %d deployment)',
-                len(solution_views), func_views, integ_views, deploy_views)
+        logger.info('Parsing solution views...')
+        solution_views = parse_solution_views(model_root)
+        func_views = sum(1 for v in solution_views if v.view_type == 'functional')
+        integ_views = sum(1 for v in solution_views if v.view_type == 'integration')
+        deploy_views = sum(1 for v in solution_views if v.view_type == 'deployment')
+        logger.info('Found %d solution views (%d functional, %d integration, %d deployment)',
+                    len(solution_views), func_views, integ_views, deploy_views)
 
-    logger.info('Parsing Technology layer...')
-    tech_elements = parse_technology_elements(model_root)
-    logger.info('Found %d technology elements', len(tech_elements))
+        logger.info('Parsing Technology layer...')
+        tech_elements = parse_technology_elements(model_root)
+        logger.info('Found %d technology elements', len(tech_elements))
 
-    logger.info('Parsing Location elements...')
-    location_elements = parse_location_elements(model_root)
-    logger.info('Found %d Location elements', len(location_elements))
-    tech_elements = tech_elements + location_elements
+        logger.info('Parsing Location elements...')
+        location_elements = parse_location_elements(model_root)
+        logger.info('Found %d Location elements', len(location_elements))
+        tech_elements = tech_elements + location_elements
+    finally:
+        _parsers_mod.DEFAULT_TRASH_NAMES = _original_trash_names
 
     return ParseResult(
         components=components,
