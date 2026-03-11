@@ -6,12 +6,15 @@ via .archi2likec4.yaml without touching source code.
 """
 
 import logging
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from .models import PROMOTE_WARN_THRESHOLD
 
 logger = logging.getLogger(__name__)
+
+_VALID_C4_ID = re.compile(r'^[a-z][a-z0-9_-]*$')
 
 
 # ── Defaults ───────────────────────────────────────────────────────────
@@ -126,6 +129,10 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                 raise ValueError(
                     f"promote_children['{k}']: key and value must be strings, "
                     f"got key={type(k).__name__}, value={type(v).__name__}")
+            if not _VALID_C4_ID.match(v):
+                raise ValueError(
+                    f"promote_children['{k}']: invalid C4 identifier "
+                    f"'{v}' (must match {_VALID_C4_ID.pattern})")
         config.promote_children = data['promote_children']
     if 'promote_warn_threshold' in data:
         val = int(data['promote_warn_threshold'])
@@ -164,6 +171,10 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                 raise ValueError(
                     f"extra_domain_patterns[{i}]['c4_id']: expected string, "
                     f"got {type(entry['c4_id']).__name__}")
+            if not _VALID_C4_ID.match(entry['c4_id']):
+                raise ValueError(
+                    f"extra_domain_patterns[{i}]['c4_id']: invalid C4 identifier "
+                    f"'{entry['c4_id']}' (must match {_VALID_C4_ID.pattern})")
             if not isinstance(entry['name'], str):
                 raise ValueError(
                     f"extra_domain_patterns[{i}]['name']: expected string, "
@@ -200,23 +211,43 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                 raise ValueError(f"quality_gates.max_unassigned_systems_warn: must be non-negative, got {val}")
             config.max_unassigned_systems_warn = val
 
-    if 'audit_suppress' in data and isinstance(data['audit_suppress'], list):
+    if 'audit_suppress' in data:
+        if not isinstance(data['audit_suppress'], list):
+            raise ValueError(
+                f"audit_suppress: expected list, got {type(data['audit_suppress']).__name__}")
         config.audit_suppress = [str(s) for s in data['audit_suppress']]
-    if 'audit_suppress_incidents' in data and isinstance(data['audit_suppress_incidents'], list):
+    if 'audit_suppress_incidents' in data:
+        if not isinstance(data['audit_suppress_incidents'], list):
+            raise ValueError(
+                f"audit_suppress_incidents: expected list, "
+                f"got {type(data['audit_suppress_incidents']).__name__}")
         config.audit_suppress_incidents = [str(s) for s in data['audit_suppress_incidents']]
 
     if 'domain_overrides' in data:
         if not isinstance(data['domain_overrides'], dict):
             raise ValueError(
                 f"domain_overrides: expected mapping, got {type(data['domain_overrides']).__name__}")
-        config.domain_overrides = {str(k): str(v) for k, v in data['domain_overrides'].items()}
-    if 'reviewed_systems' in data and isinstance(data['reviewed_systems'], list):
+        overrides: dict[str, str] = {}
+        for k, v in data['domain_overrides'].items():
+            val = str(v)
+            if not _VALID_C4_ID.match(val):
+                raise ValueError(
+                    f"domain_overrides['{k}']: invalid C4 identifier "
+                    f"'{val}' (must match {_VALID_C4_ID.pattern})")
+            overrides[str(k)] = val
+        config.domain_overrides = overrides
+    if 'reviewed_systems' in data:
+        if not isinstance(data['reviewed_systems'], list):
+            raise ValueError(
+                f"reviewed_systems: expected list, got {type(data['reviewed_systems']).__name__}")
         config.reviewed_systems = [str(s) for s in data['reviewed_systems']]
 
     if 'language' in data:
         lang = str(data['language']).lower()
-        if lang in ('ru', 'en'):
-            config.language = lang
+        if lang not in ('ru', 'en'):
+            raise ValueError(
+                f"language: expected 'ru' or 'en', got '{data['language']}'")
+        config.language = lang
 
     if 'strict' in data:
         val = data['strict']
