@@ -21,7 +21,14 @@ pip install -e ".[federation]"
 ## Running Tests
 
 ```bash
+# Run tests
 python3 -m pytest tests/ -v
+
+# Lint (matches CI)
+ruff check archi2likec4/ tests/
+
+# Type check (matches CI)
+mypy archi2likec4/ --ignore-missing-imports
 ```
 
 ## Running the Converter
@@ -62,6 +69,6 @@ See the example file for all available options.
 
 1. Create a feature branch from `main`
 2. Make your changes
-3. Ensure all tests pass: `python3 -m pytest tests/ -v`
+3. Ensure all checks pass: `pytest tests/ -v && ruff check archi2likec4/ tests/ && mypy archi2likec4/ --ignore-missing-imports`
 4. Run the converter to verify output: `archi2likec4`
 5. Submit a merge request with a clear description
