@@ -390,6 +390,15 @@ def _generate(
     if built.domain_systems.get('unassigned'):
         all_domain_meta['unassigned'] = DomainInfo(c4_id='unassigned', name='Unassigned')
 
+    # Auto-create DomainInfo for domain ids introduced by domain_overrides /
+    # promote_children fallback that have no DomainInfo yet (prevents silent data loss).
+    for domain_id in built.domain_systems:
+        if domain_id not in all_domain_meta and built.domain_systems[domain_id]:
+            all_domain_meta[domain_id] = DomainInfo(
+                c4_id=domain_id, name=domain_id.replace('_', ' ').title())
+            logger.warning('Auto-created DomainInfo for unknown domain "%s" '
+                           '(%d systems)', domain_id, len(built.domain_systems[domain_id]))
+
     domain_count = 0
     view_count = 0
     system_detail_count = 0

@@ -518,7 +518,7 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
 
     results: list[SolutionView] = []
     seen_names: dict[str, int] = {}  # dedup_key → index in results
-    seen_slugs: set[str] = set()  # track used slugs for collision avoidance
+    seen_slugs: dict[str, str] = {}  # slug → solution_name (first owner)
     parse_errors = 0
 
     for xml_path in sorted(diagrams_dir.rglob('ArchimateDiagramModel_*.xml')):
@@ -570,18 +570,23 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
             continue
         seen_names[dedup_key] = len(results)
 
-        # Avoid slug collisions: "A B" and "A_B" → same slug
-        unique_slug = solution_slug
-        counter = 2
-        while unique_slug in seen_slugs:
-            unique_slug = f'{solution_slug}_{counter}'
-            counter += 1
-        seen_slugs.add(unique_slug)
+        # Slug collision: reuse existing slug when solution_name matches,
+        # only disambiguate when genuinely different names produce the same slug.
+        if solution_slug in seen_slugs:
+            if seen_slugs[solution_slug] != solution_name:
+                # Genuine collision ("A B" vs "A_B") — disambiguate
+                unique_slug = solution_slug
+                counter = 2
+                while unique_slug in seen_slugs:
+                    unique_slug = f'{solution_slug}_{counter}'
+                    counter += 1
+                solution_slug = unique_slug
+        seen_slugs[solution_slug] = solution_name
 
         results.append(SolutionView(
             name=diagram_name,
             view_type=view_type,
-            solution=unique_slug,
+            solution=solution_slug,
             element_archi_ids=element_ids,
             relationship_archi_ids=relationship_ids,
         ))
