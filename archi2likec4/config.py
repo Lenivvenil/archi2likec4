@@ -177,6 +177,10 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                     f"extra_domain_patterns[{i}]['c4_id']: expected string, "
                     f"got {type(entry['c4_id']).__name__}")
             entry['c4_id'] = sanitize_path_segment(entry['c4_id'])
+            if not _C4_ID_RE.match(entry['c4_id']):
+                raise ValueError(
+                    f"extra_domain_patterns[{i}]['c4_id']: invalid C4 identifier "
+                    f"'{entry['c4_id']}' (must match {_C4_ID_RE.pattern})")
             if not isinstance(entry['name'], str):
                 raise ValueError(
                     f"extra_domain_patterns[{i}]['name']: expected string, "
@@ -213,26 +217,41 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                 raise ValueError(f"quality_gates.max_unassigned_systems_warn: must be non-negative, got {val}")
             config.max_unassigned_systems_warn = val
 
-    if 'audit_suppress' in data and isinstance(data['audit_suppress'], list):
+    if 'audit_suppress' in data:
+        if not isinstance(data['audit_suppress'], list):
+            raise ValueError(
+                f"audit_suppress: expected list, got {type(data['audit_suppress']).__name__}")
         config.audit_suppress = [str(s) for s in data['audit_suppress']]
-    if 'audit_suppress_incidents' in data and isinstance(data['audit_suppress_incidents'], list):
+    if 'audit_suppress_incidents' in data:
+        if not isinstance(data['audit_suppress_incidents'], list):
+            raise ValueError(
+                f"audit_suppress_incidents: expected list, got {type(data['audit_suppress_incidents']).__name__}")
         config.audit_suppress_incidents = [str(s) for s in data['audit_suppress_incidents']]
 
     if 'domain_overrides' in data:
         if not isinstance(data['domain_overrides'], dict):
             raise ValueError(
                 f"domain_overrides: expected mapping, got {type(data['domain_overrides']).__name__}")
-        config.domain_overrides = {
-            str(k): sanitize_path_segment(str(v))
-            for k, v in data['domain_overrides'].items()
-        }
-    if 'reviewed_systems' in data and isinstance(data['reviewed_systems'], list):
+        overrides: dict[str, str] = {}
+        for k, v in data['domain_overrides'].items():
+            target = sanitize_path_segment(str(v))
+            if not _C4_ID_RE.match(target):
+                raise ValueError(
+                    f"domain_overrides['{k}']: invalid C4 identifier "
+                    f"'{target}' (must match {_C4_ID_RE.pattern})")
+            overrides[str(k)] = target
+        config.domain_overrides = overrides
+    if 'reviewed_systems' in data:
+        if not isinstance(data['reviewed_systems'], list):
+            raise ValueError(
+                f"reviewed_systems: expected list, got {type(data['reviewed_systems']).__name__}")
         config.reviewed_systems = [str(s) for s in data['reviewed_systems']]
 
     if 'trash_folder_names' in data:
-        val = data['trash_folder_names']
-        if isinstance(val, list):
-            config.trash_folder_names = [str(s).strip().lower() for s in val]
+        if not isinstance(data['trash_folder_names'], list):
+            raise ValueError(
+                f"trash_folder_names: expected list, got {type(data['trash_folder_names']).__name__}")
+        config.trash_folder_names = [str(s).strip().lower() for s in data['trash_folder_names']]
 
     if 'language' in data:
         lang = str(data['language']).lower()

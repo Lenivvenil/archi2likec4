@@ -444,6 +444,30 @@ class TestDomainOverrides:
         assert '..' not in val
         assert '/' not in val
 
+    def test_invalid_c4_id_raises(self):
+        """domain_overrides with invalid C4 id must raise ValueError."""
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='invalid C4 identifier'):
+            _apply_yaml(config, {'domain_overrides': {'Sys': 'bad id'}})
+
+
+class TestExtraDomainPatternsC4IdValidation:
+    """extra_domain_patterns C4 ID validation."""
+
+    def test_invalid_c4_id_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='invalid C4 identifier'):
+            _apply_yaml(config, {'extra_domain_patterns': [
+                {'c4_id': 'bad id', 'name': 'Bad', 'patterns': ['Bad*']}
+            ]})
+
+    def test_valid_c4_id_accepted(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'extra_domain_patterns': [
+            {'c4_id': 'good_domain', 'name': 'Good', 'patterns': ['Good*']}
+        ]})
+        assert config.extra_domain_patterns[0]['c4_id'] == 'good_domain'
+
 
 class TestTrashFolderNames:
     """trash_folder_names config option."""
@@ -457,10 +481,10 @@ class TestTrashFolderNames:
         _apply_yaml(config, {'trash_folder_names': ['Trash', 'OLD']})
         assert config.trash_folder_names == ['trash', 'old']
 
-    def test_non_list_ignored(self):
+    def test_non_list_raises(self):
         config = ConvertConfig()
-        _apply_yaml(config, {'trash_folder_names': 'not-a-list'})
-        assert config.trash_folder_names is None
+        with pytest.raises(ValueError, match='trash_folder_names.*expected list'):
+            _apply_yaml(config, {'trash_folder_names': 'not-a-list'})
 
 
 class TestReviewedSystems:

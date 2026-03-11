@@ -231,20 +231,6 @@ def build_systems(
             extra_archi_ids=sys_extra_ids,
         )
 
-    # ── Build promoted_parents map: parent_archi_id → [child c4_ids] ──
-    # Instead of remapping to one child, fan out to ALL children so that
-    # downstream consumers (integrations, data_access) distribute links honestly.
-    promoted_parents: dict[str, list[str]] = {}
-    for parent_name, parent_aid in parent_remap.items():
-        children_c4_ids = sorted(
-            sys.c4_id for name, sys in systems.items()
-            if name.startswith(f'{parent_name}.')
-        )
-        if children_c4_ids:
-            promoted_parents[parent_aid] = children_c4_ids
-            logger.info('Parent "%s" archi_id fans out to %d children',
-                        parent_name, len(children_c4_ids))
-
     # ── Attach regular subsystems ────────────────────────────────────────
     _attach_subsystems(
         systems, subsystem_acs,
@@ -271,6 +257,21 @@ def build_systems(
         parent_name_fn=lambda ac: '.'.join(ac.name.split('.', 2)[:2]),
         sub_name_fn=lambda ac: ac.name.split('.', 2)[2],
     )
+
+    # ── Build promoted_parents map: parent_archi_id → [child c4_ids] ──
+    # MUST be after auto-created 2-segment systems so all children are visible.
+    # Instead of remapping to one child, fan out to ALL children so that
+    # downstream consumers (integrations, data_access) distribute links honestly.
+    promoted_parents: dict[str, list[str]] = {}
+    for parent_name, parent_aid in parent_remap.items():
+        children_c4_ids = sorted(
+            sys.c4_id for name, sys in systems.items()
+            if name.startswith(f'{parent_name}.')
+        )
+        if children_c4_ids:
+            promoted_parents[parent_aid] = children_c4_ids
+            logger.info('Parent "%s" archi_id fans out to %d children',
+                        parent_name, len(children_c4_ids))
 
     # ── Phase 4: warn about suspicious parents ───────────────────────────
     parent_sub_count: dict[str, int] = {}

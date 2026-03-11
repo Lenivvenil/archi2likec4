@@ -18,10 +18,20 @@ pip install -e ".[dev]"
 pip install -e ".[federation]"
 ```
 
-## Running Tests
+## Running Tests & Quality Checks
+
+The CI pipeline runs lint, tests with coverage, and type checking.
+Run the same checks locally before submitting:
 
 ```bash
+# Lint
+ruff check archi2likec4/ tests/
+
+# Tests
 python3 -m pytest tests/ -v
+
+# Type check
+mypy archi2likec4/ --ignore-missing-imports
 ```
 
 ## Running the Converter
@@ -62,6 +72,6 @@ See the example file for all available options.
 
 1. Create a feature branch from `main`
 2. Make your changes
-3. Ensure all tests pass: `python3 -m pytest tests/ -v`
+3. Ensure all checks pass: `ruff check archi2likec4/ tests/ && python3 -m pytest tests/ -v && mypy archi2likec4/ --ignore-missing-imports`
 4. Run the converter to verify output: `archi2likec4`
 5. Submit a merge request with a clear description

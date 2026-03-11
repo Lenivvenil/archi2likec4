@@ -436,7 +436,13 @@ def _generate(
             continue
         d_info = all_domain_meta.get(domain_id)
         if not d_info:
-            continue
+            # Auto-create DomainInfo for domains from domain_overrides /
+            # promote_children that have no parsed DomainInfo entry.
+            # Without this, systems assigned to such domains are silently lost.
+            logger.warning('Domain "%s" has %d system(s) but no DomainInfo — auto-creating',
+                           domain_id, len(domain_sys_list))
+            d_info = DomainInfo(c4_id=domain_id, name=domain_id.replace('_', ' ').title())
+            all_domain_meta[domain_id] = d_info
 
         safe_domain_id = sanitize_path_segment(domain_id)
 

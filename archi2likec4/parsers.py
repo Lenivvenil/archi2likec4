@@ -197,7 +197,7 @@ def _extract_folder_display_path(xml_path: Path, diagrams_dir: Path) -> str:
                 if name and name.lower() not in _VIEW_TYPE_FOLDER_NAMES:
                     parts.append(name)
             except ET.ParseError:
-                pass
+                logger.debug('Could not parse folder.xml: %s', folder_xml)
         current = current.parent
     parts.reverse()
     return ' / '.join(parts)
@@ -617,7 +617,8 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
 
     results: list[SolutionView] = []
     seen_names: dict[str, int] = {}  # dedup_key → index in results
-    seen_slugs: set[str] = set()  # track used slugs for collision avoidance
+    seen_slugs: dict[str, str] = {}  # folder:slug → resolved unique_slug
+    seen_slugs_global: set[str] = set()  # track globally used slugs
     parse_errors = 0
 
     for xml_path in sorted(diagrams_dir.rglob('ArchimateDiagramModel_*.xml')):
@@ -672,12 +673,22 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
         seen_names[dedup_key] = len(results)
 
         # Avoid slug collisions: "A B" and "A_B" → same slug
-        unique_slug = solution_slug
-        counter = 2
-        while unique_slug in seen_slugs:
-            unique_slug = f'{solution_slug}_{counter}'
-            counter += 1
-        seen_slugs.add(unique_slug)
+        # Scope dedup by folder_path so functional+integration views of the
+        # same solution keep the same slug (required for generator grouping).
+        slug_key = f'{folder_path}:{solution_slug}'
+        if slug_key not in seen_slugs:
+            # First occurrence in this folder — register the slug
+            unique_slug = solution_slug
+            # But ensure global uniqueness of the slug itself
+            global_counter = 2
+            while unique_slug in seen_slugs_global:
+                unique_slug = f'{solution_slug}_{global_counter}'
+                global_counter += 1
+            seen_slugs_global.add(unique_slug)
+            seen_slugs[slug_key] = unique_slug
+        else:
+            # Same folder, same slug — reuse the previously assigned slug
+            unique_slug = seen_slugs[slug_key]
 
         results.append(SolutionView(
             name=diagram_name,

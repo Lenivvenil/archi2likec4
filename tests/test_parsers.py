@@ -718,6 +718,43 @@ class TestParseSolutionViewsFuncInteg:
         assert 'functional_areas' in result[0].folder_path
         assert 'channels' in result[0].folder_path
 
+    def test_func_integ_same_solution_share_slug(self, tmp_path):
+        """Functional + integration views of same solution must share slug for grouping."""
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_f1.xml',
+            'functional_architecture.PaymentFlow',
+            elements=['sys-1'],
+        )
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_i1.xml',
+            'integration_architecture.PaymentFlow',
+            elements=['sys-1', 'sys-2'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 2
+        slugs = {r.solution for r in result}
+        assert len(slugs) == 1, f'Expected same slug, got {slugs}'
+        assert result[0].solution == 'paymentflow'
+
+    def test_different_solutions_get_different_slugs(self, tmp_path):
+        """Views for different solutions must have different slugs."""
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_f1.xml',
+            'functional_architecture.Alpha',
+            elements=['sys-1'],
+        )
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_f2.xml',
+            'functional_architecture.Beta',
+            elements=['sys-2'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 2
+        slugs = {r.solution for r in result}
+        assert len(slugs) == 2
+
 
 # ── _extract_folder_path ──────────────────────────────────────────────
 
