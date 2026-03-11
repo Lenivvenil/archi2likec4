@@ -339,6 +339,20 @@ class TestPromoteChildren:
         assert systems[0].subsystems[0].name == 'Platform.Core.Module'
         assert systems[0].subsystems[0].c4_id == 'module'
 
+    def test_three_segment_only_promoted_parents_populated(self):
+        """Parent with only 3-segment children must still appear in promoted_parents."""
+        comps = [
+            AppComponent(archi_id='id-parent', name='Platform'),
+            AppComponent(archi_id='id-2', name='Platform.Core.Module'),
+        ]
+        systems, promoted_parents = build_systems(comps, promote_children={'Platform': 'infra'})
+        # Auto-created 2-seg system should exist
+        assert len(systems) == 1
+        assert systems[0].name == 'Platform.Core'
+        # Parent archi_id must fan out to auto-created child
+        assert 'id-parent' in promoted_parents
+        assert len(promoted_parents['id-parent']) == 1
+
     def test_non_promoted_parent_unchanged(self):
         """Systems not in promote_children keep the old subsystem behavior."""
         comps = [

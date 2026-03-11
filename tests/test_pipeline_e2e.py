@@ -110,6 +110,30 @@ class TestPipelineE2E:
         rels = (output / 'relationships.c4').read_text()
         assert 'alphasystem' in rels.lower() or 'betasystem' in rels.lower()
 
+    def test_unknown_domain_from_overrides_not_lost(self, tmp_path):
+        """Systems assigned to a domain_overrides target unknown to parsed domains must not vanish."""
+        model = _create_minimal_model(tmp_path)
+        output = tmp_path / 'output'
+
+        config = ConvertConfig(
+            model_root=model,
+            output_dir=output,
+            promote_children={},
+            domain_renames={},
+            extra_domain_patterns=[],
+            domain_overrides={'AlphaSystem': 'custom_domain'},
+        )
+
+        parsed = _parse(model, config)
+        built = _build(parsed, config)
+        _generate(built, output, config, {})
+
+        # The custom domain file must be generated (not silently skipped)
+        assert (output / 'domains' / 'custom_domain.c4').exists(), \
+            'Domain file for custom_domain should be auto-created'
+        content = (output / 'domains' / 'custom_domain.c4').read_text()
+        assert 'AlphaSystem' in content or 'alphasystem' in content
+
     def test_dry_run_no_output(self, tmp_path):
         """dry_run=True: parse+build succeed, but _generate is never called."""
         model = _create_minimal_model(tmp_path)

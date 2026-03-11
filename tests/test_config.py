@@ -73,6 +73,11 @@ class TestApplyYaml:
         _apply_yaml(config, {'promote_children': {'X': 'domain_x'}})
         assert config.promote_children == {'X': 'domain_x'}
 
+    def test_promote_children_invalid_c4_id_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='invalid C4 identifier'):
+            _apply_yaml(config, {'promote_children': {'X': 'Bad Domain'}})
+
     def test_promote_warn_threshold_override(self):
         config = ConvertConfig()
         _apply_yaml(config, {'promote_warn_threshold': 20})
@@ -296,6 +301,14 @@ class TestExtraDomainPatternsValidation:
                 {'c4_id': 123, 'name': 'X', 'patterns': ['a']}
             ]})
 
+    def test_invalid_c4_id_raises(self):
+        from archi2likec4.config import _apply_yaml, ConvertConfig
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='invalid C4 identifier'):
+            _apply_yaml(config, {'extra_domain_patterns': [
+                {'c4_id': 'bad id', 'name': 'X', 'patterns': ['a']}
+            ]})
+
     def test_name_must_be_string(self):
         from archi2likec4.config import _apply_yaml, ConvertConfig
         config = ConvertConfig()
@@ -316,6 +329,16 @@ class TestAuditSuppressIncidents:
         config = ConvertConfig()
         _apply_yaml(config, {'audit_suppress_incidents': ['QA-5', 'QA-6']})
         assert config.audit_suppress_incidents == ['QA-5', 'QA-6']
+
+    def test_invalid_type_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='audit_suppress_incidents.*expected list'):
+            _apply_yaml(config, {'audit_suppress_incidents': 'QA-5'})
+
+    def test_audit_suppress_invalid_type_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='audit_suppress.*expected list'):
+            _apply_yaml(config, {'audit_suppress': 'SystemA'})
 
 
 class TestSaveSuppress:
@@ -401,10 +424,10 @@ class TestLanguageConfig:
         _apply_yaml(config, {'language': 'en'})
         assert config.language == 'en'
 
-    def test_invalid_language_ignored(self):
+    def test_invalid_language_raises(self):
         config = ConvertConfig()
-        _apply_yaml(config, {'language': 'fr'})
-        assert config.language == 'ru'  # unchanged
+        with pytest.raises(ValueError, match="language.*expected 'ru' or 'en'"):
+            _apply_yaml(config, {'language': 'fr'})
 
 
 class TestDomainOverrides:
@@ -424,6 +447,11 @@ class TestDomainOverrides:
         with pytest.raises(ValueError, match='domain_overrides.*expected mapping'):
             _apply_yaml(config, {'domain_overrides': 'not-a-dict'})
 
+    def test_invalid_c4_id_value_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='invalid C4 identifier'):
+            _apply_yaml(config, {'domain_overrides': {'CRM': 'bad id'}})
+
 
 class TestReviewedSystems:
     """reviewed_systems config option."""
@@ -436,6 +464,11 @@ class TestReviewedSystems:
         config = ConvertConfig()
         _apply_yaml(config, {'reviewed_systems': ['SysA', 'SysB']})
         assert config.reviewed_systems == ['SysA', 'SysB']
+
+    def test_invalid_type_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='reviewed_systems.*expected list'):
+            _apply_yaml(config, {'reviewed_systems': 'not-a-list'})
 
 
 class TestUpdateConfigField:

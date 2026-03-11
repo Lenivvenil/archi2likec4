@@ -636,3 +636,39 @@ class TestParseSolutionViewsFuncInteg:
         )
         result = parse_solution_views(tmp_path)
         assert len(result) == 0
+
+    def test_func_integ_same_solution_share_slug(self, tmp_path):
+        """functional_architecture.X and integration_architecture.X must get the same slug."""
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_f1.xml',
+            'functional_architecture.Pay',
+            elements=['sys-1'],
+        )
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_i1.xml',
+            'integration_architecture.Pay',
+            elements=['sys-2'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 2
+        slugs = {sv.solution for sv in result}
+        assert slugs == {'pay'}, f'Expected both views to share slug "pay", got {slugs}'
+
+    def test_genuine_slug_collision_disambiguated(self, tmp_path):
+        """Different solution names that produce the same slug get disambiguated."""
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_f1.xml',
+            'functional_architecture.A B',
+            elements=['sys-1'],
+        )
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_f2.xml',
+            'functional_architecture.A_B',
+            elements=['sys-2'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 2
+        slugs = {sv.solution for sv in result}
+        assert len(slugs) == 2, f'Expected distinct slugs for different names, got {slugs}'
