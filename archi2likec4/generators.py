@@ -361,13 +361,20 @@ def generate_entities(entities: list[DataEntity], data_access: list[DataAccess])
 
 
 def generate_landscape_view() -> str:
-    """Generate the top-level landscape view."""
+    """Generate the top-level landscape view.
+
+    Shows only domain→system nesting. Subsystems and appFunctions are
+    excluded to keep the landscape readable — they are accessible via
+    drill-down into per-system detail views.
+    """
     return """\
 views {
 
   view index {
     title 'Application Landscape'
     include *
+    exclude * where kind is subsystem
+    exclude * where kind is appFunction
     exclude * where kind is dataEntity
   }
 

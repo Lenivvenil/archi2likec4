@@ -169,6 +169,8 @@ class TestGenerateLandscapeView:
         assert 'view index' in result
         assert "title 'Application Landscape'" in result
         assert 'include *' in result
+        assert 'exclude * where kind is subsystem' in result
+        assert 'exclude * where kind is appFunction' in result
         assert 'exclude * where kind is dataEntity' in result
 
 
