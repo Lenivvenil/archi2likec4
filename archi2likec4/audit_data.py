@@ -334,13 +334,13 @@ def compute_audit_incidents(
                         'issue': get_qa10_issue('empty_location', lang),
                     })
 
-            # Check 3: Root Node not under Location
+            # Check 3: Root Node/Zone not under Location
             location_child_ids: set[str] = set()
             for loc in locations:
                 for child in loc.children:
                     location_child_ids.add(child.archi_id)
             for dn in deployment_nodes:
-                if dn.kind == 'infraNode' and dn.archi_id not in location_child_ids:
+                if dn.kind in ('infraNode', 'infraZone') and dn.archi_id not in location_child_ids:
                     qa10_affected.append({
                         'name': dn.name, 'kind': dn.kind,
                         'issue': get_qa10_issue('root_no_location', lang),

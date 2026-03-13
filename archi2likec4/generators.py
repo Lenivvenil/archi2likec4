@@ -515,12 +515,15 @@ def generate_solution_views(
         for sv in sorted(views, key=lambda v: v.view_type):
             # Resolve element archi_ids to c4 paths
             c4_paths: list[str] = []
+            entity_paths: list[str] = []
             unresolved = 0
             system_c4_ids: set[str] = set()  # track unique systems
 
             if sv.view_type == 'deployment':
                 # Deployment views resolve via tech_archi_to_c4, not archi_to_c4
-                total_elements += len(sv.element_archi_ids)
+                # Only count non-entity elements (entities are filtered out)
+                non_entity_count = sum(1 for a in sv.element_archi_ids if a not in entity_archi_ids)
+                total_elements += non_entity_count
                 for aid in sv.element_archi_ids:
                     if aid in entity_archi_ids:
                         continue  # skip data entities on deployment views
@@ -532,7 +535,8 @@ def generate_solution_views(
                         unresolved += 1
             elif sv.view_type == 'functional':
                 # Functional views: skip data entities entirely
-                total_elements += len(sv.element_archi_ids)
+                non_entity_count = sum(1 for a in sv.element_archi_ids if a not in entity_archi_ids)
+                total_elements += non_entity_count
                 for aid in sv.element_archi_ids:
                     if aid in entity_archi_ids:
                         continue  # skip data entities
@@ -553,7 +557,6 @@ def generate_solution_views(
             elif sv.view_type == 'integration':
                 # Integration views: separate app elements from data entities
                 total_elements += len(sv.element_archi_ids)
-                entity_paths: list[str] = []
                 for aid in sv.element_archi_ids:
                     if aid in entity_archi_ids:
                         # Resolve entity to its c4_id (stored in archi_to_c4 for entities)
@@ -594,7 +597,7 @@ def generate_solution_views(
                         unresolved += 1
             total_unresolved += unresolved
 
-            if not c4_paths and sv.view_type != 'deployment':
+            if not c4_paths and not entity_paths and sv.view_type != 'deployment':
                 continue
 
             # Deduplicate paths
@@ -784,6 +787,16 @@ def generate_solution_views(
                     tech_c4_values = set((tech_archi_to_c4 or {}).values())
                     app_paths = [rp for rp in resolved_unique if rp not in tech_c4_values]
                     infra_paths = [rp for rp in resolved_unique if rp in tech_c4_values]
+
+                    # Enrich: if app paths have no corresponding infra paths from
+                    # the diagram, pull mapped targets from deployment_map
+                    if app_paths and not infra_paths and _deploy_targets:
+                        seen_infra: set[str] = set()
+                        for ap in app_paths:
+                            for target in _deploy_targets.get(ap, set()):
+                                if target not in seen_infra:
+                                    seen_infra.add(target)
+                                    infra_paths.append(target)
 
                     # Ancestor dedup for infra: if both 'loc' and 'loc.cluster.node' are present,
                     # remove 'loc' — keep only the most specific paths

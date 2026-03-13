@@ -206,6 +206,24 @@ class TestApplyYaml:
         with pytest.raises(ValueError, match="domain_renames\\['y'\\]"):
             _apply_yaml(config, {'domain_renames': {'y': ['a', 'b', 'c']}})
 
+    def test_domain_renames_invalid_c4_id(self):
+        """Invalid C4 identifier in domain_renames must raise ValueError."""
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match="invalid C4 identifier"):
+            _apply_yaml(config, {'domain_renames': {'old': ['../../escape', 'Bad']}})
+
+    def test_domain_renames_path_traversal_rejected(self):
+        """Path traversal in c4_id must be rejected."""
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match="invalid C4 identifier"):
+            _apply_yaml(config, {'domain_renames': {'old': ['../etc/passwd', 'Hack']}})
+
+    def test_domain_renames_valid_c4_id_accepted(self):
+        """Valid C4 identifier in domain_renames must be accepted."""
+        config = ConvertConfig()
+        _apply_yaml(config, {'domain_renames': {'old': ['new_domain', 'New Domain']}})
+        assert config.domain_renames == {'old': ('new_domain', 'New Domain')}
+
     def test_full_yaml_file(self, tmp_path):
         """Load a complete YAML config file."""
         yaml_content = """\

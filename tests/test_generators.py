@@ -340,6 +340,58 @@ class TestGenerateSolutionViews:
         assert unresolved == 1
         assert total == 1
 
+    def test_entity_only_integration_view_not_dropped(self):
+        """Integration view with only data entities should still render."""
+        sv = SolutionView(
+            name='integration_architecture.DataOnly',
+            view_type='integration',
+            solution='data_only',
+            element_archi_ids=['do-1', 'do-2'],
+            relationship_archi_ids=[],
+        )
+        archi_to_c4 = {'do-1': 'de_account', 'do-2': 'de_card'}
+        entity_archi_ids = {'do-1', 'do-2'}
+        files, _, _ = generate_solution_views(
+            [sv], archi_to_c4, {}, entity_archi_ids=entity_archi_ids)
+        assert 'data_only' in files
+        content = files['data_only']
+        assert 'de_account' in content
+        assert 'de_card' in content
+
+    def test_coverage_not_inflated_by_filtered_entities(self):
+        """Filtered entity IDs should not inflate total_elements."""
+        sv = SolutionView(
+            name='functional_architecture.Mixed',
+            view_type='functional',
+            solution='mixed',
+            element_archi_ids=['sys-1', 'do-1', 'unknown-1'],
+        )
+        archi_to_c4 = {'sys-1': 'channels.efs', 'do-1': 'de_account'}
+        entity_archi_ids = {'do-1'}
+        _, unresolved, total = generate_solution_views(
+            [sv], archi_to_c4, {'efs': 'channels'}, entity_archi_ids=entity_archi_ids)
+        # total should be 2 (sys-1 + unknown-1), not 3 (do-1 is filtered)
+        assert total == 2
+        assert unresolved == 1
+
+    def test_deployment_view_enriched_from_deploy_map(self):
+        """Deployment view with app-only elements uses deployment_map for infra."""
+        sv = SolutionView(
+            name='deployment_architecture.AppOnly',
+            view_type='deployment',
+            solution='app_only',
+            element_archi_ids=['ac-1'],
+        )
+        archi_to_c4 = {'ac-1': 'channels.efs'}
+        deploy_map = [('channels.efs', 'server_1')]
+        files, _, _ = generate_solution_views(
+            [sv], archi_to_c4, {'efs': 'channels'},
+            deployment_map=deploy_map)
+        assert 'app_only' in files
+        content = files['app_only']
+        assert 'channels.efs' in content
+        assert 'server_1' in content
+
 
 # ── Deployment generators ───────────────────────────────────────────────
 
@@ -579,6 +631,30 @@ class TestGenerateAuditMd:
         built = MockBuilt(deployment_nodes=[parent])
         result = generate_audit_md(built, 0, 0, MockConfig())
         assert 'Проблемы иерархии развёртывания' not in result
+
+    def test_qa10_infra_zone_root_without_location(self):
+        """QA-10 should flag root infraZone not under infraLocation."""
+        loc = DeploymentNode(c4_id='dc', name='DC', archi_id='loc-1',
+                             tech_type='Location', kind='infraLocation',
+                             children=[])
+        zone = DeploymentNode(c4_id='lan', name='LAN', archi_id='cn-1',
+                              tech_type='CommunicationNetwork', kind='infraZone')
+        built = MockBuilt(deployment_nodes=[loc, zone])
+        result = generate_audit_md(built, 0, 0, MockConfig())
+        assert 'Проблемы иерархии развёртывания' in result
+        assert 'LAN' in result
+
+    def test_qa10_infra_zone_under_location_ok(self):
+        """QA-10 should NOT flag infraZone nested under infraLocation."""
+        zone = DeploymentNode(c4_id='lan', name='LAN', archi_id='cn-1',
+                              tech_type='CommunicationNetwork', kind='infraZone')
+        loc = DeploymentNode(c4_id='dc', name='DC', archi_id='loc-1',
+                             tech_type='Location', kind='infraLocation',
+                             children=[zone])
+        built = MockBuilt(deployment_nodes=[loc])
+        result = generate_audit_md(built, 0, 0, MockConfig())
+        # LAN is nested under DC, should not be flagged
+        assert 'LAN' not in result or 'Проблемы иерархии развёртывания' not in result
 
 
     def test_stable_qa_ids(self):

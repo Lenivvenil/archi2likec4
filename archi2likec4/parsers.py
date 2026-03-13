@@ -555,8 +555,10 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
 
         solution_slug = make_id(solution_name)
 
-        # Merge duplicates instead of discarding
-        dedup_key = f'{view_type}:{solution_name}'
+        # Merge duplicates: key includes parent folder to separate same-named
+        # diagrams under different Archi folders (e.g. projects/X vs functional_areas/Y)
+        folder_key = str(xml_path.parent.relative_to(diagrams_dir))
+        dedup_key = f'{folder_key}:{view_type}:{solution_name}'
         if dedup_key in seen_names:
             existing = results[seen_names[dedup_key]]
             existing_elem_set = set(existing.element_archi_ids)

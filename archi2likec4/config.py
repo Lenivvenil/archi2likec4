@@ -152,6 +152,10 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             if not isinstance(v[0], str) or not isinstance(v[1], str):
                 raise ValueError(
                     f"domain_renames['{k}']: values must be strings, got {v!r}")
+            if not _VALID_C4_ID.match(v[0]):
+                raise ValueError(
+                    f"domain_renames['{k}']: invalid C4 identifier "
+                    f"'{v[0]}' (must match {_VALID_C4_ID.pattern})")
             renames[k] = tuple(v)
         config.domain_renames = renames
     if 'extra_domain_patterns' in data:
