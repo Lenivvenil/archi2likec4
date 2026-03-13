@@ -446,6 +446,8 @@ def generate_solution_views(
     relationships: list[RawRelationship] | None = None,
     promoted_archi_to_c4: dict[str, list[str]] | None = None,
     tech_archi_to_c4: dict[str, str] | None = None,
+    entity_archi_ids: set[str] | None = None,
+    deployment_map: list[tuple[str, str]] | None = None,
 ) -> tuple[dict[str, str], int, int]:
     """Generate solution view .c4 files.
 
@@ -456,7 +458,28 @@ def generate_solution_views(
     Groups functional and integration views for the same solution into one file.
     Uses actual diagram relationships for integration views when available.
     When a promoted parent archi_id appears, fans out to all children.
+
+    Strict filtering rules per view type:
+      - functional: exclude dataEntity/dataStore; only primary system gets .*
+      - integration: entity cap (≤10); fan-out fix; orphan removal; exclude dataStore
+      - deployment: app paths without .*; infra paths with .*; ancestor dedup; exclude dataEntity
     """
+    _logger = logging.getLogger('archi2likec4')
+    if entity_archi_ids is None:
+        entity_archi_ids = set()
+
+    # Element count thresholds for QA-11 warnings
+    _MAX_FUNCTIONAL = 25
+    _MAX_INTEGRATION = 50  # ~20 systems + ~30 relationships
+    _MAX_DEPLOYMENT = 40
+    _MAX_INTEGRATION_ENTITIES = 10
+
+    # Build deployment target lookup: app_c4_path → set of infra c4_ids
+    _deploy_targets: dict[str, set[str]] = {}
+    if deployment_map:
+        for app_path, infra_id in deployment_map:
+            _deploy_targets.setdefault(app_path, set()).add(infra_id)
+
     # Build relationship lookup: rel_archi_id → (source_archi_id, target_archi_id, rel_type)
     rel_lookup: dict[str, tuple[str, str, str]] = {}
     # Structural rel types excluded from integration views (consistent with build_integrations)
@@ -491,10 +514,57 @@ def generate_solution_views(
                 # Deployment views resolve via tech_archi_to_c4, not archi_to_c4
                 total_elements += len(sv.element_archi_ids)
                 for aid in sv.element_archi_ids:
+                    if aid in entity_archi_ids:
+                        continue  # skip data entities on deployment views
                     if tech_archi_to_c4 and aid in tech_archi_to_c4:
                         c4_paths.append(tech_archi_to_c4[aid])
                     elif aid in archi_to_c4:
                         c4_paths.append(archi_to_c4[aid])
+                    else:
+                        unresolved += 1
+            elif sv.view_type == 'functional':
+                # Functional views: skip data entities entirely
+                total_elements += len(sv.element_archi_ids)
+                for aid in sv.element_archi_ids:
+                    if aid in entity_archi_ids:
+                        continue  # skip data entities
+                    c4_path = archi_to_c4.get(aid)
+                    if c4_path:
+                        c4_paths.append(c4_path)
+                        parts = c4_path.split('.')
+                        if len(parts) >= 2:
+                            system_c4_ids.add(parts[1])
+                    elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
+                        for child_path in promoted_archi_to_c4[aid]:
+                            c4_paths.append(child_path)
+                            parts = child_path.split('.')
+                            if len(parts) >= 2:
+                                system_c4_ids.add(parts[1])
+                    else:
+                        unresolved += 1
+            elif sv.view_type == 'integration':
+                # Integration views: separate app elements from data entities
+                total_elements += len(sv.element_archi_ids)
+                entity_paths: list[str] = []
+                for aid in sv.element_archi_ids:
+                    if aid in entity_archi_ids:
+                        # Resolve entity to its c4_id (stored in archi_to_c4 for entities)
+                        entity_path = archi_to_c4.get(aid)
+                        if entity_path:
+                            entity_paths.append(entity_path)
+                        continue
+                    c4_path = archi_to_c4.get(aid)
+                    if c4_path:
+                        c4_paths.append(c4_path)
+                        parts = c4_path.split('.')
+                        if len(parts) >= 2:
+                            system_c4_ids.add(parts[1])
+                    elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
+                        for child_path in promoted_archi_to_c4[aid]:
+                            c4_paths.append(child_path)
+                            parts = child_path.split('.')
+                            if len(parts) >= 2:
+                                system_c4_ids.add(parts[1])
                     else:
                         unresolved += 1
             else:
@@ -536,13 +606,15 @@ def generate_solution_views(
 
             if sv.view_type == 'functional':
                 # Functional view: include specific elements (systems + children)
-                # Find unique system-level paths (domain.system)
+                # Find unique system-level paths (domain.system) and count elements per system
                 system_paths: list[str] = []
                 seen_sys: set[str] = set()
+                sys_element_count: dict[str, int] = {}
                 for p in unique_paths:
                     parts = p.split('.')
                     if len(parts) >= 2:
                         sys_path = f'{parts[0]}.{parts[1]}'
+                        sys_element_count[sys_path] = sys_element_count.get(sys_path, 0) + 1
                         if sys_path not in seen_sys:
                             seen_sys.add(sys_path)
                             system_paths.append(sys_path)
@@ -552,19 +624,37 @@ def generate_solution_views(
                     lines.append(f"  view {view_id} of {system_paths[0]} {{")
                     lines.append(f"    title '{escape_str(title)}'")
                     lines.append(f"    include *")
+                    lines.append(f"    exclude * where kind is dataEntity")
+                    lines.append(f"    exclude * where kind is dataStore")
                     lines.append(f"  }}")
+                    # QA-11: warn on element count (estimate)
+                    est = sys_element_count.get(system_paths[0], 0)
+                    if est > _MAX_FUNCTIONAL:
+                        _logger.warning('QA-11: functional view %s has ~%d elements '
+                                        '(threshold: %d)', view_id, est, _MAX_FUNCTIONAL)
                 else:
-                    # Multi-system view with explicit includes
+                    # Multi-system: determine primary system (most elements)
+                    primary_sys = max(system_paths, key=lambda sp: sys_element_count.get(sp, 0)) if system_paths else None
                     lines.append(f"  view {view_id} {{")
                     lines.append(f"    title '{escape_str(title)}'")
                     lines.append(f"    include")
                     for sp in system_paths:
-                        lines.append(f"      {sp},")
-                        lines.append(f"      {sp}.*,")
+                        if sp == primary_sys:
+                            lines.append(f"      {sp},")
+                            lines.append(f"      {sp}.*,")
+                        else:
+                            lines.append(f"      {sp},")
                     # Remove trailing comma from last line
                     if lines[-1].endswith(','):
                         lines[-1] = lines[-1][:-1]
+                    lines.append(f"    exclude * where kind is dataEntity")
+                    lines.append(f"    exclude * where kind is dataStore")
                     lines.append(f"  }}")
+                    # QA-11: warn on element count
+                    est = len(system_paths) + sys_element_count.get(primary_sys, 0) if primary_sys else len(system_paths)
+                    if est > _MAX_FUNCTIONAL:
+                        _logger.warning('QA-11: functional view %s has ~%d elements '
+                                        '(threshold: %d)', view_id, est, _MAX_FUNCTIONAL)
 
             elif sv.view_type == 'integration':
                 # Integration view: system-level with specific relationships from diagram
@@ -588,29 +678,34 @@ def generate_solution_views(
                     # Skip structural relationships (same filter as build_integrations)
                     if rtype in _structural_types or rtype == 'AccessRelationship':
                         continue
-                    # Resolve endpoints (fan out promoted parents)
-                    src_c4_list: list[str] = []
+                    # Resolve endpoints — lift BOTH sides to system level BEFORE iteration
+                    # This prevents N×M fan-out for promoted parents
+                    src_sys_set: set[str] = set()
                     if src_aid in archi_to_c4:
-                        src_c4_list = [archi_to_c4[src_aid]]
+                        src_path = archi_to_c4[src_aid]
+                        src_parts = src_path.split('.')
+                        src_sys_set.add(f'{src_parts[0]}.{src_parts[1]}' if len(src_parts) >= 2 else src_path)
                     elif promoted_archi_to_c4 and src_aid in promoted_archi_to_c4:
-                        src_c4_list = promoted_archi_to_c4[src_aid]
+                        for child_path in promoted_archi_to_c4[src_aid]:
+                            parts = child_path.split('.')
+                            src_sys_set.add(f'{parts[0]}.{parts[1]}' if len(parts) >= 2 else child_path)
 
-                    tgt_c4_list: list[str] = []
+                    tgt_sys_set: set[str] = set()
                     if tgt_aid in archi_to_c4:
-                        tgt_c4_list = [archi_to_c4[tgt_aid]]
+                        tgt_path = archi_to_c4[tgt_aid]
+                        tgt_parts = tgt_path.split('.')
+                        tgt_sys_set.add(f'{tgt_parts[0]}.{tgt_parts[1]}' if len(tgt_parts) >= 2 else tgt_path)
                     elif promoted_archi_to_c4 and tgt_aid in promoted_archi_to_c4:
-                        tgt_c4_list = promoted_archi_to_c4[tgt_aid]
+                        for child_path in promoted_archi_to_c4[tgt_aid]:
+                            parts = child_path.split('.')
+                            tgt_sys_set.add(f'{parts[0]}.{parts[1]}' if len(parts) >= 2 else child_path)
 
-                    if not src_c4_list or not tgt_c4_list:
+                    if not src_sys_set or not tgt_sys_set:
                         continue
 
-                    # Cross-product, lifted to system level (domain.system)
-                    for src_c4 in src_c4_list:
-                        src_parts = src_c4.split('.')
-                        src_sys = f'{src_parts[0]}.{src_parts[1]}' if len(src_parts) >= 2 else src_c4
-                        for tgt_c4 in tgt_c4_list:
-                            tgt_parts = tgt_c4.split('.')
-                            tgt_sys = f'{tgt_parts[0]}.{tgt_parts[1]}' if len(tgt_parts) >= 2 else tgt_c4
+                    # One pair per unique (src_sys, tgt_sys) — no cross-product explosion
+                    for src_sys in src_sys_set:
+                        for tgt_sys in tgt_sys_set:
                             if src_sys == tgt_sys:
                                 continue
                             pair = (src_sys, tgt_sys)
@@ -618,11 +713,35 @@ def generate_solution_views(
                                 seen_pairs.add(pair)
                                 rel_pairs.append(pair)
 
+                # Orphan removal: keep only systems that participate in relationships
+                if rel_pairs:
+                    connected_systems: set[str] = set()
+                    for src, tgt in rel_pairs:
+                        connected_systems.add(src)
+                        connected_systems.add(tgt)
+                    system_paths = [sp for sp in system_paths if sp in connected_systems]
+
+                # Entity cap: include entities only if ≤ threshold
+                include_entities = False
+                resolved_entities: list[str] = []
+                if sv.view_type == 'integration' and entity_paths:
+                    resolved_entities = list(dict.fromkeys(entity_paths))
+                    if len(resolved_entities) <= _MAX_INTEGRATION_ENTITIES:
+                        include_entities = True
+                    else:
+                        _logger.info('Integration view %s: %d data entities exceed cap (%d), excluding',
+                                     view_id, len(resolved_entities), _MAX_INTEGRATION_ENTITIES)
+
                 lines.append(f"  view {view_id} {{")
                 lines.append(f"    title '{escape_str(title)}'")
+                if not include_entities and resolved_entities:
+                    lines.append(f"    // {len(resolved_entities)} data entities excluded (>{_MAX_INTEGRATION_ENTITIES} cap)")
                 lines.append(f"    include")
                 for sp in system_paths:
                     lines.append(f"      {sp},")
+                if include_entities:
+                    for ep in resolved_entities:
+                        lines.append(f"      {ep},")
                 if rel_pairs:
                     # Use specific relationship pairs from diagram
                     for src, tgt in rel_pairs:
@@ -630,21 +749,67 @@ def generate_solution_views(
                 # Remove trailing comma
                 if lines[-1].endswith(','):
                     lines[-1] = lines[-1][:-1]
+                lines.append(f"    exclude * where kind is dataStore")
                 lines.append(f"  }}")
+                # QA-11: warn on element count
+                est = len(system_paths) + len(rel_pairs) + (len(resolved_entities) if include_entities else 0)
+                if est > _MAX_INTEGRATION:
+                    _logger.warning('QA-11: integration view %s has ~%d elements '
+                                    '(threshold: %d)', view_id, est, _MAX_INTEGRATION)
 
             elif sv.view_type == 'deployment':
-                # Deployment view: c4_paths already resolved via tech_archi_to_c4 above
+                # Deployment view: separate app paths from infra paths
                 resolved_unique = list(dict.fromkeys(c4_paths))
                 if resolved_unique:
+                    app_paths: list[str] = []
+                    infra_paths: list[str] = []
+                    for rp in resolved_unique:
+                        if tech_archi_to_c4 and rp in tech_archi_to_c4.values():
+                            infra_paths.append(rp)
+                        elif any(rp == v for v in (tech_archi_to_c4 or {}).values()):
+                            infra_paths.append(rp)
+                        else:
+                            # Check if it was resolved from archi_to_c4 (app element)
+                            app_paths.append(rp)
+
+                    # Re-classify: paths from tech_archi_to_c4 are infra, from archi_to_c4 are app
+                    tech_c4_values = set((tech_archi_to_c4 or {}).values())
+                    app_paths = [rp for rp in resolved_unique if rp not in tech_c4_values]
+                    infra_paths = [rp for rp in resolved_unique if rp in tech_c4_values]
+
+                    # Ancestor dedup for infra: if both 'loc' and 'loc.cluster.node' are present,
+                    # remove 'loc' — keep only the most specific paths
+                    deduped_infra: list[str] = []
+                    infra_set = set(infra_paths)
+                    for ip in infra_paths:
+                        # Check if any other infra path is a descendant of ip
+                        has_descendant = any(
+                            other != ip and other.startswith(ip + '.')
+                            for other in infra_set
+                        )
+                        if not has_descendant:
+                            deduped_infra.append(ip)
+                    infra_paths = deduped_infra
+
                     lines.append(f"  view {view_id} {{")
                     lines.append(f"    title '{escape_str(title)}'")
                     lines.append(f"    include")
-                    for rp in resolved_unique:
-                        lines.append(f"      {rp},")
-                        lines.append(f"      {rp}.*,")
+                    # App paths: without .* (don't expand appFunction)
+                    for ap in app_paths:
+                        lines.append(f"      {ap},")
+                    # Infra paths: no .* — only elements from the Archi view
+                    # are included (stand-specific nodes only)
+                    for ip in infra_paths:
+                        lines.append(f"      {ip},")
                     if lines[-1].endswith(','):
                         lines[-1] = lines[-1][:-1]
+                    lines.append(f"    exclude * where kind is dataEntity")
                     lines.append(f"  }}")
+                    # QA-11: warn on element count
+                    est = len(app_paths) + len(infra_paths)
+                    if est > _MAX_DEPLOYMENT:
+                        _logger.warning('QA-11: deployment view %s has ~%d elements '
+                                        '(threshold: %d)', view_id, est, _MAX_DEPLOYMENT)
 
             lines.append('')
 
@@ -656,7 +821,6 @@ def generate_solution_views(
             files[solution_slug] = content
 
     if total_unresolved:
-        _logger = logging.getLogger('archi2likec4')
         resolved = total_elements - total_unresolved
         ratio = total_unresolved / total_elements if total_elements else 0
         _logger.warning('%d/%d diagram element(s) could not be resolved '

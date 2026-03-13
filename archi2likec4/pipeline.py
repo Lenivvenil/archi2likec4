@@ -283,6 +283,8 @@ def _validate(built: BuildResult, config: ConvertConfig) -> tuple[int, int, dict
         built.relationships,
         promoted_archi_to_c4=built.promoted_archi_to_c4,
         tech_archi_to_c4=built.tech_archi_to_c4,
+        entity_archi_ids={e.archi_id for e in built.entities},
+        deployment_map=built.deployment_map,
     )
 
     # Gate 1: Solution view unresolved ratio
