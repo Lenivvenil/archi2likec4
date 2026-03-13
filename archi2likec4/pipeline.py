@@ -33,6 +33,7 @@ from .builders import (
     build_systems,
     build_tech_archi_to_c4_map,
     build_datastore_entity_links,
+    enrich_deployment_from_visual_nesting,
 )
 from .generators import (
     generate_audit_md,
@@ -229,6 +230,17 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     logger.info('Building deployment topology...')
     deployment_nodes = build_deployment_topology(
         parsed.tech_elements, parsed.relationships)
+
+    # Enrich topology with visual nesting from deployment diagrams
+    all_visual_nesting: list[tuple[str, str]] = []
+    for sv in parsed.solution_views:
+        if sv.view_type == 'deployment' and sv.visual_nesting:
+            all_visual_nesting.extend(sv.visual_nesting)
+    reparented = enrich_deployment_from_visual_nesting(
+        deployment_nodes, all_visual_nesting)
+    if reparented:
+        logger.info('Visual nesting enrichment: %d nodes re-parented', reparented)
+
     from .builders import _flatten_deployment_nodes
     all_dn = _flatten_deployment_nodes(deployment_nodes)
     logger.info('%d top-level deployment nodes, %d total',

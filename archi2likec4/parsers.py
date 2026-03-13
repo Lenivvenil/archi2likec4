@@ -152,6 +152,38 @@ def _extract_all_element_refs(element, element_ids: list[str], relationship_ids:
         _extract_all_element_refs(child, element_ids, relationship_ids)
 
 
+def _get_element_id(node) -> str | None:
+    """Get the archi_id from a diagram object's archimateElement child."""
+    for child in node:
+        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if tag == 'archimateElement':
+            href = child.get('href', '')
+            return _extract_ref_id(href)
+    return None
+
+
+def _extract_visual_nesting(
+    element,
+    parent_id: str | None,
+    nesting: list[tuple[str, str]],
+):
+    """Recursively extract visual parent→child nesting from Archi diagram XML.
+
+    In Archi diagrams, `<children>` elements nested inside other `<children>`
+    represent visual containment on the canvas (e.g., a Node box containing
+    SystemSoftware boxes).  This function walks the tree and records
+    (parent_archi_id, child_archi_id) pairs for every nested element.
+    """
+    for child in element:
+        tag = child.tag.split('}')[-1] if '}' in child.tag else child.tag
+        if tag != 'children':
+            continue
+        child_id = _get_element_id(child)
+        if child_id and parent_id:
+            nesting.append((parent_id, child_id))
+        _extract_visual_nesting(child, child_id or parent_id, nesting)
+
+
 # ── Parsers ──────────────────────────────────────────────────────────────
 
 def parse_application_components(model_root: Path) -> list[AppComponent]:
@@ -553,6 +585,11 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
         relationship_ids: list[str] = []
         _extract_all_element_refs(root, element_ids, relationship_ids)
 
+        # For deployment views, extract visual nesting from diagram canvas
+        visual_nesting: list[tuple[str, str]] = []
+        if view_type == 'deployment':
+            _extract_visual_nesting(root, None, visual_nesting)
+
         solution_slug = make_id(solution_name)
 
         # Merge duplicates: key includes parent folder to separate same-named
@@ -591,6 +628,7 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
             solution=solution_slug,
             element_archi_ids=element_ids,
             relationship_archi_ids=relationship_ids,
+            visual_nesting=visual_nesting,
         ))
 
     if parse_errors:

@@ -179,6 +179,8 @@ class SolutionView:
     solution: str          # solution slug for c4_id
     element_archi_ids: list[str] = field(default_factory=list)
     relationship_archi_ids: list[str] = field(default_factory=list)
+    # Visual nesting from Archi diagram canvas (parent_archi_id, child_archi_id)
+    visual_nesting: list[tuple[str, str]] = field(default_factory=list)
 
 
 # ── Technology / Deployment ─────────────────────────────────────────────

@@ -879,6 +879,76 @@ def build_deployment_topology(
     return roots
 
 
+def enrich_deployment_from_visual_nesting(
+    deployment_nodes: list[DeploymentNode],
+    visual_nesting_pairs: list[tuple[str, str]],
+) -> int:
+    """Use visual nesting from Archi diagrams to fix missing parent-child relationships.
+
+    When a tech element appears as a root node but a deployment diagram shows it
+    visually nested inside another tech element, re-parent it. This fixes the common
+    case where Archi has no AggregationRelationship but the diagram canvas shows nesting.
+
+    Mutates deployment_nodes in-place. Returns the count of re-parented nodes.
+    """
+    if not visual_nesting_pairs:
+        return 0
+
+    # Build flat index: archi_id → DeploymentNode
+    all_nodes = _flatten_deployment_nodes(deployment_nodes)
+    by_archi: dict[str, DeploymentNode] = {dn.archi_id: dn for dn in all_nodes}
+    root_ids = {dn.archi_id for dn in deployment_nodes}
+
+    # Deduplicate and filter: only consider pairs where both sides are known tech elements
+    # and the child is currently a root node
+    reparent: dict[str, str] = {}  # child_archi_id → parent_archi_id
+    for parent_aid, child_aid in visual_nesting_pairs:
+        if parent_aid not in by_archi or child_aid not in by_archi:
+            continue
+        if child_aid not in root_ids:
+            continue  # already nested
+        if child_aid == parent_aid:
+            continue
+        # First diagram wins (most authoritative)
+        if child_aid not in reparent:
+            reparent[child_aid] = parent_aid
+
+    # Apply reparenting
+    reparented = 0
+    for child_aid, parent_aid in reparent.items():
+        child = by_archi[child_aid]
+        parent = by_archi[parent_aid]
+        # Avoid cycles: don't reparent if parent is descendant of child
+        if _is_descendant(child, parent_aid):
+            continue
+        # Check child is not already a child of parent
+        if any(c.archi_id == child_aid for c in parent.children):
+            continue
+        parent.children.append(child)
+        reparented += 1
+
+    # Remove reparented nodes from root list
+    if reparented:
+        reparented_aids = {aid for aid in reparent if by_archi[aid] in deployment_nodes}
+        deployment_nodes[:] = [dn for dn in deployment_nodes if dn.archi_id not in reparented_aids]
+        deployment_nodes.sort(key=lambda n: n.name)
+
+    if reparented:
+        logger.info('Re-parented %d deployment nodes from visual nesting', reparented)
+
+    return reparented
+
+
+def _is_descendant(node: DeploymentNode, target_archi_id: str) -> bool:
+    """Check if target_archi_id is a descendant of node."""
+    for child in node.children:
+        if child.archi_id == target_archi_id:
+            return True
+        if _is_descendant(child, target_archi_id):
+            return True
+    return False
+
+
 def _flatten_deployment_nodes(nodes: list[DeploymentNode]) -> list[DeploymentNode]:
     """Recursively flatten a tree of DeploymentNodes into a flat list."""
     result: list[DeploymentNode] = []
