@@ -556,7 +556,8 @@ def generate_solution_views(
                         unresolved += 1
             elif sv.view_type == 'integration':
                 # Integration views: separate app elements from data entities
-                total_elements += len(sv.element_archi_ids)
+                non_entity_count = sum(1 for a in sv.element_archi_ids if a not in entity_archi_ids)
+                total_elements += non_entity_count
                 for aid in sv.element_archi_ids:
                     if aid in entity_archi_ids:
                         # Resolve entity to its c4_id (stored in archi_to_c4 for entities)

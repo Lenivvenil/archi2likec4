@@ -527,3 +527,41 @@ class TestUpdateConfigField:
         update_config_field(f, 'domain_overrides', {})
         data = yaml.safe_load(f.read_text())
         assert data is None or 'domain_overrides' not in (data or {})
+
+
+class TestStrictValidation:
+    """strict field should reject invalid types and unrecognised strings."""
+
+    def test_strict_list_rejected(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='strict.*expected bool or string'):
+            _apply_yaml(config, {'strict': ['x']})
+
+    def test_strict_int_rejected(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='strict.*expected bool or string'):
+            _apply_yaml(config, {'strict': 42})
+
+    def test_strict_unknown_string_rejected(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match="strict.*got 'tru'"):
+            _apply_yaml(config, {'strict': 'tru'})
+
+
+class TestListItemTypeValidation:
+    """List config fields should reject non-string items."""
+
+    def test_audit_suppress_non_string_item(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='audit_suppress.*must be strings'):
+            _apply_yaml(config, {'audit_suppress': ['ok', 123]})
+
+    def test_audit_suppress_incidents_non_string_item(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='audit_suppress_incidents.*must be strings'):
+            _apply_yaml(config, {'audit_suppress_incidents': ['QA-1', ['nested']]})
+
+    def test_reviewed_systems_non_string_item(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='reviewed_systems.*must be strings'):
+            _apply_yaml(config, {'reviewed_systems': [None]})

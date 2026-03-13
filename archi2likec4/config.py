@@ -219,13 +219,22 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
         if not isinstance(data['audit_suppress'], list):
             raise ValueError(
                 f"audit_suppress: expected list, got {type(data['audit_suppress']).__name__}")
-        config.audit_suppress = [str(s) for s in data['audit_suppress']]
+        for item in data['audit_suppress']:
+            if not isinstance(item, str):
+                raise ValueError(
+                    f"audit_suppress: all items must be strings, got {type(item).__name__}: {item!r}")
+        config.audit_suppress = list(data['audit_suppress'])
     if 'audit_suppress_incidents' in data:
         if not isinstance(data['audit_suppress_incidents'], list):
             raise ValueError(
                 f"audit_suppress_incidents: expected list, "
                 f"got {type(data['audit_suppress_incidents']).__name__}")
-        config.audit_suppress_incidents = [str(s) for s in data['audit_suppress_incidents']]
+        for item in data['audit_suppress_incidents']:
+            if not isinstance(item, str):
+                raise ValueError(
+                    f"audit_suppress_incidents: all items must be strings, "
+                    f"got {type(item).__name__}: {item!r}")
+        config.audit_suppress_incidents = list(data['audit_suppress_incidents'])
 
     if 'domain_overrides' in data:
         if not isinstance(data['domain_overrides'], dict):
@@ -244,7 +253,11 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
         if not isinstance(data['reviewed_systems'], list):
             raise ValueError(
                 f"reviewed_systems: expected list, got {type(data['reviewed_systems']).__name__}")
-        config.reviewed_systems = [str(s) for s in data['reviewed_systems']]
+        for item in data['reviewed_systems']:
+            if not isinstance(item, str):
+                raise ValueError(
+                    f"reviewed_systems: all items must be strings, got {type(item).__name__}: {item!r}")
+        config.reviewed_systems = list(data['reviewed_systems'])
 
     if 'language' in data:
         lang = str(data['language']).lower()
@@ -258,9 +271,16 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
         if isinstance(val, bool):
             config.strict = val
         elif isinstance(val, str):
-            config.strict = val.lower() in ('true', '1', 'yes')
+            if val.lower() in ('true', '1', 'yes'):
+                config.strict = True
+            elif val.lower() in ('false', '0', 'no'):
+                config.strict = False
+            else:
+                raise ValueError(
+                    f"strict: expected bool or 'true'/'false', got '{val}'")
         else:
-            config.strict = bool(val)
+            raise ValueError(
+                f"strict: expected bool or string, got {type(val).__name__}")
 
 
 def save_suppress(

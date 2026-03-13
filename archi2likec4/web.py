@@ -669,7 +669,7 @@ def create_app(
         )
 
     from . import __version__
-    from .config import load_config, save_suppress, update_config_field
+    from .config import load_config, save_suppress, update_config_field, _VALID_C4_ID
     from .audit_data import compute_audit_incidents
 
     # Fail-fast: validate paths at startup, not on first request
@@ -690,6 +690,21 @@ def create_app(
         if not url or not url.startswith('/') or url.startswith('//'):
             return '/'
         return url
+
+    @app.before_request
+    def _csrf_check():
+        """Reject cross-origin POST requests (Origin/Referer check)."""
+        if request.method != 'POST':
+            return None
+        origin = request.headers.get('Origin') or ''
+        referer = request.headers.get('Referer') or ''
+        if origin:
+            if not origin.startswith(request.host_url.rstrip('/')):
+                return 'Forbidden: cross-origin POST', 403
+        elif referer:
+            if not referer.startswith(request.host_url):
+                return 'Forbidden: cross-origin POST', 403
+        return None
 
     _cache: dict[str, object] = {}
     _CACHE_TTL = 30  # seconds
@@ -854,6 +869,8 @@ def create_app(
         domain = request.form.get('domain', '').strip()
         redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name and domain:
+            if not _VALID_C4_ID.match(domain):
+                return f'Invalid domain identifier: {domain}', 400
             config = _load_config_safe()
             overrides = dict(config.domain_overrides)
             overrides[name] = domain
@@ -901,6 +918,8 @@ def create_app(
         domain = request.form.get('domain', '').strip()
         redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name and domain:
+            if not _VALID_C4_ID.match(domain):
+                return f'Invalid domain identifier: {domain}', 400
             config = _load_config_safe()
             promote = dict(config.promote_children)
             promote[name] = domain

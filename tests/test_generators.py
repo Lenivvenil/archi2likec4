@@ -374,6 +374,22 @@ class TestGenerateSolutionViews:
         assert total == 2
         assert unresolved == 1
 
+    def test_integration_coverage_not_inflated_by_filtered_entities(self):
+        """Integration view: filtered entity IDs should not inflate total_elements."""
+        sv = SolutionView(
+            name='integration_architecture.Mixed',
+            view_type='integration',
+            solution='mixed_int',
+            element_archi_ids=['sys-1', 'do-1', 'unknown-1'],
+        )
+        archi_to_c4 = {'sys-1': 'channels.efs', 'do-1': 'de_account'}
+        entity_archi_ids = {'do-1'}
+        _, unresolved, total = generate_solution_views(
+            [sv], archi_to_c4, {'efs': 'channels'}, entity_archi_ids=entity_archi_ids)
+        # total should be 2 (sys-1 + unknown-1), not 3 (do-1 is entity)
+        assert total == 2
+        assert unresolved == 1
+
     def test_deployment_view_enriched_from_deploy_map(self):
         """Deployment view with app-only elements uses deployment_map for infra."""
         sv = SolutionView(
