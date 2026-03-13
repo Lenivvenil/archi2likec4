@@ -722,13 +722,16 @@ class TestDeploymentTopology:
         assert len(roots) == 2
 
     def test_kind_assignment(self):
-        """Node→infraNode, non-DB SystemSoftware→infraSoftware, Device→infraNode."""
+        """Node→infraNode, non-DB SystemSoftware→infraSoftware, Device→infraNode,
+        CommunicationNetwork/Path→infraZone."""
         elems = [
             TechElement(archi_id='n-1', name='Srv', tech_type='Node'),
             TechElement(archi_id='d-1', name='Power', tech_type='Device'),
             TechElement(archi_id='sw-1', name='Nginx', tech_type='SystemSoftware'),
             TechElement(archi_id='ts-1', name='Eureka', tech_type='TechnologyService'),
             TechElement(archi_id='a-1', name='app.war', tech_type='Artifact'),
+            TechElement(archi_id='cn-1', name='LAN_Segment', tech_type='CommunicationNetwork'),
+            TechElement(archi_id='p-1', name='WAN_Link', tech_type='Path'),
         ]
         roots = build_deployment_topology(elems, [])
         by_name = {r.name: r for r in roots}
@@ -737,6 +740,8 @@ class TestDeploymentTopology:
         assert by_name['Nginx'].kind == 'infraSoftware'
         assert by_name['Eureka'].kind == 'infraSoftware'
         assert by_name['app.war'].kind == 'infraSoftware'
+        assert by_name['LAN_Segment'].kind == 'infraZone'
+        assert by_name['WAN_Link'].kind == 'infraZone'
 
     def test_id_collision_resolved(self):
         """Two elements with same name get unique c4_ids."""
@@ -904,6 +909,47 @@ class TestReviewedSystemsInBuild:
         comps = [AppComponent(archi_id='id-1', name='Normal', source_folder='')]
         systems, _ = build_systems(comps, promote_children={}, reviewed_systems=['Normal'])
         assert systems[0].tags == []
+
+
+# ── CommunicationNetwork/Path → infraZone ───────────────────────────────
+
+class TestInfraZoneKind:
+    def test_communication_network_becomes_infra_zone(self):
+        """CommunicationNetwork tech_type should produce infraZone kind."""
+        elems = [
+            TechElement(archi_id='cn-1', name='LAN Segment', tech_type='CommunicationNetwork'),
+        ]
+        roots = build_deployment_topology(elems, [])
+        assert len(roots) == 1
+        assert roots[0].kind == 'infraZone'
+
+    def test_path_becomes_infra_zone(self):
+        """Path tech_type should produce infraZone kind."""
+        elems = [
+            TechElement(archi_id='p-1', name='WAN Link', tech_type='Path'),
+        ]
+        roots = build_deployment_topology(elems, [])
+        assert len(roots) == 1
+        assert roots[0].kind == 'infraZone'
+
+    def test_infra_zone_with_child_node(self):
+        """infraZone → infraNode aggregation creates proper hierarchy."""
+        elems = [
+            TechElement(archi_id='cn-1', name='VLAN_10', tech_type='CommunicationNetwork'),
+            TechElement(archi_id='n-1', name='Server 1', tech_type='Node'),
+        ]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AggregationRelationship', name='',
+                source_type='CommunicationNetwork', source_id='cn-1',
+                target_type='Node', target_id='n-1',
+            ),
+        ]
+        roots = build_deployment_topology(elems, rels)
+        assert len(roots) == 1
+        assert roots[0].kind == 'infraZone'
+        assert len(roots[0].children) == 1
+        assert roots[0].children[0].kind == 'infraNode'
 
 
 # ── Location → infraLocation ────────────────────────────────────────────

@@ -795,7 +795,10 @@ def build_archi_to_c4_map(
 # ── Deployment topology ─────────────────────────────────────────────────
 
 _INFRA_NODE_TYPES = frozenset({
-    'Node', 'Device', 'TechnologyCollaboration', 'CommunicationNetwork', 'Path',
+    'Node', 'Device', 'TechnologyCollaboration',
+})
+_INFRA_ZONE_TYPES = frozenset({
+    'CommunicationNetwork', 'Path',
 })
 _INFRA_SW_TYPES = frozenset({
     'SystemSoftware', 'TechnologyService', 'Artifact',
@@ -836,6 +839,8 @@ def build_deployment_topology(
 
         if te.tech_type == 'Location':
             kind = 'infraLocation'
+        elif te.tech_type in _INFRA_ZONE_TYPES:
+            kind = 'infraZone'
         elif te.tech_type in _INFRA_NODE_TYPES:
             kind = 'infraNode'
         elif te.tech_type in _INFRA_SW_TYPES and _DATASTORE_PATTERNS.search(te.name):

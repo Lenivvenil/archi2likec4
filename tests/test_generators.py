@@ -347,9 +347,17 @@ class TestGenerateSpec_InfraKinds:
     def test_spec_includes_infra_node(self):
         spec = generate_spec()
         assert 'element infraNode' in spec
+        assert 'element infraZone' in spec
         assert 'element infraSoftware' in spec
         assert 'element infraLocation' in spec
         assert 'archi-tech' in spec
+
+    def test_spec_infra_zone_style(self):
+        spec = generate_spec()
+        # infraZone should have dotted border
+        zone_idx = spec.index('element infraZone')
+        zone_block = spec[zone_idx:spec.index('}', spec.index('}', zone_idx) + 1) + 1]
+        assert 'border dotted' in zone_block
 
     def test_spec_includes_deployed_on(self):
         spec = generate_spec()
@@ -411,6 +419,7 @@ class TestGenerateDeploymentView:
         content = generate_deployment_view()
         assert 'view deployment_architecture' in content
         assert 'infraLocation' in content
+        assert 'infraZone' in content
         assert 'infraNode' in content
         assert 'infraSoftware' in content
         assert 'dataStore' in content

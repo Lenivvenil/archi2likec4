@@ -177,6 +177,14 @@ specification {
     }
   }
 
+  element infraZone {
+    style {
+      shape rectangle
+      color archi-tech
+      border dotted
+    }
+  }
+
   element infraLocation {
     style {
       shape rectangle
@@ -906,6 +914,7 @@ views {
 
     include
       element.kind = infraLocation,
+      element.kind = infraZone,
       element.kind = infraNode,
       element.kind = infraSoftware,
       element.kind = dataStore
