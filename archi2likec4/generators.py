@@ -488,6 +488,16 @@ def generate_solution_views(
         for app_path, infra_id in deployment_map:
             _deploy_targets.setdefault(app_path, set()).add(infra_id)
 
+    # Pre-compute non-leaf (container) infra paths: paths that have descendants
+    # in the full topology. Including such paths in LikeC4 expands ALL children.
+    _container_infra: set[str] = set()
+    if tech_archi_to_c4:
+        all_tech_paths = set(tech_archi_to_c4.values())
+        for tp in all_tech_paths:
+            prefix = tp + '.'
+            if any(other.startswith(prefix) for other in all_tech_paths):
+                _container_infra.add(tp)
+
     # Build relationship lookup: rel_archi_id → (source_archi_id, target_archi_id, rel_type)
     rel_lookup: dict[str, tuple[str, str, str]] = {}
     # Structural rel types excluded from integration views (consistent with build_integrations)
@@ -789,22 +799,39 @@ def generate_solution_views(
                     app_paths = [rp for rp in resolved_unique if rp not in tech_c4_values]
                     infra_paths = [rp for rp in resolved_unique if rp in tech_c4_values]
 
-                    # Enrich: if app paths have no corresponding infra paths from
-                    # the diagram, pull mapped targets from deployment_map
-                    if app_paths and not infra_paths and _deploy_targets:
+                    # Filter out container infra paths (non-leaf nodes in topology).
+                    # Including a container in LikeC4 expands ALL its descendants,
+                    # creating a visual mess.  Leaf descendants already show
+                    # ancestor containers through their dotted c4 path.
+                    leaf_infra = [ip for ip in infra_paths if ip not in _container_infra]
+                    container_infra_in_view = [ip for ip in infra_paths if ip in _container_infra]
+
+                    # For containers whose leaf children are NOT already in the view,
+                    # try to pull specific hosting nodes from deployment_map
+                    if container_infra_in_view and _deploy_targets:
+                        leaf_set = set(leaf_infra)
+                        for ap in app_paths:
+                            for target in _deploy_targets.get(ap, set()):
+                                if target not in leaf_set:
+                                    leaf_set.add(target)
+                                    leaf_infra.append(target)
+
+                    # Fallback: if no leaf infra at all, try deployment_map
+                    if app_paths and not leaf_infra and _deploy_targets:
                         seen_infra: set[str] = set()
                         for ap in app_paths:
                             for target in _deploy_targets.get(ap, set()):
                                 if target not in seen_infra:
                                     seen_infra.add(target)
-                                    infra_paths.append(target)
+                                    leaf_infra.append(target)
+
+                    infra_paths = leaf_infra
 
                     # Ancestor dedup for infra: if both 'loc' and 'loc.cluster.node' are present,
                     # remove 'loc' — keep only the most specific paths
                     deduped_infra: list[str] = []
                     infra_set = set(infra_paths)
                     for ip in infra_paths:
-                        # Check if any other infra path is a descendant of ip
                         has_descendant = any(
                             other != ip and other.startswith(ip + '.')
                             for other in infra_set
