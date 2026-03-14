@@ -47,13 +47,13 @@
 
 ### Task 4: Update Generator — Render Subdomains in Domain Files
 Изменить рендеринг `domains/{id}.c4`: системы оборачивать в блок субдомена, если субдомен назначен.
-- [ ] Прочитать `archi2likec4/generators.py`, найти функцию генерации `domains/{id}.c4` (блок где итерируются системы домена)
-- [ ] Добавить группировку систем по субдоменам: если у домена есть субдомены, вначале рендерить `{subdomain_id} = subdomain "{subdomain_name}" { ... }`, внутри — системы этого субдомена; системы без субдомена рендерить напрямую в домен (fallback)
-- [ ] Проверить, что `systems/{id}.c4` (подсистемы и функции) не требует изменений — пути уже пересчитаны в Task 2
-- [ ] Проверить `relationships.c4` — пути интеграций теперь включают субдомен, убедиться что они правильно рендерятся
-- [ ] Проверить `solutions/` views — пути элементов в solution views должны использовать обновлённые `c4_path`
-- [ ] Add/update tests (`tests/test_generators.py`): `test_domain_file_contains_subdomain_block`, `test_system_nested_in_subdomain`, `test_system_without_subdomain_at_domain_root`)
-- [ ] Mark completed
+- [x] Прочитать `archi2likec4/generators.py`, найти функцию генерации `domains/{id}.c4` (блок где итерируются системы домена)
+- [x] Добавить группировку систем по субдоменам: если у домена есть субдомены, вначале рендерить `{subdomain_id} = subdomain "{subdomain_name}" { ... }`, внутри — системы этого субдомена; системы без субдомена рендерить напрямую в домен (fallback)
+- [x] Проверить, что `systems/{id}.c4` (подсистемы и функции) не требует изменений — пути уже пересчитаны в Task 2; исправлен `generate_system_detail_c4`: путь теперь `domain.subdomain.system` если субдомен назначен
+- [x] Проверить `relationships.c4` — пути интеграций теперь включают субдомен, убедиться что они правильно рендерятся
+- [x] Проверить `solutions/` views — пути элементов в solution views должны использовать обновлённые `c4_path`
+- [x] Add/update tests (`tests/test_generators.py`): `test_domain_file_contains_subdomain_block`, `test_system_nested_in_subdomain`, `test_system_without_subdomain_at_domain_root`)
+- [x] Mark completed
 
 ---
 

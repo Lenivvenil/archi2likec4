@@ -165,6 +165,22 @@ class TestGenerateSystemDetailC4:
         assert "create_account = appFunction 'CreateAccount'" in result
         assert "description 'Creates a new account'" in result
 
+    def test_extend_path_includes_subdomain(self):
+        sub = Subsystem(c4_id='core', name='EFS.Core', archi_id='sub-1', metadata={})
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     subsystems=[sub], metadata={}, subdomain='payments')
+        result = generate_system_detail_c4('channels', sys)
+        assert 'extend channels.payments.efs {' in result
+        assert 'view efs_detail of channels.payments.efs' in result
+
+    def test_extend_path_without_subdomain(self):
+        sub = Subsystem(c4_id='core', name='EFS.Core', archi_id='sub-1', metadata={})
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     subsystems=[sub], metadata={}, subdomain='')
+        result = generate_system_detail_c4('channels', sys)
+        assert 'extend channels.efs {' in result
+        assert 'view efs_detail of channels.efs' in result
+
 
 # ── generate_relationships ───────────────────────────────────────────────
 

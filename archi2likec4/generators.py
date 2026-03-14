@@ -295,8 +295,14 @@ def generate_system_detail_c4(domain_c4_id: str, sys: System) -> str:
     The detail view (``view {sys_id}_detail of {domain}.{sys_id}``) enables
     drill-down navigation: clicking a system on the domain-level functional
     view opens this view showing its subsystems and appFunctions.
+
+    If the system belongs to a subdomain, the path is
+    ``{domain}.{subdomain}.{system}`` instead of ``{domain}.{system}``.
     """
-    full_path = f'{domain_c4_id}.{sys.c4_id}'
+    if sys.subdomain:
+        full_path = f'{domain_c4_id}.{sys.subdomain}.{sys.c4_id}'
+    else:
+        full_path = f'{domain_c4_id}.{sys.c4_id}'
     lines = [
         f'// ── {sys.name} (detail) ──────────────────────────────────',
         'model {',
