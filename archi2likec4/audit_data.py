@@ -93,20 +93,12 @@ def compute_audit_incidents(
     meta_pct = round(meta_filled / meta_possible * 100) if meta_possible else 100
 
     deployment_map: list = built.deployment_map  # type: ignore[attr-defined]
-    # Extract system-level paths from deployment_map.
+    # Collect all paths present in the deployment map.
+    # A system is considered deployed if any deployment path equals its c4_path
+    # or starts with its c4_path followed by '.' (subsystem/component entries).
     # Paths may be: 'domain.system', 'domain.system.subsystem',
     # 'domain.subdomain.system', or 'domain.subdomain.system.subsystem'.
-    # We index 2-part (domain.X) and 3-part (domain.X.Y) prefixes so that
-    # both non-subdomain paths ('domain.system') and subdomain paths
-    # ('domain.subdomain.system') can be matched against a system's c4_path.
-    mapped_sys_paths: set[str] = set()
-    for pair in deployment_map:
-        parts = pair[0].split('.')
-        if len(parts) >= 2:
-            mapped_sys_paths.add(f'{parts[0]}.{parts[1]}')
-        if len(parts) >= 3:
-            mapped_sys_paths.add(f'{parts[0]}.{parts[1]}.{parts[2]}')
-        mapped_sys_paths.add(pair[0])
+    deployment_paths: set[str] = {pair[0] for pair in deployment_map}
 
     summary = AuditSummary(
         total_systems=total_sys,
@@ -298,7 +290,11 @@ def compute_audit_incidents(
             return f'{s.domain}.{sd}.{s.c4_id}'
         return f'{s.domain}.{s.c4_id}'
 
-    unmapped = [s for s in systems if _sys_c4_path(s) not in mapped_sys_paths
+    def _is_deployed(s: System) -> bool:
+        p = _sys_c4_path(s)
+        return any(dp == p or dp.startswith(p + '.') for dp in deployment_paths)
+
+    unmapped = [s for s in systems if not _is_deployed(s)
                     and s.domain and s.domain != 'unassigned'
                     and s.name not in suppress]
     if unmapped:
