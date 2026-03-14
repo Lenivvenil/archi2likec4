@@ -449,7 +449,7 @@ def _generate(
 
         # Domain model file
         (domains_dir / f'{domain_id}.c4').write_text(
-            generate_domain_c4(domain_id, d_info.name, domain_sys_list),
+            generate_domain_c4(domain_id, d_info.name, domain_sys_list, built.subdomains),
             encoding='utf-8')
         file_count += 1
         domain_count += 1

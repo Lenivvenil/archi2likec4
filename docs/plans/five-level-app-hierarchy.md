@@ -36,12 +36,12 @@
 
 ### Task 3: Update LikeC4 Specification — Add `subdomain` Kind
 Добавить `subdomain` в `specification.c4` (цвет, стиль, иконка) по аналогии с `domain` и `system`.
-- [ ] Прочитать `archi2likec4/generators.py`, найти блок генерации `specification.c4` (блок `specification { ... }`)
-- [ ] Добавить `element subdomain` с цветом (например, amber/secondary между domain и system), стилем `shape: rectangle`, иконкой по аналогии с `domain`
-- [ ] Прочитать шаблоны/строки для `domain` (как рендерится `domain` в `domains/{id}.c4`) и создать аналогичный шаблон для `subdomain` внутри домена
-- [ ] Убедиться, что `subdomain` добавлен в README/комментарии specification рядом с другими kinds
-- [ ] Add/update tests (`tests/test_generators.py`): `test_specification_contains_subdomain_kind`)
-- [ ] Mark completed
+- [x] Прочитать `archi2likec4/generators.py`, найти блок генерации `specification.c4` (блок `specification { ... }`)
+- [x] Добавить `element subdomain` с цветом (например, amber/secondary между domain и system), стилем `shape: rectangle`, иконкой по аналогии с `domain`
+- [x] Прочитать шаблоны/строки для `domain` (как рендерится `domain` в `domains/{id}.c4`) и создать аналогичный шаблон для `subdomain` внутри домена
+- [x] Убедиться, что `subdomain` добавлен в README/комментарии specification рядом с другими kinds
+- [x] Add/update tests (`tests/test_generators.py`): `test_specification_contains_subdomain_kind`)
+- [x] Mark completed
 
 ---
 

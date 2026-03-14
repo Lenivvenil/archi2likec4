@@ -10,6 +10,7 @@ from archi2likec4.models import (
     Integration,
     RawRelationship,
     SolutionView,
+    Subdomain,
     Subsystem,
     System,
 )
@@ -42,6 +43,15 @@ class TestGenerateSpec:
         assert 'element subsystem' in spec
         assert 'element appFunction' in spec
         assert 'element dataEntity' in spec
+
+    def test_specification_contains_subdomain_kind(self):
+        spec = generate_spec()
+        assert 'element subdomain' in spec
+        # subdomain should appear between domain and system
+        idx_domain = spec.index('element domain')
+        idx_subdomain = spec.index('element subdomain')
+        idx_system = spec.index('element system')
+        assert idx_domain < idx_subdomain < idx_system
 
     def test_contains_tags(self):
         spec = generate_spec()
@@ -84,6 +94,44 @@ class TestGenerateDomainC4:
         idx_alpha = result.index('Alpha')
         idx_zebra = result.index('Zebra')
         assert idx_alpha < idx_zebra
+
+    def test_domain_file_contains_subdomain_block(self):
+        sd = Subdomain(c4_id='payments', name='Payments', domain_id='channels',
+                       system_ids=['efs'])
+        sys = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
+                     subdomain='payments')
+        result = generate_domain_c4('channels', 'Channels', [sys], subdomains=[sd])
+        assert "payments = subdomain 'Payments'" in result
+        assert 'model {' in result
+
+    def test_system_nested_in_subdomain(self):
+        sd = Subdomain(c4_id='payments', name='Payments', domain_id='channels',
+                       system_ids=['efs'])
+        sys = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
+                     subdomain='payments')
+        result = generate_domain_c4('channels', 'Channels', [sys], subdomains=[sd])
+        # system block should come after subdomain opening
+        idx_sd = result.index("payments = subdomain")
+        idx_sys = result.index("efs = system")
+        assert idx_sd < idx_sys
+
+    def test_system_without_subdomain_at_domain_root(self):
+        sd = Subdomain(c4_id='payments', name='Payments', domain_id='channels',
+                       system_ids=['efs'])
+        sys_in_sd = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
+                           subdomain='payments')
+        sys_no_sd = System(c4_id='crm', name='CRM', archi_id='s2', metadata={},
+                           subdomain='')
+        result = generate_domain_c4('channels', 'Channels', [sys_in_sd, sys_no_sd],
+                                    subdomains=[sd])
+        # CRM should be present and not inside subdomain block
+        assert "crm = system 'CRM'" in result
+        # EFS inside subdomain
+        assert "payments = subdomain" in result
+        idx_sd_close = result.index('    }')
+        idx_crm = result.index("crm = system")
+        # CRM rendered after subdomain block closes
+        assert idx_crm > idx_sd_close
 
 
 # ── generate_system_detail_c4 ───────────────────────────────────────────
