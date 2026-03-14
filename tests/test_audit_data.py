@@ -1,9 +1,8 @@
 """Tests for archi2likec4.audit_data module."""
 
-from archi2likec4.audit_data import AuditSummary, AuditIncident, compute_audit_incidents
-from archi2likec4.models import DeploymentNode, System, Subsystem, RawRelationship
-
-from tests.helpers import MockConfig, MockBuilt
+from archi2likec4.audit_data import AuditSummary, compute_audit_incidents
+from archi2likec4.models import DeploymentNode, RawRelationship, Subsystem, System
+from tests.helpers import MockBuilt, MockConfig
 
 
 class TestComputeAuditIncidents:

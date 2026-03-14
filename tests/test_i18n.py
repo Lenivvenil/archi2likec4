@@ -1,6 +1,6 @@
 """Tests for archi2likec4.i18n module."""
 
-from archi2likec4.i18n import get_msg, get_qa10_issue, get_audit_label
+from archi2likec4.i18n import get_audit_label, get_msg, get_qa10_issue
 
 
 class TestGetMsg:
@@ -65,9 +65,9 @@ class TestLanguageInAuditData:
     """Verify language parameter flows through audit_data."""
 
     def test_en_incidents(self):
-        from tests.helpers import MockConfig, MockBuilt
         from archi2likec4.audit_data import compute_audit_incidents
         from archi2likec4.models import System
+        from tests.helpers import MockBuilt, MockConfig
 
         sys1 = System(c4_id='test', name='TestSys', archi_id='s-1',
                       metadata={'ci': 'TBD', 'full_name': 'Test',
@@ -87,9 +87,9 @@ class TestLanguageInAuditData:
         assert qa1.title == 'Systems without domain'
 
     def test_ru_default(self):
-        from tests.helpers import MockConfig, MockBuilt
         from archi2likec4.audit_data import compute_audit_incidents
         from archi2likec4.models import System
+        from tests.helpers import MockBuilt, MockConfig
 
         sys1 = System(c4_id='test', name='TestSys', archi_id='s-1',
                       metadata={'ci': 'TBD', 'full_name': 'Test',

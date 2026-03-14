@@ -1,10 +1,9 @@
 """End-to-end tests for the pipeline: parse → build → generate on synthetic data."""
 
-import pytest
 from pathlib import Path
 
 from archi2likec4.config import ConvertConfig
-from archi2likec4.pipeline import _parse, _build, _generate
+from archi2likec4.pipeline import _build, _generate, _parse
 
 
 def _create_minimal_model(tmp_path: Path) -> Path:
@@ -149,7 +148,7 @@ class TestPipelineE2E:
         )
 
         parsed = _parse(model, config)
-        built = _build(parsed, config)
+        _build(parsed, config)
         # Pipeline skips _generate when dry_run=True
         assert config.dry_run is True
         assert not output.exists()

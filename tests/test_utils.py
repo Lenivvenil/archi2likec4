@@ -1,10 +1,8 @@
 """Tests for archi2likec4.utils — transliteration, ID generation, escaping."""
 
-import pytest
 
-from archi2likec4.utils import build_metadata, escape_str, make_id, transliterate
 from archi2likec4.models import AppComponent
-
+from archi2likec4.utils import build_metadata, escape_str, make_id, transliterate
 
 # ── transliterate ────────────────────────────────────────────────────────
 

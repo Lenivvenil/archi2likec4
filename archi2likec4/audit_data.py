@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from .i18n import get_msg, get_qa10_issue
-from .models import System, Subsystem, _STANDARD_KEYS
+from .models import _STANDARD_KEYS, Subsystem, System
 
 # Maximum number of affected items shown in an incident's detail table.
 _MAX_AFFECTED_ITEMS = 30

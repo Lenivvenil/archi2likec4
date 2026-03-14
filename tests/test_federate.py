@@ -1,7 +1,6 @@
 """Tests for archi2likec4.scripts.federate_template module."""
 
 import os
-import pytest
 
 from archi2likec4.scripts.federate_template import _is_safe_relpath
 

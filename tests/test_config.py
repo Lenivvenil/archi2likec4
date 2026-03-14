@@ -1,12 +1,15 @@
 """Tests for archi2likec4.config module."""
 
-import pytest
 from pathlib import Path
 
+import pytest
+
 from archi2likec4.config import (
-    ConvertConfig, load_config, _apply_yaml,
-    _DEFAULT_PROMOTE_CHILDREN, _DEFAULT_DOMAIN_RENAMES,
-    _DEFAULT_EXTRA_DOMAIN_PATTERNS,
+    _DEFAULT_DOMAIN_RENAMES,
+    _DEFAULT_PROMOTE_CHILDREN,
+    ConvertConfig,
+    _apply_yaml,
+    load_config,
 )
 from archi2likec4.models import PROMOTE_WARN_THRESHOLD
 
@@ -270,19 +273,19 @@ class TestStrictBoolParsing:
     """P1-3: bool('false') should not become True."""
 
     def test_strict_string_false(self):
-        from archi2likec4.config import _apply_yaml, ConvertConfig
+        from archi2likec4.config import ConvertConfig, _apply_yaml
         config = ConvertConfig()
         _apply_yaml(config, {'strict': 'false'})
         assert config.strict is False
 
     def test_strict_string_true(self):
-        from archi2likec4.config import _apply_yaml, ConvertConfig
+        from archi2likec4.config import ConvertConfig, _apply_yaml
         config = ConvertConfig()
         _apply_yaml(config, {'strict': 'true'})
         assert config.strict is True
 
     def test_strict_bool_native(self):
-        from archi2likec4.config import _apply_yaml, ConvertConfig
+        from archi2likec4.config import ConvertConfig, _apply_yaml
         config = ConvertConfig()
         _apply_yaml(config, {'strict': False})
         assert config.strict is False
@@ -292,13 +295,13 @@ class TestExtraDomainPatternsValidation:
     """P1-4: invalid extra_domain_patterns should raise ValueError."""
 
     def test_missing_key(self):
-        from archi2likec4.config import _apply_yaml, ConvertConfig
+        from archi2likec4.config import ConvertConfig, _apply_yaml
         config = ConvertConfig()
         with pytest.raises(ValueError, match='missing required key'):
             _apply_yaml(config, {'extra_domain_patterns': [{'foo': 'bar'}]})
 
     def test_patterns_not_list(self):
-        from archi2likec4.config import _apply_yaml, ConvertConfig
+        from archi2likec4.config import ConvertConfig, _apply_yaml
         config = ConvertConfig()
         with pytest.raises(ValueError, match='expected list'):
             _apply_yaml(config, {'extra_domain_patterns': [
@@ -306,13 +309,13 @@ class TestExtraDomainPatternsValidation:
             ]})
 
     def test_entry_not_dict(self):
-        from archi2likec4.config import _apply_yaml, ConvertConfig
+        from archi2likec4.config import ConvertConfig, _apply_yaml
         config = ConvertConfig()
         with pytest.raises(ValueError, match='expected mapping'):
             _apply_yaml(config, {'extra_domain_patterns': ['just-a-string']})
 
     def test_c4_id_must_be_string(self):
-        from archi2likec4.config import _apply_yaml, ConvertConfig
+        from archi2likec4.config import ConvertConfig, _apply_yaml
         config = ConvertConfig()
         with pytest.raises(ValueError, match="c4_id.*expected string"):
             _apply_yaml(config, {'extra_domain_patterns': [
@@ -320,7 +323,7 @@ class TestExtraDomainPatternsValidation:
             ]})
 
     def test_invalid_c4_id_raises(self):
-        from archi2likec4.config import _apply_yaml, ConvertConfig
+        from archi2likec4.config import ConvertConfig, _apply_yaml
         config = ConvertConfig()
         with pytest.raises(ValueError, match='invalid C4 identifier'):
             _apply_yaml(config, {'extra_domain_patterns': [
@@ -328,7 +331,7 @@ class TestExtraDomainPatternsValidation:
             ]})
 
     def test_name_must_be_string(self):
-        from archi2likec4.config import _apply_yaml, ConvertConfig
+        from archi2likec4.config import ConvertConfig, _apply_yaml
         config = ConvertConfig()
         with pytest.raises(ValueError, match="name.*expected string"):
             _apply_yaml(config, {'extra_domain_patterns': [

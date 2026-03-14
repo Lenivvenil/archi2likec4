@@ -720,15 +720,15 @@ def create_app(
 ) -> 'Flask':
     """Create Flask app for quality audit dashboard (without starting the server)."""
     try:
-        from flask import Flask, render_template_string, request, redirect
+        from flask import Flask, redirect, render_template_string, request
     except ImportError:
         raise SystemExit(
             'Flask is required for web UI: pip install "archi2likec4[web]"'
         )
 
     from . import __version__
-    from .config import load_config, save_suppress, update_config_field, _VALID_C4_ID
     from .audit_data import compute_audit_incidents
+    from .config import _VALID_C4_ID, load_config, save_suppress, update_config_field
 
     # Fail-fast: validate paths at startup, not on first request
     if config_path is not None and not config_path.exists():
@@ -774,7 +774,7 @@ def create_app(
         if '_data' in _cache and now - _cache.get('_ts', 0) < _CACHE_TTL:
             return _cache['_data']
 
-        from .pipeline import _parse, _build, _validate
+        from .pipeline import _build, _parse, _validate
         try:
             config = load_config(config_path)
         except (FileNotFoundError, ValueError, OSError) as e:

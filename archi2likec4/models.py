@@ -2,7 +2,6 @@
 
 from dataclasses import dataclass, field
 
-
 # ── Transliteration table (Cyrillic → Latin) ────────────────────────────
 
 _CYRILLIC_MAP = {

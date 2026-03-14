@@ -1060,6 +1060,7 @@ def build_deployment_map(
     deployment_nodes: list[DeploymentNode],
     relationships: list[RawRelationship],
     sys_domain: dict[str, str],
+    sys_subdomain: dict[str, str] | None = None,
 ) -> list[tuple[str, str]]:
     """Build (app_c4_path, node_c4_id) pairs from cross-layer RealizationRelationship.
 
@@ -1068,11 +1069,12 @@ def build_deployment_map(
     if not deployment_nodes or not systems:
         return []
 
-    # Build app index: archi_id → full c4 path (domain.system)
+    # Build app index: archi_id → full c4 path (domain.system or domain.subdomain.system)
     app_path: dict[str, str] = {}
     for sys in systems:
         domain = sys_domain.get(sys.c4_id, 'unassigned')
-        full = f'{domain}.{sys.c4_id}'
+        subdomain = sys_subdomain.get(sys.c4_id, '') if sys_subdomain else ''
+        full = f'{domain}.{subdomain}.{sys.c4_id}' if subdomain else f'{domain}.{sys.c4_id}'
         if sys.archi_id:
             app_path[sys.archi_id] = full
         for eid in sys.extra_archi_ids:

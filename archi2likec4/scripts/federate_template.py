@@ -148,7 +148,7 @@ def federate(filter_name=None):
                     if sha:
                         f.write(f" @ {sha[:12]}")
                     f.write("\n")
-                    f.write(f"// Auto-synced by scripts/federate.py\n\n")
+                    f.write("// Auto-synced by scripts/federate.py\n\n")
                     f.write(content)
                 print(f"  OK {c4_path} -> {dst_c4}")
             else:
@@ -168,7 +168,7 @@ def federate(filter_name=None):
                     if sha:
                         f.write(f" @ {sha[:12]}")
                     f.write("\n")
-                    f.write(f"# Auto-synced by scripts/federate.py\n\n")
+                    f.write("# Auto-synced by scripts/federate.py\n\n")
                     f.write(content)
                 print(f"  OK {yaml_path} -> {dst_yaml}")
             else:

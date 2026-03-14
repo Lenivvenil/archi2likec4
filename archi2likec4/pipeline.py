@@ -6,20 +6,6 @@ import sys
 from pathlib import Path
 from typing import NamedTuple
 
-from .config import ConvertConfig, load_config
-from .models import DomainInfo
-from .parsers import (
-    parse_application_components,
-    parse_application_functions,
-    parse_application_interfaces,
-    parse_data_objects,
-    parse_domain_mapping,
-    parse_location_elements,
-    parse_relationships,
-    parse_solution_views,
-    parse_subdomains,
-    parse_technology_elements,
-)
 from .builders import (
     apply_domain_prefix,
     assign_domains,
@@ -29,18 +15,20 @@ from .builders import (
     build_archi_to_c4_map,
     build_data_access,
     build_data_entities,
+    build_datastore_entity_links,
     build_deployment_map,
     build_deployment_topology,
     build_integrations,
     build_systems,
     build_tech_archi_to_c4_map,
-    build_datastore_entity_links,
     enrich_deployment_from_visual_nesting,
 )
+from .config import ConvertConfig, load_config
+from .federation import generate_federate_script, generate_federation_registry
 from .generators import (
     generate_audit_md,
-    generate_deployment_c4,
     generate_datastore_mapping_c4,
+    generate_deployment_c4,
     generate_deployment_mapping_c4,
     generate_deployment_view,
     generate_domain_c4,
@@ -54,7 +42,19 @@ from .generators import (
     generate_spec,
     generate_system_detail_c4,
 )
-from .federation import generate_federate_script, generate_federation_registry
+from .models import DomainInfo
+from .parsers import (
+    parse_application_components,
+    parse_application_functions,
+    parse_application_interfaces,
+    parse_data_objects,
+    parse_domain_mapping,
+    parse_location_elements,
+    parse_relationships,
+    parse_solution_views,
+    parse_subdomains,
+    parse_technology_elements,
+)
 
 logger = logging.getLogger('archi2likec4')
 
@@ -273,7 +273,7 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
 
     logger.info('Building deployment mapping...')
     deployment_map = build_deployment_map(
-        systems, deployment_nodes, parsed.relationships, sys_domain)
+        systems, deployment_nodes, parsed.relationships, sys_domain, sys_subdomain)
     logger.info('%d app→infrastructure deployment mappings', len(deployment_map))
 
     logger.info('Building dataStore→dataEntity links...')

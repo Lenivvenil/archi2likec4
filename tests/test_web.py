@@ -1,10 +1,10 @@
 """Tests for archi2likec4.web module — Flask routes via create_app + test client."""
 
-import pytest
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
-from archi2likec4.audit_data import AuditSummary, AuditIncident
+import pytest
+
+from archi2likec4.audit_data import AuditIncident, AuditSummary
 from archi2likec4.config import ConvertConfig
 
 
@@ -47,7 +47,7 @@ def _mock_load_data():
     available_domains = ['channels', 'products', 'platform']
 
     # Mock built object for hierarchy page
-    from archi2likec4.models import System, Subsystem
+    from archi2likec4.models import Subsystem, System
     sys1 = System(c4_id='efs', name='EFS', archi_id='s1', metadata={}, domain='channels',
                   subsystems=[Subsystem(c4_id='core', name='EFS.Core', archi_id='sub1', metadata={})])
     sys2 = System(c4_id='crm', name='CRM', archi_id='s2', metadata={}, domain='products')
@@ -165,7 +165,7 @@ class TestRemediations:
     def test_empty_remediations_shows_placeholder(self, app_client):
         """Default ConvertConfig has no remediations, page shows empty state."""
         resp = app_client.get('/remediations')
-        html = resp.data.decode()
+        resp.data.decode()
         assert resp.status_code == 200
 
 
@@ -242,7 +242,7 @@ class TestHierarchy:
 def app_client_with_subdomains(tmp_path):
     """App client where some systems are assigned to a subdomain."""
     from archi2likec4 import web
-    from archi2likec4.models import System, Subdomain
+    from archi2likec4.models import Subdomain, System
 
     sys1 = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
                   domain='channels', subdomain='retail')
@@ -254,7 +254,6 @@ def app_client_with_subdomains(tmp_path):
     summary = _make_summary(total_systems=2, total_subsystems=0, assigned_count=2)
     incidents = []
     config = _make_config()
-    available_domains = ['channels']
 
     mock_built = MagicMock()
     mock_built.domain_systems = {'channels': [sys1, sys2]}

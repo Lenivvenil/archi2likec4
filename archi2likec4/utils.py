@@ -3,11 +3,11 @@
 import re
 
 from .models import (
-    AppComponent,
     _CYRILLIC_MAP,
     _PROP_MAP,
     _RESERVED,
     _STANDARD_KEYS,
+    AppComponent,
 )
 
 

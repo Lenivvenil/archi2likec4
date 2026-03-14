@@ -5,7 +5,8 @@ Or use the pytest fixtures below.
 """
 
 import pytest
-from tests.helpers import MockConfig, MockBuilt
+
+from tests.helpers import MockBuilt, MockConfig
 
 
 @pytest.fixture

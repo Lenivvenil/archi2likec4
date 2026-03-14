@@ -6,6 +6,7 @@ import logging
 from datetime import datetime
 from typing import TYPE_CHECKING
 
+from .i18n import get_audit_label
 from .models import (
     AppFunction,
     DataAccess,
@@ -18,7 +19,6 @@ from .models import (
     Subsystem,
     System,
 )
-from .i18n import get_audit_label
 from .utils import escape_str
 
 if TYPE_CHECKING:

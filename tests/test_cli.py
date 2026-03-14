@@ -1,8 +1,9 @@
 """Tests for CLI entry point (archi2likec4.pipeline:main)."""
 
-import pytest
 from pathlib import Path
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from archi2likec4.pipeline import main
 
@@ -12,8 +13,8 @@ class TestCLIArgs:
 
     def test_default_args(self):
         """Default model_root and output_dir are used when no args given."""
-        with patch('archi2likec4.pipeline._parse') as mock_parse, \
-             patch('archi2likec4.pipeline._build') as mock_build, \
+        with patch('archi2likec4.pipeline._parse'), \
+             patch('archi2likec4.pipeline._build'), \
              patch('archi2likec4.pipeline._validate') as mock_validate, \
              patch('archi2likec4.pipeline._generate'), \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
@@ -31,7 +32,7 @@ class TestCLIArgs:
 
     def test_strict_flag(self):
         """--strict sets config.strict = True."""
-        with patch('archi2likec4.pipeline._parse') as mock_parse, \
+        with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build'), \
              patch('archi2likec4.pipeline._validate') as mock_validate, \
              patch('archi2likec4.pipeline._generate'), \
@@ -49,7 +50,7 @@ class TestCLIArgs:
 
     def test_verbose_flag(self):
         """--verbose sets config.verbose = True."""
-        with patch('archi2likec4.pipeline._parse') as mock_parse, \
+        with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build'), \
              patch('archi2likec4.pipeline._validate') as mock_validate, \
              patch('archi2likec4.pipeline._generate'), \

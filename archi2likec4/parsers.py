@@ -6,8 +6,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 
 from .models import (
-    NS,
     DOMAIN_RENAMES,
+    NS,
     AppComponent,
     AppFunction,
     AppInterface,
@@ -424,6 +424,24 @@ def parse_relationships(model_root: Path) -> list[RawRelationship]:
     return results
 
 
+def _find_functional_areas_dir(diagrams_dir: Path) -> Path | None:
+    """Locate the functional_areas folder inside diagrams_dir by reading folder.xml names."""
+    for child in sorted(diagrams_dir.iterdir()):
+        if not child.is_dir():
+            continue
+        folder_xml = child / 'folder.xml'
+        if not folder_xml.exists():
+            continue
+        try:
+            tree = ET.parse(folder_xml)
+            name = tree.getroot().get('name', '').strip()
+            if name.lower().replace(' ', '_') == 'functional_areas':
+                return child
+        except ET.ParseError:
+            logger.debug('Skipping malformed folder.xml: %s', folder_xml)
+    return None
+
+
 def parse_domain_mapping(
     model_root: Path,
     domain_renames: dict[str, tuple[str, str]] | None = None,
@@ -438,22 +456,7 @@ def parse_domain_mapping(
         return []
 
     # Find the functional_areas folder by reading folder.xml names
-    func_areas_dir = None
-    for child in sorted(diagrams_dir.iterdir()):
-        if not child.is_dir():
-            continue
-        folder_xml = child / 'folder.xml'
-        if not folder_xml.exists():
-            continue
-        try:
-            tree = ET.parse(folder_xml)
-            name = tree.getroot().get('name', '').strip()
-            if name.lower().replace(' ', '_') == 'functional_areas':
-                func_areas_dir = child
-                break
-        except ET.ParseError:
-            logger.debug('Skipping malformed folder.xml: %s', folder_xml)
-
+    func_areas_dir = _find_functional_areas_dir(diagrams_dir)
     if not func_areas_dir:
         logger.warning('functional_areas folder not found in diagrams/')
         return []
@@ -516,22 +519,7 @@ def parse_subdomains(
         return []
 
     # Locate functional_areas folder
-    func_areas_dir = None
-    for child in sorted(diagrams_dir.iterdir()):
-        if not child.is_dir():
-            continue
-        folder_xml = child / 'folder.xml'
-        if not folder_xml.exists():
-            continue
-        try:
-            tree = ET.parse(folder_xml)
-            name = tree.getroot().get('name', '').strip()
-            if name.lower().replace(' ', '_') == 'functional_areas':
-                func_areas_dir = child
-                break
-        except ET.ParseError:
-            logger.debug('Skipping malformed folder.xml: %s', folder_xml)
-
+    func_areas_dir = _find_functional_areas_dir(diagrams_dir)
     if not func_areas_dir:
         return []
 

@@ -4,7 +4,6 @@ Uses temporary directories with minimal XML files to test parser logic
 without depending on the real architectural_repository.
 """
 
-import xml.etree.ElementTree as ET
 from pathlib import Path
 
 import pytest

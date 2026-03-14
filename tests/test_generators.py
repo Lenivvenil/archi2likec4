@@ -1,7 +1,23 @@
 """Tests for archi2likec4.generators — .c4 file content generation."""
 
-import pytest
 
+from archi2likec4.generators import (
+    generate_audit_md,
+    generate_datastore_mapping_c4,
+    generate_deployment_c4,
+    generate_deployment_mapping_c4,
+    generate_deployment_view,
+    generate_domain_c4,
+    generate_domain_functional_view,
+    generate_domain_integration_view,
+    generate_entities,
+    generate_landscape_view,
+    generate_persistence_map,
+    generate_relationships,
+    generate_solution_views,
+    generate_spec,
+    generate_system_detail_c4,
+)
 from archi2likec4.models import (
     AppFunction,
     DataAccess,
@@ -14,24 +30,7 @@ from archi2likec4.models import (
     Subsystem,
     System,
 )
-from archi2likec4.generators import (
-    generate_audit_md,
-    generate_deployment_c4,
-    generate_datastore_mapping_c4,
-    generate_deployment_mapping_c4,
-    generate_deployment_view,
-    generate_domain_c4,
-    generate_domain_functional_view,
-    generate_domain_integration_view,
-    generate_entities,
-    generate_landscape_view,
-    generate_persistence_map,
-    generate_relationships,
-    generate_spec,
-    generate_system_detail_c4,
-    generate_solution_views,
-)
-
+from tests.helpers import MockBuilt, MockConfig
 
 # ── generate_spec ────────────────────────────────────────────────────────
 
@@ -532,8 +531,8 @@ class TestGenerateDeploymentC4:
         assert "pg = infraSoftware 'PostgreSQL'" in content
         # Child should be indented more than parent
         lines = content.split('\n')
-        parent_line = next(l for l in lines if 'srv_1 = infraNode' in l)
-        child_line = next(l for l in lines if 'pg = infraSoftware' in l)
+        parent_line = next(ln for ln in lines if 'srv_1 = infraNode' in ln)
+        child_line = next(ln for ln in lines if 'pg = infraSoftware' in ln)
         assert len(child_line) - len(child_line.lstrip()) > len(parent_line) - len(parent_line.lstrip())
 
 
@@ -571,8 +570,6 @@ class TestGenerateDatastoreMapping:
 
 
 # ── generate_audit_md ───────────────────────────────────────────────────
-
-from tests.helpers import MockConfig, MockBuilt
 
 
 class TestGenerateAuditMd:

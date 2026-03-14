@@ -1,7 +1,22 @@
 """Tests for archi2likec4.builders — system hierarchy, integrations, domains."""
 
-import pytest
 
+from archi2likec4.builders import (
+    apply_domain_prefix,
+    assign_domains,
+    assign_subdomains,
+    attach_functions,
+    attach_interfaces,
+    build_archi_to_c4_map,
+    build_data_access,
+    build_data_entities,
+    build_datastore_entity_links,
+    build_deployment_map,
+    build_deployment_topology,
+    build_integrations,
+    build_systems,
+    build_tech_archi_to_c4_map,
+)
 from archi2likec4.models import (
     AppComponent,
     AppFunction,
@@ -14,27 +29,10 @@ from archi2likec4.models import (
     Integration,
     ParsedSubdomain,
     RawRelationship,
-    Subdomain,
     Subsystem,
     System,
     TechElement,
 )
-from archi2likec4.builders import (
-    apply_domain_prefix,
-    assign_domains,
-    assign_subdomains,
-    attach_functions,
-    attach_interfaces,
-    build_archi_to_c4_map,
-    build_data_access,
-    build_data_entities,
-    build_deployment_map,
-    build_deployment_topology,
-    build_integrations,
-    build_systems,
-    build_tech_archi_to_c4_map,
-)
-
 
 # ── build_systems ────────────────────────────────────────────────────────
 
@@ -222,7 +220,7 @@ class TestAssignDomains:
         domains = []
         sys = System(c4_id='elk', name='ELK', archi_id='sys-1')
         patterns = [{'c4_id': 'platform', 'name': 'Platform', 'patterns': ['ELK', 'Grafana']}]
-        result = assign_domains([sys], domains, extra_domain_patterns=patterns)
+        assign_domains([sys], domains, extra_domain_patterns=patterns)
         # ELK matches 'platform' pattern
         assert sys.domain == 'platform'
 
@@ -231,7 +229,7 @@ class TestAssignDomains:
         d2 = DomainInfo(c4_id='d2', name='D2', archi_ids={'sys-1', 'sub-1'})
         sub = Subsystem(c4_id='sub', name='EFS.Core', archi_id='sub-1')
         sys = System(c4_id='efs', name='EFS', archi_id='sys-1', subsystems=[sub])
-        result = assign_domains([sys], [d1, d2])
+        assign_domains([sys], [d1, d2])
         assert sys.domain == 'd2'  # 2 hits vs 1
 
 
@@ -513,7 +511,7 @@ class TestAssignDomainsFallback:
         """System not matching any promote prefix stays unassigned."""
         domains = [DomainInfo(c4_id='channels', name='Channels', archi_ids=set())]
         sys = System(c4_id='crm', name='CRM', archi_id='s-1')
-        result = assign_domains([sys], domains, promote_children={'EFS': 'channels'})
+        assign_domains([sys], domains, promote_children={'EFS': 'channels'})
         assert sys.domain != 'channels'
 
     def test_view_membership_overrides_fallback(self):
@@ -523,7 +521,7 @@ class TestAssignDomainsFallback:
             DomainInfo(c4_id='channels', name='Channels', archi_ids=set()),
         ]
         sys = System(c4_id='efs_svc', name='EFS.Svc', archi_id='s-1')
-        result = assign_domains([sys], domains, promote_children={'EFS': 'channels'})
+        assign_domains([sys], domains, promote_children={'EFS': 'channels'})
         # View membership (products) takes priority over fallback (channels)
         assert sys.domain == 'products'
 
@@ -849,6 +847,76 @@ class TestDeploymentMap:
         assert len(result) == 1
         assert result[0] == ('channels.efs', 'srv.pg')
 
+    def test_system_with_subdomain_includes_subdomain_in_path(self):
+        """System assigned to subdomain gets domain.subdomain.system path."""
+        systems = [
+            System(c4_id='efs', name='EFS', archi_id='ac-1'),
+        ]
+        nodes = [
+            DeploymentNode(c4_id='srv', name='Server', archi_id='n-1', tech_type='Node'),
+        ]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='RealizationRelationship', name='',
+                source_type='ApplicationComponent', source_id='ac-1',
+                target_type='Node', target_id='n-1',
+            ),
+        ]
+        result = build_deployment_map(
+            systems, nodes, rels,
+            sys_domain={'efs': 'channels'},
+            sys_subdomain={'efs': 'retail'},
+        )
+        assert len(result) == 1
+        assert result[0] == ('channels.retail.efs', 'srv')
+
+    def test_system_without_subdomain_unaffected_when_subdomain_dict_provided(self):
+        """System without subdomain keeps domain.system path even when sys_subdomain passed."""
+        systems = [
+            System(c4_id='efs', name='EFS', archi_id='ac-1'),
+        ]
+        nodes = [
+            DeploymentNode(c4_id='srv', name='Server', archi_id='n-1', tech_type='Node'),
+        ]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='RealizationRelationship', name='',
+                source_type='ApplicationComponent', source_id='ac-1',
+                target_type='Node', target_id='n-1',
+            ),
+        ]
+        result = build_deployment_map(
+            systems, nodes, rels,
+            sys_domain={'efs': 'channels'},
+            sys_subdomain={},
+        )
+        assert len(result) == 1
+        assert result[0] == ('channels.efs', 'srv')
+
+    def test_subsystem_inherits_subdomain_from_parent_path(self):
+        """Subsystem gets domain.subdomain.system.subsystem path."""
+        sub = Subsystem(c4_id='core', name='Core', archi_id='sub-1')
+        systems = [
+            System(c4_id='efs', name='EFS', archi_id='ac-1', subsystems=[sub]),
+        ]
+        nodes = [
+            DeploymentNode(c4_id='srv', name='Server', archi_id='n-1', tech_type='Node'),
+        ]
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='RealizationRelationship', name='',
+                source_type='ApplicationComponent', source_id='sub-1',
+                target_type='Node', target_id='n-1',
+            ),
+        ]
+        result = build_deployment_map(
+            systems, nodes, rels,
+            sys_domain={'efs': 'channels'},
+            sys_subdomain={'efs': 'retail'},
+        )
+        assert len(result) == 1
+        assert result[0] == ('channels.retail.efs.core', 'srv')
+
 
 class TestAssignDomainsOverrides:
     """Tests for domain_overrides (Pass 0) in assign_domains."""
@@ -869,7 +937,7 @@ class TestAssignDomainsOverrides:
             DomainInfo(c4_id='products', name='Products', archi_ids=set()),
         ]
         sys = System(c4_id='crm', name='CRM', archi_id='s-1', metadata={})
-        result = assign_domains(
+        assign_domains(
             [sys], domains, promote_children={}, extra_domain_patterns=[],
             domain_overrides={'CRM': 'products'},
         )
@@ -888,7 +956,7 @@ class TestAssignDomainsOverrides:
     def test_no_overrides_is_noop(self):
         domains = [DomainInfo(c4_id='channels', name='Channels', archi_ids={'s-1'})]
         sys = System(c4_id='crm', name='CRM', archi_id='s-1', metadata={})
-        result = assign_domains(
+        assign_domains(
             [sys], domains, promote_children={}, extra_domain_patterns=[],
             domain_overrides=None,
         )
@@ -1047,8 +1115,6 @@ class TestDataStoreDetection:
 
 # ── build_datastore_entity_links ─────────────────────────────────────────
 
-from archi2likec4.builders import build_datastore_entity_links
-from archi2likec4.models import DataEntity
 
 class TestBuildDatastoreEntityLinks:
     def test_access_relationship_creates_link(self):
