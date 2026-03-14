@@ -59,13 +59,13 @@
 
 ### Task 5: Update AUDIT and QA — Propagate Subdomain Awareness
 Обновить диагностику (QA incidents) и Web UI для отображения нового уровня иерархии.
-- [ ] Прочитать `archi2likec4/audit_data.py` — найти QA-1 (unassigned systems) и QA-6 (orphan functions); проверить, что пути систем с субдоменами корректно попадают в отчёты
-- [ ] Обновить `archi2likec4/i18n.py` — добавить ключи `subdomain`, `subdomain_plural`, `l2_subdomain_label` в Russian и English каталоги
-- [ ] Прочитать `archi2likec4/web.py` — найти блоки где отображается `domain → system` иерархия в `/hierarchy` и dashboard; добавить уровень субдомена в дерево
-- [ ] Обновить `tests/helpers.py` (`MockBuilt`) — добавить `subdomains=[]` и `subdomain_systems={}` дефолты в `MockBuilt`
-- [ ] Обновить `tests/test_audit_data.py` если есть тесты, зависящие от структуры `BuildResult`
-- [ ] Add/update tests (`tests/test_web.py`): `test_hierarchy_page_shows_subdomain_level`)
-- [ ] Mark completed
+- [x] Прочитать `archi2likec4/audit_data.py` — найти QA-1 (unassigned systems) и QA-6 (orphan functions); проверить, что пути систем с субдоменами корректно попадают в отчёты
+- [x] Обновить `archi2likec4/i18n.py` — добавить ключи `subdomain`, `subdomain_plural`, `l2_subdomain_label` в Russian и English каталоги
+- [x] Прочитать `archi2likec4/web.py` — найти блоки где отображается `domain → system` иерархия в `/hierarchy` и dashboard; добавить уровень субдомена в дерево
+- [x] Обновить `tests/helpers.py` (`MockBuilt`) — добавить `subdomains=[]` и `subdomain_systems={}` дефолты в `MockBuilt`
+- [x] Обновить `tests/test_audit_data.py` если есть тесты, зависящие от структуры `BuildResult`
+- [x] Add/update tests (`tests/test_web.py`): `test_hierarchy_page_shows_subdomain_level`)
+- [x] Mark completed
 
 ---
 

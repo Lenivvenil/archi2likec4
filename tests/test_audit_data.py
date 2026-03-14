@@ -329,6 +329,36 @@ class TestQA9NoInfraMapping:
         qa9 = next((i for i in incidents if i.qa_id == 'QA-9'), None)
         assert qa9 is None
 
+    def test_subdomain_system_mapped_no_qa9(self):
+        """System with subdomain should be matched via domain.subdomain.system path."""
+        s = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
+                   domain='channels', subdomain='retail')
+        built = MockBuilt(systems=[s],
+                          deployment_map=[('channels.retail.efs', 'server_1')])
+        _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
+        qa9 = next((i for i in incidents if i.qa_id == 'QA-9'), None)
+        assert qa9 is None
+
+    def test_subdomain_system_subsystem_mapped_no_qa9(self):
+        """System with subdomain should be matched when path includes subsystem."""
+        s = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
+                   domain='channels', subdomain='retail')
+        built = MockBuilt(systems=[s],
+                          deployment_map=[('channels.retail.efs.core', 'server_1')])
+        _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
+        qa9 = next((i for i in incidents if i.qa_id == 'QA-9'), None)
+        assert qa9 is None
+
+    def test_subdomain_system_unmapped_triggers_qa9(self):
+        """System with subdomain and no deployment mapping should trigger QA-9."""
+        s = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
+                   domain='channels', subdomain='retail')
+        built = MockBuilt(systems=[s], deployment_map=[])
+        _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
+        qa9 = next((i for i in incidents if i.qa_id == 'QA-9'), None)
+        assert qa9 is not None
+        assert qa9.count == 1
+
 
 class TestQA10DeploymentHierarchy:
     """Tests for QA-10: deployment hierarchy issues."""

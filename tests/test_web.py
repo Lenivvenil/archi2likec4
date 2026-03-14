@@ -238,6 +238,77 @@ class TestHierarchy:
         assert 'EFS.Core' in html
 
 
+@pytest.fixture
+def app_client_with_subdomains(tmp_path):
+    """App client where some systems are assigned to a subdomain."""
+    from archi2likec4 import web
+    from archi2likec4.models import System, Subdomain
+
+    sys1 = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
+                  domain='channels', subdomain='retail')
+    sys2 = System(c4_id='crm', name='CRM', archi_id='s2', metadata={},
+                  domain='channels', subdomain='')
+    subdomain = Subdomain(c4_id='retail', name='Retail Banking',
+                          domain_id='channels', system_ids=['s1'])
+
+    summary = _make_summary(total_systems=2, total_subsystems=0, assigned_count=2)
+    incidents = []
+    config = _make_config()
+    available_domains = ['channels']
+
+    mock_built = MagicMock()
+    mock_built.domain_systems = {'channels': [sys1, sys2]}
+    mock_built.systems = [sys1, sys2]
+    mock_built.subdomains = [subdomain]
+    mock_built.subdomain_systems = {'retail': ['s1']}
+    mock_built.deployment_map = []
+    mock_built.integrations = []
+    mock_built.entities = []
+    mock_built.deployment_nodes = []
+    mock_built.relationships = []
+    mock_built.orphan_fns = 0
+
+    model_dir = tmp_path / 'model'
+    model_dir.mkdir()
+
+    with patch('archi2likec4.config.load_config', return_value=config), \
+         patch('archi2likec4.pipeline._parse', return_value=MagicMock()), \
+         patch('archi2likec4.pipeline._build', return_value=mock_built), \
+         patch('archi2likec4.pipeline._validate', return_value=(0, 0, {}, 0, 0)), \
+         patch('archi2likec4.audit_data.compute_audit_incidents',
+               return_value=(summary, incidents)):
+        app = web.create_app(
+            config_path=None,
+            model_root=model_dir,
+            output_dir=tmp_path / 'output',
+        )
+        yield app.test_client()
+
+
+class TestHierarchySubdomain:
+    def test_hierarchy_page_shows_subdomain_level(self, app_client_with_subdomains):
+        resp = app_client_with_subdomains.get('/hierarchy')
+        assert resp.status_code == 200
+        html = resp.data.decode()
+        # Subdomain name and id should appear in the hierarchy
+        assert 'Retail Banking' in html
+        assert 'retail' in html
+        # Both systems should be visible
+        assert 'EFS' in html
+        assert 'CRM' in html
+
+    def test_hierarchy_subdomain_structure(self, app_client_with_subdomains):
+        resp = app_client_with_subdomains.get('/hierarchy')
+        html = resp.data.decode()
+        # Subdomain header CSS class should be present
+        assert 'hier-subdomain' in html
+        # EFS is in subdomain, CRM is not — both visible
+        efs_pos = html.find('EFS')
+        crm_pos = html.find('CRM')
+        assert efs_pos != -1
+        assert crm_pos != -1
+
+
 # ── Open redirect prevention ──────────────────────────────────────────
 
 class TestOpenRedirect:

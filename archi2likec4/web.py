@@ -58,6 +58,7 @@ _UI_STRINGS: dict[str, dict[str, str]] = {
     'parent': {'ru': 'Родитель', 'en': 'Parent'},
     'dark_mode': {'ru': 'Тёмная тема', 'en': 'Dark mode'},
     'light_mode': {'ru': 'Светлая тема', 'en': 'Light mode'},
+    'subdomain': {'ru': 'Субдомен', 'en': 'Subdomain'},
 }
 
 
@@ -151,6 +152,8 @@ pre { white-space: pre-wrap; font-size: 0.85em; color: #555; }
 [data-theme="dark"] .hier-domain h3 { background: #0f3460; color: #e0e0e0; }
 [data-theme="dark"] .hier-sys { border-color: #334155; background: #16213e !important; }
 [data-theme="dark"] .hier-sub { color: #999; }
+[data-theme="dark"] .hier-subdomain { border-color: #334155; }
+[data-theme="dark"] .hier-subdomain-header { background: #1a0f3c; color: #c0a6f7; border-bottom-color: #334155; }
 [data-theme="dark"] .theme-toggle { background: #16213e; border-color: #334155; color: #e0e0e0; }
 """
 
@@ -566,7 +569,12 @@ _HIERARCHY_TEMPLATE = """\
   .hier-domain { margin-bottom: 20px; }
   .hier-domain h3 { background: #e9ecef; padding: 8px 12px; border-radius: 6px 6px 0 0;
                      margin: 0; font-size: 0.95em; }
+  .hier-subdomain { border: 1px solid #dee2e6; border-top: none; }
+  .hier-subdomain-header { background: #f5f0ff; padding: 5px 12px; font-size: 0.85em;
+                            color: #6f42c1; font-weight: 600; border-bottom: 1px solid #e2d9f3; }
   .hier-sys { padding: 6px 12px; border: 1px solid #dee2e6; border-top: none; font-size: 0.9em; }
+  .hier-subdomain .hier-sys { border-left: none; border-right: none; border-top: none;
+                               padding-left: 20px; }
   .hier-sys:last-child { border-radius: 0 0 6px 6px; }
   .hier-sub { margin-left: 24px; color: #555; font-size: 0.85em; }
   .hier-fn-count { color: #999; font-size: 0.8em; }
@@ -583,9 +591,44 @@ _HIERARCHY_TEMPLATE = """\
   <h1>{{ t.system_hierarchy }}</h1>
   <div class="subtitle">{{ total_systems }} {{ t.systems|lower }}, {{ total_subsystems }} {{ t.subsystems|lower }}</div>
 
-  {% for domain_id, systems in domain_groups.items() %}
+  {% for domain_id, sd_map in domain_groups.items() %}
   <div class="hier-domain">
-    <h3>{{ domain_id }} ({{ systems|length }})</h3>
+    <h3>{{ domain_id }} ({{ domain_totals[domain_id] }})</h3>
+    {% for sd_id, systems in sd_map.items() %}
+    {% if sd_id %}
+    <div class="hier-subdomain">
+      <div class="hier-subdomain-header">
+        {{ subdomain_names.get(sd_id, sd_id) }}
+        <code style="color:#999;font-size:0.8em">{{ sd_id }}</code>
+        <span style="color:#999;font-size:0.8em">({{ systems|length }})</span>
+      </div>
+      {% for sys in systems %}
+      <div class="hier-sys" style="background:#fff">
+        <strong>{{ sys.name }}</strong>
+        <code style="color:#999;font-size:0.8em">{{ sys.c4_id }}</code>
+        {% if sys.name.split('.')[0] in promoted_parents %}
+          <span class="hier-tag tag-promoted">promoted</span>
+        {% endif %}
+        {% for tag in sys.tags %}
+          <span class="hier-tag tag-{{ tag }}">{{ tag }}</span>
+        {% endfor %}
+        {% if sys.functions %}
+          <span class="hier-fn-count">{{ sys.functions|length }} fn</span>
+        {% endif %}
+        {% if sys.subsystems %}
+        {% for sub in sys.subsystems|sort(attribute='name') %}
+          <div class="hier-sub">
+            &#x2514; {{ sub.name }} <code style="color:#bbb;font-size:0.8em">{{ sub.c4_id }}</code>
+            {% if sub.functions %}
+              <span class="hier-fn-count">{{ sub.functions|length }} fn</span>
+            {% endif %}
+          </div>
+        {% endfor %}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
     {% for sys in systems %}
     <div class="hier-sys" style="background:#fff">
       <strong>{{ sys.name }}</strong>
@@ -610,6 +653,8 @@ _HIERARCHY_TEMPLATE = """\
       {% endfor %}
       {% endif %}
     </div>
+    {% endfor %}
+    {% endif %}
     {% endfor %}
   </div>
   {% endfor %}
@@ -944,11 +989,28 @@ def create_app(
         config, summary, incidents, available_domains, built = _load_data()
         lang = getattr(config, 'language', 'ru')
 
-        # Group systems by domain
-        domain_groups: dict[str, list] = {}
+        # Build subdomain name lookup: c4_id → display name
+        subdomain_names: dict[str, str] = {}
+        for sd in getattr(built, 'subdomains', []):
+            subdomain_names[sd.c4_id] = sd.name
+
+        # Group systems by domain → subdomain ('' = no subdomain)
+        domain_groups: dict[str, dict[str, list]] = {}
+        domain_totals: dict[str, int] = {}
         for domain_id, sys_list in sorted(built.domain_systems.items()):
             if sys_list:
-                domain_groups[domain_id] = sorted(sys_list, key=lambda s: s.name)
+                sd_map: dict[str, list] = {}
+                for sys in sorted(sys_list, key=lambda s: s.name):
+                    sd_key = getattr(sys, 'subdomain', '') or ''
+                    sd_map.setdefault(sd_key, []).append(sys)
+                # Put '' (no subdomain) first, then sorted subdomains
+                ordered: dict[str, list] = {}
+                if '' in sd_map:
+                    ordered[''] = sd_map['']
+                for k in sorted(k for k in sd_map if k):
+                    ordered[k] = sd_map[k]
+                domain_groups[domain_id] = ordered
+                domain_totals[domain_id] = len(sys_list)
 
         # Promoted info
         promoted_parents = set(config.promote_children.keys())
@@ -958,6 +1020,8 @@ def create_app(
             t=_ui(lang), lang=lang,
             version=__version__,
             domain_groups=domain_groups,
+            domain_totals=domain_totals,
+            subdomain_names=subdomain_names,
             promoted_parents=promoted_parents,
             total_systems=summary.total_systems,
             total_subsystems=summary.total_subsystems,

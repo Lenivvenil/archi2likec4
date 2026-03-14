@@ -426,6 +426,9 @@ _SUMMARY_LABELS: dict[str, dict[str, str]] = {
     'col_element': {'ru': 'Элемент', 'en': 'Element'},
     'col_kind': {'ru': 'Kind', 'en': 'Kind'},
     'col_issue': {'ru': 'Проблема', 'en': 'Issue'},
+    'subdomain': {'ru': 'Субдомен', 'en': 'Subdomain'},
+    'subdomain_plural': {'ru': 'Субдомены', 'en': 'Subdomains'},
+    'l2_subdomain_label': {'ru': 'Субдомен (L2)', 'en': 'Subdomain (L2)'},
 }
 
 
