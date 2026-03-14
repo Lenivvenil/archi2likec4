@@ -5,8 +5,6 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-logger = logging.getLogger('archi2likec4')
-
 from .models import (
     NS,
     DOMAIN_RENAMES,
@@ -21,6 +19,8 @@ from .models import (
     TechElement,
 )
 from .utils import make_id
+
+logger = logging.getLogger('archi2likec4')
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────

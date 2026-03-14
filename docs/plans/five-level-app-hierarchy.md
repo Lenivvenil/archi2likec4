@@ -71,10 +71,10 @@
 
 ### Task 6: Integration, Cleanup, and Documentation
 Связать все компоненты, убрать TODO, обновить документацию и пример конфига.
-- [ ] Запустить полный набор тестов `python -m pytest tests/ -x -q`; устранить все падения
-- [ ] Прочитать `.archi2likec4.example.yaml` — добавить пример секции `subdomain_overrides` (по аналогии с `domain_overrides`) если нужна ручная привязка системы к субдомену
-- [ ] Прочитать `README.md` — обновить раздел про иерархию элементов (добавить строку L2 subdomain)
-- [ ] Прочитать `CHANGELOG.md` — добавить запись в `[Unreleased]` про новый уровень субдомена
-- [ ] Убрать все TODO/FIXME, добавленные в Tasks 1–5
-- [ ] Запустить `python -m ruff check archi2likec4/ --select E,F,W` — исправить предупреждения
-- [ ] Mark completed
+- [x] Запустить полный набор тестов `python -m pytest tests/ -x -q`; устранить все падения
+- [x] Прочитать `.archi2likec4.example.yaml` — добавить пример секции `subdomain_overrides` (по аналогии с `domain_overrides`) если нужна ручная привязка системы к субдомену
+- [x] Прочитать `README.md` — обновить раздел про иерархию элементов (добавить строку L2 subdomain)
+- [x] Прочитать `CHANGELOG.md` — добавить запись в `[Unreleased]` про новый уровень субдомена
+- [x] Убрать все TODO/FIXME, добавленные в Tasks 1–5
+- [x] Запустить `python -m ruff check archi2likec4/ --select E,F,W` — исправить предупреждения
+- [x] Mark completed

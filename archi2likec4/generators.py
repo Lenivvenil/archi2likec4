@@ -22,6 +22,7 @@ from .i18n import get_audit_label
 from .utils import escape_str
 
 if TYPE_CHECKING:
+    from .audit_data import AuditIncident
     from .config import ConvertConfig
 
 
@@ -329,8 +330,8 @@ def generate_system_detail_c4(domain_c4_id: str, sys: System) -> str:
     lines.append('')
     lines.append(f'  view {sys.c4_id}_detail of {full_path} {{')
     lines.append(f"    title '{escape_str(sys.name)}'")
-    lines.append(f'    include *')
-    lines.append(f'  }}')
+    lines.append('    include *')
+    lines.append('  }')
     lines.append('')
     lines.append('}')
     lines.append('')
@@ -392,19 +393,19 @@ def generate_entities(entities: list[DataEntity], data_access: list[DataAccess])
                 if len(desc) > 300:
                     desc = desc[:297] + '...'
                 lines.append(f"  {entity.c4_id} = dataEntity '{title}' {{")
-                lines.append(f'    #entity')
+                lines.append('    #entity')
                 lines.append(f"    description '{desc}'")
-                lines.append(f"    metadata {{")
+                lines.append("    metadata {")
                 lines.append(f"      archi_id '{entity.archi_id}'")
-                lines.append(f"    }}")
-                lines.append(f"  }}")
+                lines.append("    }")
+                lines.append("  }")
             else:
                 lines.append(f"  {entity.c4_id} = dataEntity '{title}' {{")
-                lines.append(f'    #entity')
-                lines.append(f"    metadata {{")
+                lines.append('    #entity')
+                lines.append("    metadata {")
                 lines.append(f"      archi_id '{entity.archi_id}'")
-                lines.append(f"    }}")
-                lines.append(f"  }}")
+                lines.append("    }")
+                lines.append("  }")
             lines.append('')
 
     # Access relationships (migrated from ArchiMate AccessRelationship)
@@ -694,10 +695,10 @@ def generate_solution_views(
                     # Scoped view for a single system
                     lines.append(f"  view {view_id} of {system_paths[0]} {{")
                     lines.append(f"    title '{escape_str(title)}'")
-                    lines.append(f"    include *")
-                    lines.append(f"    exclude * where kind is dataEntity")
-                    lines.append(f"    exclude * where kind is dataStore")
-                    lines.append(f"  }}")
+                    lines.append("    include *")
+                    lines.append("    exclude * where kind is dataEntity")
+                    lines.append("    exclude * where kind is dataStore")
+                    lines.append("  }")
                     # QA-11: warn on element count (estimate)
                     est = sys_element_count.get(system_paths[0], 0)
                     if est > _MAX_FUNCTIONAL:
@@ -705,10 +706,13 @@ def generate_solution_views(
                                         '(threshold: %d)', view_id, est, _MAX_FUNCTIONAL)
                 else:
                     # Multi-system: determine primary system (most elements)
-                    primary_sys = max(system_paths, key=lambda sp: sys_element_count.get(sp, 0)) if system_paths else None
+                    primary_sys = (
+                        max(system_paths, key=lambda sp: sys_element_count.get(sp, 0))
+                        if system_paths else None
+                    )
                     lines.append(f"  view {view_id} {{")
                     lines.append(f"    title '{escape_str(title)}'")
-                    lines.append(f"    include")
+                    lines.append("    include")
                     for sp in system_paths:
                         if sp == primary_sys:
                             lines.append(f"      {sp},")
@@ -718,11 +722,14 @@ def generate_solution_views(
                     # Remove trailing comma from last line
                     if lines[-1].endswith(','):
                         lines[-1] = lines[-1][:-1]
-                    lines.append(f"    exclude * where kind is dataEntity")
-                    lines.append(f"    exclude * where kind is dataStore")
-                    lines.append(f"  }}")
+                    lines.append("    exclude * where kind is dataEntity")
+                    lines.append("    exclude * where kind is dataStore")
+                    lines.append("  }")
                     # QA-11: warn on element count
-                    est = len(system_paths) + sys_element_count.get(primary_sys, 0) if primary_sys else len(system_paths)
+                    est = (
+                        len(system_paths) + sys_element_count.get(primary_sys, 0)
+                        if primary_sys else len(system_paths)
+                    )
                     if est > _MAX_FUNCTIONAL:
                         _logger.warning('QA-11: functional view %s has ~%d elements '
                                         '(threshold: %d)', view_id, est, _MAX_FUNCTIONAL)
@@ -806,8 +813,9 @@ def generate_solution_views(
                 lines.append(f"  view {view_id} {{")
                 lines.append(f"    title '{escape_str(title)}'")
                 if not include_entities and resolved_entities:
-                    lines.append(f"    // {len(resolved_entities)} data entities excluded (>{_MAX_INTEGRATION_ENTITIES} cap)")
-                lines.append(f"    include")
+                    cap = _MAX_INTEGRATION_ENTITIES
+                    lines.append(f"    // {len(resolved_entities)} data entities excluded (>{cap} cap)")
+                lines.append("    include")
                 for sp in system_paths:
                     lines.append(f"      {sp},")
                 if include_entities:
@@ -820,8 +828,8 @@ def generate_solution_views(
                 # Remove trailing comma
                 if lines[-1].endswith(','):
                     lines[-1] = lines[-1][:-1]
-                lines.append(f"    exclude * where kind is dataStore")
-                lines.append(f"  }}")
+                lines.append("    exclude * where kind is dataStore")
+                lines.append("  }")
                 # QA-11: warn on element count
                 est = len(system_paths) + len(rel_pairs) + (len(resolved_entities) if include_entities else 0)
                 if est > _MAX_INTEGRATION:
@@ -874,7 +882,7 @@ def generate_solution_views(
 
                     lines.append(f"  view {view_id} {{")
                     lines.append(f"    title '{escape_str(title)}'")
-                    lines.append(f"    include")
+                    lines.append("    include")
                     # App paths: without .* (don't expand appFunction)
                     for ap in app_paths:
                         lines.append(f"      {ap},")
@@ -884,8 +892,8 @@ def generate_solution_views(
                         lines.append(f"      {ip},")
                     if lines[-1].endswith(','):
                         lines[-1] = lines[-1][:-1]
-                    lines.append(f"    exclude * where kind is dataEntity")
-                    lines.append(f"  }}")
+                    lines.append("    exclude * where kind is dataEntity")
+                    lines.append("  }")
                     # QA-11: warn on element count
                     est = len(app_paths) + len(infra_paths)
                     if est > _MAX_DEPLOYMENT:
@@ -1066,7 +1074,6 @@ def generate_audit_md(
 
     # ── Assemble ──────────────────────────────────────────────────────
     suppressed_qa_ids = [inc.qa_id for inc in all_incidents if inc.suppressed]
-    has_suppression = suppressed_total > 0 or suppressed_qa_ids
     suppress_note = ''
     if suppressed_total > 0:
         suppress_note = _L('suppressed_note', count=suppressed_total)

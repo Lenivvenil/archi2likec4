@@ -3,8 +3,6 @@
 import logging
 import re
 
-logger = logging.getLogger('archi2likec4')
-
 from .models import (
     PROMOTE_WARN_THRESHOLD,
     AppComponent,
@@ -24,6 +22,8 @@ from .models import (
     TechElement,
 )
 from .utils import build_metadata, make_id
+
+logger = logging.getLogger('archi2likec4')
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────

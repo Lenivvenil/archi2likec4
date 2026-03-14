@@ -278,7 +278,6 @@ def compute_audit_incidents(
     # ── QA-8: Solution view coverage ─────────────────────────────────
     if sv_total > 0 and sv_unresolved > 0:
         sv_resolved = sv_total - sv_unresolved
-        sv_pct = round(sv_resolved / sv_total * 100)
         incidents.append(AuditIncident(
             qa_id='QA-8',
             severity='High',
@@ -328,7 +327,6 @@ def compute_audit_incidents(
         qa10_affected: list[dict] = []
 
         # Check 1: SystemSoftware as root node ("floating software")
-        root_archi_ids = {dn.archi_id for dn in deployment_nodes}
         for dn in deployment_nodes:
             if dn.kind in ('infraSoftware', 'dataStore'):
                 qa10_affected.append({

@@ -5,6 +5,10 @@ from __future__ import annotations
 import argparse
 import logging
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from flask import Flask
 
 logger = logging.getLogger('archi2likec4.web')
 
@@ -43,9 +47,15 @@ _UI_STRINGS: dict[str, dict[str, str]] = {
     'mark_reviewed': {'ru': 'Проверено', 'en': 'Mark reviewed'},
     'promote': {'ru': 'Промоутить', 'en': 'Promote'},
     'undo': {'ru': 'Отменить', 'en': 'Undo'},
-    'hidden_by_suppress': {'ru': 'элемент(ов) скрыто через audit_suppress.', 'en': 'element(s) hidden by audit_suppress.'},
+    'hidden_by_suppress': {
+        'ru': 'элемент(ов) скрыто через audit_suppress.',
+        'en': 'element(s) hidden by audit_suppress.',
+    },
     'remed_review': {'ru': 'Обзор ремедиаций', 'en': 'Remediations Review'},
-    'remed_subtitle': {'ru': 'Все конфиг-решения для этой конвертации', 'en': 'All config-driven decisions for this conversion'},
+    'remed_subtitle': {
+        'ru': 'Все конфиг-решения для этой конвертации',
+        'en': 'All config-driven decisions for this conversion',
+    },
     'domain_overrides': {'ru': 'Назначения доменов', 'en': 'Domain Overrides'},
     'reviewed_systems': {'ru': 'Проверенные системы', 'en': 'Reviewed Systems'},
     'promoted_children': {'ru': 'Промоутированные', 'en': 'Promoted Children'},
@@ -253,7 +263,8 @@ _DASHBOARD_TEMPLATE = """\
   </div>
   {% endif %}
 
-  <h2>{{ t.incidents }} ({{ active_count }}{% if suppressed_count > 0 %}, {{ suppressed_count }} {{ t.suppressed|lower }}{% endif %})</h2>
+  <h2>{{ t.incidents }} ({{ active_count }}{% if suppressed_count > 0 %},
+      {{ suppressed_count }} {{ t.suppressed|lower }}{% endif %})</h2>
   {% if incidents %}
   <table>
     <thead>
@@ -337,7 +348,8 @@ _DETAIL_TEMPLATE = """\
   </div>
 
   {% if incident.affected %}
-  <h2>{{ t.affected }} ({{ incident.affected|length }}{% if incident.count > incident.affected|length %} of {{ incident.count }}{% endif %})</h2>
+  <h2>{{ t.affected }} ({{ incident.affected|length
+      }}{% if incident.count > incident.affected|length %} of {{ incident.count }}{% endif %})</h2>
   <table>
     <thead>
       <tr>
@@ -546,7 +558,8 @@ _REMEDIATIONS_TEMPLATE = """\
   </div>
   {% endif %}
 
-  {% if not domain_overrides and not reviewed_systems and not promote_children and not suppress_names and not suppress_incidents_list %}
+  {% if not domain_overrides and not reviewed_systems and not promote_children
+      and not suppress_names and not suppress_incidents_list %}
   <p>{{ t.no_remed }}</p>
   {% endif %}
 

@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Five-level application hierarchy**: L1 domain → L2 subdomain → L3 system → L4 subsystem → L5 function
+- **`subdomain` LikeC4 kind**: new element kind with amber colour between domain and system
+- **Auto-detection of subdomains**: from nested `functional_areas/{domain}/{subdomain}/` folder structure in coArchi XML
+- **Subdomain rendering**: systems grouped inside subdomain blocks in `domains/{id}.c4`; graceful fallback (no subdomain) for flat domain folders
+- **`subdomain_overrides` config**: manual assignment of systems to subdomains in `.archi2likec4.yaml`
+- **i18n keys**: `subdomain`, `subdomain_plural`, `l2_subdomain_label` in ru/en catalogs
+- **Web UI hierarchy**: `/hierarchy` page shows subdomain level between domain and system
+
 ## [1.0.0] — 2026-03-09
 
 ### Added

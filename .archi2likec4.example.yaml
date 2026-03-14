@@ -95,6 +95,14 @@ quality_gates:
 #   AD: platform
 #   LegacyApp: products
 
+# ── Subdomain overrides ─────────────────────────────────────────────
+# Manually assign systems to subdomains (overrides folder-based auto-detection).
+# Format: system_name: subdomain_c4_id
+# The subdomain must exist within the system's assigned domain.
+# subdomain_overrides:
+#   PaymentCore: payments
+#   ReportingApp: analytics
+
 # ── Reviewed systems ──────────────────────────────────────────────
 # Systems reviewed externally — strip the to_review tag during build.
 # reviewed_systems:
