@@ -23,6 +23,7 @@ from .parsers import (
 from .builders import (
     apply_domain_prefix,
     assign_domains,
+    assign_subdomains,
     attach_functions,
     attach_interfaces,
     build_archi_to_c4_map,
@@ -93,6 +94,8 @@ class BuildResult(NamedTuple):
     datastore_entity_links: list
     intg_skipped: int
     intg_total_eligible: int
+    subdomains: list  # list[Subdomain]
+    subdomain_systems: dict  # subdomain c4_id → list[system c4_id]
 
 
 # ── Phases ───────────────────────────────────────────────────────────────
@@ -217,11 +220,18 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     # Build sys_id → domain_id map for prefixing paths
     sys_domain: dict[str, str] = {s.c4_id: s.domain for s in systems}
 
-    # Apply domain prefix to integrations and data access paths
-    apply_domain_prefix(integrations, data_access, sys_domain)
+    # Assign systems to subdomains (Pass 4)
+    logger.info('Assigning systems to subdomains...')
+    subdomains, subdomain_systems = assign_subdomains(systems, parsed.parsed_subdomains)
+    logger.info('%d subdomain(s) assigned, %d system(s) with subdomain',
+                len(subdomains), sum(len(v) for v in subdomain_systems.values()))
+    sys_subdomain: dict[str, str] = {s.c4_id: s.subdomain for s in systems if s.subdomain}
+
+    # Apply domain (and subdomain) prefix to integrations and data access paths
+    apply_domain_prefix(integrations, data_access, sys_domain, sys_subdomain)
 
     # Build complete archi_id → c4_path map (for solution views)
-    archi_to_c4 = build_archi_to_c4_map(systems, sys_domain, iface_c4_path)
+    archi_to_c4 = build_archi_to_c4_map(systems, sys_domain, iface_c4_path, sys_subdomain)
     logger.info('%d elements in archi→c4 map', len(archi_to_c4))
 
     # Build promoted parent → full c4 paths map (for solution views fan-out)
@@ -230,7 +240,11 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
         paths = []
         for c4_id in child_c4_ids:
             domain = sys_domain.get(c4_id, 'unassigned')
-            paths.append(f'{domain}.{c4_id}')
+            sd = sys_subdomain.get(c4_id, '')
+            if sd:
+                paths.append(f'{domain}.{sd}.{c4_id}')
+            else:
+                paths.append(f'{domain}.{c4_id}')
         promoted_archi_to_c4[parent_aid] = paths
 
     # Deployment topology from Technology layer
@@ -288,6 +302,8 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
         datastore_entity_links=datastore_entity_links,
         intg_skipped=intg_skipped,
         intg_total_eligible=intg_total_eligible,
+        subdomains=subdomains,
+        subdomain_systems=subdomain_systems,
     )
 
 

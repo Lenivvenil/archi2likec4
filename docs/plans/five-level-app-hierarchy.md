@@ -24,13 +24,13 @@
 
 ### Task 2: Update Builder — Assign Systems to Subdomains
 В `archi2likec4/builders.py` после определения домена системы определять субдомен и строить путь `domain.subdomain.system`.
-- [ ] Прочитать `archi2likec4/builders.py`, блок domain-assignment (функции ~строки 641–733), понять текущий `c4_path = f"{domain_id}.{system_id}"`
-- [ ] Добавить `subdomain_systems: dict[str, list[str]]` и `subdomains: list[Subdomain]` в `BuildResult` NamedTuple
-- [ ] В builder: после Pass 1–3 domain-assignment добавить Pass 4 — subdomain assignment: для каждой системы найти субдомен по `parsed_subdomains` (проверка, входит ли `archi_id` системы в `component_ids` субдомена)
-- [ ] Пересчитать `system.c4_path` с учётом субдомена: `domain_id.subdomain_id.system_id` (если субдомен есть) или оставить `domain_id.system_id` (fallback без субдомена)
-- [ ] Пересчитать пути зависимых элементов (`Subsystem.c4_path`, `AppFunction.c4_path`, `Integration`, `DataAccess`) — они строятся от `system.c4_path`, поэтому должны наследовать новый путь автоматически; проверить и при необходимости явно обновить
-- [ ] Add/update tests (`tests/test_builders.py`): `test_system_assigned_to_subdomain`, `test_system_without_subdomain_falls_back`, `test_integration_path_includes_subdomain`)
-- [ ] Mark completed
+- [x] Прочитать `archi2likec4/builders.py`, блок domain-assignment (функции ~строки 641–733), понять текущий `c4_path = f"{domain_id}.{system_id}"`
+- [x] Добавить `subdomain_systems: dict[str, list[str]]` и `subdomains: list[Subdomain]` в `BuildResult` NamedTuple
+- [x] В builder: после Pass 1–3 domain-assignment добавить Pass 4 — subdomain assignment: для каждой системы найти субдомен по `parsed_subdomains` (проверка, входит ли `archi_id` системы в `component_ids` субдомена)
+- [x] Пересчитать `system.c4_path` с учётом субдомена: `domain_id.subdomain_id.system_id` (если субдомен есть) или оставить `domain_id.system_id` (fallback без субдомена)
+- [x] Пересчитать пути зависимых элементов (`Subsystem.c4_path`, `AppFunction.c4_path`, `Integration`, `DataAccess`) — они строятся от `system.c4_path`, поэтому должны наследовать новый путь автоматически; проверить и при необходимости явно обновить
+- [x] Add/update tests (`tests/test_builders.py`): `test_system_assigned_to_subdomain`, `test_system_without_subdomain_falls_back`, `test_integration_path_includes_subdomain`)
+- [x] Mark completed
 
 ---
 

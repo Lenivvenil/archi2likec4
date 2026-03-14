@@ -12,7 +12,9 @@ from archi2likec4.models import (
     DeploymentNode,
     DomainInfo,
     Integration,
+    ParsedSubdomain,
     RawRelationship,
+    Subdomain,
     Subsystem,
     System,
     TechElement,
@@ -20,6 +22,7 @@ from archi2likec4.models import (
 from archi2likec4.builders import (
     apply_domain_prefix,
     assign_domains,
+    assign_subdomains,
     attach_functions,
     attach_interfaces,
     build_archi_to_c4_map,
@@ -1091,3 +1094,157 @@ class TestBuildDatastoreEntityLinks:
         result = build_datastore_entity_links([node], entities, rels)
         assert len(result) == 1
         assert result[0] == ('redis', 'de_cache')
+
+
+# ── assign_subdomains ────────────────────────────────────────────────────
+
+class TestAssignSubdomains:
+    def test_system_assigned_to_subdomain(self):
+        """System whose archi_id is in ParsedSubdomain.component_ids gets assigned."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='channels')
+        psd = ParsedSubdomain(
+            archi_id='banking',
+            name='Banking',
+            domain_folder='channels',
+            component_ids=['sys-1'],
+        )
+        subdomains, subdomain_systems = assign_subdomains([sys], [psd])
+        assert sys.subdomain == 'banking'
+        assert len(subdomains) == 1
+        assert subdomains[0].c4_id == 'banking'
+        assert subdomains[0].name == 'Banking'
+        assert subdomains[0].domain_id == 'channels'
+        assert 'efs' in subdomains[0].system_ids
+        assert 'banking' in subdomain_systems
+        assert 'efs' in subdomain_systems['banking']
+
+    def test_system_without_subdomain_falls_back(self):
+        """System not in any ParsedSubdomain keeps empty subdomain."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-2', domain='customer_service')
+        psd = ParsedSubdomain(
+            archi_id='banking',
+            name='Banking',
+            domain_folder='channels',
+            component_ids=['sys-1'],  # sys-2 not included
+        )
+        subdomains, subdomain_systems = assign_subdomains([sys], [psd])
+        assert sys.subdomain == ''
+        assert len(subdomains) == 0
+
+    def test_extra_archi_ids_matched(self):
+        """System with matching extra_archi_id also gets assigned to subdomain."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     extra_archi_ids=['sys-dup'], domain='channels')
+        psd = ParsedSubdomain(
+            archi_id='payments',
+            name='Payments',
+            domain_folder='channels',
+            component_ids=['sys-dup'],
+        )
+        subdomains, subdomain_systems = assign_subdomains([sys], [psd])
+        assert sys.subdomain == 'payments'
+
+    def test_cross_domain_subdomains_not_merged(self):
+        """Same subdomain name in different domains creates separate Subdomain objects."""
+        sys1 = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='channels')
+        sys2 = System(c4_id='crm', name='CRM', archi_id='sys-2', domain='products')
+        psd1 = ParsedSubdomain(
+            archi_id='core',
+            name='Core',
+            domain_folder='channels',
+            component_ids=['sys-1'],
+        )
+        psd2 = ParsedSubdomain(
+            archi_id='core',
+            name='Core',
+            domain_folder='products',
+            component_ids=['sys-2'],
+        )
+        subdomains, _ = assign_subdomains([sys1, sys2], [psd1, psd2])
+        assert len(subdomains) == 2
+        assert {(s.domain_id, s.c4_id) for s in subdomains} == {
+            ('channels', 'core'), ('products', 'core')
+        }
+
+    def test_empty_parsed_subdomains(self):
+        """No parsed subdomains → no assignments."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='channels')
+        subdomains, subdomain_systems = assign_subdomains([sys], [])
+        assert sys.subdomain == ''
+        assert subdomains == []
+        assert subdomain_systems == {}
+
+    def test_multiple_systems_in_same_subdomain(self):
+        """Multiple systems can belong to the same subdomain."""
+        sys1 = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='channels')
+        sys2 = System(c4_id='cards', name='Cards', archi_id='sys-2', domain='channels')
+        psd = ParsedSubdomain(
+            archi_id='banking',
+            name='Banking',
+            domain_folder='channels',
+            component_ids=['sys-1', 'sys-2'],
+        )
+        subdomains, subdomain_systems = assign_subdomains([sys1, sys2], [psd])
+        assert len(subdomains) == 1
+        assert sorted(subdomains[0].system_ids) == ['cards', 'efs']
+        assert sorted(subdomain_systems['banking']) == ['cards', 'efs']
+
+
+# ── apply_domain_prefix with subdomain ──────────────────────────────────
+
+class TestApplyDomainPrefixSubdomain:
+    def test_integration_path_includes_subdomain(self):
+        """Integration source/target paths include subdomain when assigned."""
+        intg = Integration(source_path='efs', target_path='crm', name='flow', rel_type='')
+        sys_domain = {'efs': 'channels', 'crm': 'customer_service'}
+        sys_subdomain = {'efs': 'banking'}
+        apply_domain_prefix([intg], [], sys_domain, sys_subdomain)
+        assert intg.source_path == 'channels.banking.efs'
+        assert intg.target_path == 'customer_service.crm'  # no subdomain
+
+    def test_data_access_path_includes_subdomain(self):
+        da = DataAccess(system_path='efs', entity_id='de_account', name='')
+        sys_domain = {'efs': 'channels'}
+        sys_subdomain = {'efs': 'banking'}
+        apply_domain_prefix([], [da], sys_domain, sys_subdomain)
+        assert da.system_path == 'channels.banking.efs'
+
+    def test_no_subdomain_unchanged(self):
+        """Without sys_subdomain parameter, behavior is unchanged."""
+        intg = Integration(source_path='efs', target_path='crm', name='', rel_type='')
+        sys_domain = {'efs': 'channels', 'crm': 'products'}
+        apply_domain_prefix([intg], [], sys_domain)
+        assert intg.source_path == 'channels.efs'
+        assert intg.target_path == 'products.crm'
+
+
+# ── build_archi_to_c4_map with subdomain ────────────────────────────────
+
+class TestBuildArchiToC4MapSubdomain:
+    def test_system_path_includes_subdomain(self):
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     domain='channels', subdomain='banking')
+        result = build_archi_to_c4_map([sys], {'efs': 'channels'},
+                                       sys_subdomain={'efs': 'banking'})
+        assert result['sys-1'] == 'channels.banking.efs'
+
+    def test_subsystem_path_inherits_subdomain(self):
+        sub = Subsystem(c4_id='core', name='EFS.Core', archi_id='sub-1')
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     subsystems=[sub], domain='channels', subdomain='banking')
+        result = build_archi_to_c4_map([sys], {'efs': 'channels'},
+                                       sys_subdomain={'efs': 'banking'})
+        assert result['sub-1'] == 'channels.banking.efs.core'
+
+    def test_function_path_inherits_subdomain(self):
+        fn = AppFunction(archi_id='fn-1', name='DoStuff', c4_id='do_stuff')
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     functions=[fn], domain='channels', subdomain='banking')
+        result = build_archi_to_c4_map([sys], {'efs': 'channels'},
+                                       sys_subdomain={'efs': 'banking'})
+        assert result['fn-1'] == 'channels.banking.efs.do_stuff'
+
+    def test_no_subdomain_unchanged(self):
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='channels')
+        result = build_archi_to_c4_map([sys], {'efs': 'channels'})
+        assert result['sys-1'] == 'channels.efs'

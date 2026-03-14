@@ -135,6 +135,7 @@ class System:
     functions: list[AppFunction] = field(default_factory=list)  # functions w/o subsystem
     api_interfaces: list[str] = field(default_factory=list)
     domain: str = ''
+    subdomain: str = ''  # subdomain c4_id if assigned, else ''
     extra_archi_ids: list[str] = field(default_factory=list)  # archi_ids from duplicates
 
 

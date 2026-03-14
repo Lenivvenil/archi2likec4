@@ -20,7 +20,7 @@ class MockBuilt:
                  entities=None, deployment_map=None, orphan_fns=0,
                  relationships=None, deployment_nodes=None,
                  datastore_entity_links=None, intg_skipped=0,
-                 intg_total_eligible=0):
+                 intg_total_eligible=0, subdomains=None, subdomain_systems=None):
         self.systems = systems or []
         self.domain_systems = domain_systems or {}
         self.integrations = integrations or []
@@ -32,3 +32,5 @@ class MockBuilt:
         self.datastore_entity_links = datastore_entity_links or []
         self.intg_skipped = intg_skipped
         self.intg_total_eligible = intg_total_eligible
+        self.subdomains = subdomains or []
+        self.subdomain_systems = subdomain_systems or {}

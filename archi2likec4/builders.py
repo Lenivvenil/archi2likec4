@@ -16,7 +16,9 @@ from .models import (
     DeploymentNode,
     DomainInfo,
     Integration,
+    ParsedSubdomain,
     RawRelationship,
+    Subdomain,
     Subsystem,
     System,
     TechElement,
@@ -733,40 +735,108 @@ def assign_domains(
     return result
 
 
+def assign_subdomains(
+    systems: list[System],
+    parsed_subdomains: list[ParsedSubdomain],
+) -> tuple[list[Subdomain], dict[str, list[str]]]:
+    """Assign each system to a subdomain (Pass 4 of hierarchy assignment).
+
+    Checks if any archi_id of a system appears in a ParsedSubdomain's
+    component_ids list. Sets system.subdomain to the matched subdomain c4_id.
+
+    Returns (subdomains, subdomain_systems) where subdomain_systems maps
+    subdomain c4_id → list of system c4_ids.
+    """
+    # Build archi_id → ParsedSubdomain index
+    archi_to_psd: dict[str, ParsedSubdomain] = {}
+    for psd in parsed_subdomains:
+        for cid in psd.component_ids:
+            archi_to_psd[cid] = psd
+
+    subdomain_systems: dict[str, list[str]] = {}
+    subdomains_by_key: dict[tuple[str, str], Subdomain] = {}
+
+    for sys in systems:
+        # Collect all archi_ids for this system
+        all_ids: list[str] = []
+        if sys.archi_id:
+            all_ids.append(sys.archi_id)
+        all_ids.extend(sys.extra_archi_ids)
+
+        # Find matching subdomain (first archi_id match wins)
+        matched_psd: ParsedSubdomain | None = None
+        for aid in all_ids:
+            matched_psd = archi_to_psd.get(aid)
+            if matched_psd:
+                break
+
+        if matched_psd is None:
+            continue
+
+        # Key by (domain_folder, archi_id) to avoid cross-domain collisions
+        sd_key = (matched_psd.domain_folder, matched_psd.archi_id)
+        if sd_key not in subdomains_by_key:
+            subdomains_by_key[sd_key] = Subdomain(
+                c4_id=matched_psd.archi_id,
+                name=matched_psd.name,
+                domain_id=matched_psd.domain_folder,
+                system_ids=[],
+            )
+
+        # Assign system to subdomain
+        sys.subdomain = matched_psd.archi_id
+        subdomains_by_key[sd_key].system_ids.append(sys.c4_id)
+        subdomain_systems.setdefault(matched_psd.archi_id, []).append(sys.c4_id)
+
+    subdomains = sorted(subdomains_by_key.values(), key=lambda s: (s.domain_id, s.c4_id))
+    return subdomains, subdomain_systems
+
+
 def apply_domain_prefix(
     integrations: list[Integration],
     data_access: list[DataAccess],
     sys_domain: dict[str, str],
+    sys_subdomain: dict[str, str] | None = None,
 ) -> None:
-    """Add domain prefix to integration and data access paths.
+    """Add domain (and optional subdomain) prefix to integration and data access paths.
 
-    Transforms 'efs' → 'channels.efs' based on domain assignment.
+    Transforms 'efs' → 'channels.efs' (no subdomain) or
+    'efs' → 'channels.banking.efs' (with subdomain) based on assignment.
     """
+    def _prefix(sys_c4_id: str) -> str:
+        domain = sys_domain.get(sys_c4_id, 'unassigned')
+        subdomain = sys_subdomain.get(sys_c4_id, '') if sys_subdomain else ''
+        if subdomain:
+            return f'{domain}.{subdomain}.{sys_c4_id}'
+        return f'{domain}.{sys_c4_id}'
+
     for intg in integrations:
-        src_domain = sys_domain.get(intg.source_path, 'unassigned')
-        tgt_domain = sys_domain.get(intg.target_path, 'unassigned')
-        intg.source_path = f'{src_domain}.{intg.source_path}'
-        intg.target_path = f'{tgt_domain}.{intg.target_path}'
+        intg.source_path = _prefix(intg.source_path)
+        intg.target_path = _prefix(intg.target_path)
 
     for da in data_access:
-        domain = sys_domain.get(da.system_path, 'unassigned')
-        da.system_path = f'{domain}.{da.system_path}'
+        da.system_path = _prefix(da.system_path)
 
 
 def build_archi_to_c4_map(
     systems: list[System],
     sys_domain: dict[str, str],
     iface_c4_path: dict[str, str] | None = None,
+    sys_subdomain: dict[str, str] | None = None,
 ) -> dict[str, str]:
     """Build a complete archi_id → c4_path mapping for all elements.
 
     Includes systems, subsystems, appFunctions, and optionally interfaces.
-    Returns dict: archi_id → full c4 path (e.g. 'products.efs.account_service.fn_create')
+    Returns dict: archi_id → full c4 path (e.g. 'products.banking.efs.account_service.fn_create')
     """
     result: dict[str, str] = {}
     for sys in systems:
         domain = sys_domain.get(sys.c4_id, 'unassigned')
-        sys_path = f'{domain}.{sys.c4_id}'
+        subdomain = sys_subdomain.get(sys.c4_id, '') if sys_subdomain else sys.subdomain
+        if subdomain:
+            sys_path = f'{domain}.{subdomain}.{sys.c4_id}'
+        else:
+            sys_path = f'{domain}.{sys.c4_id}'
         if sys.archi_id:
             result[sys.archi_id] = sys_path
         for eid in sys.extra_archi_ids:
@@ -785,10 +855,14 @@ def build_archi_to_c4_map(
     if iface_c4_path:
         for iface_id, iface_path in iface_c4_path.items():
             if iface_id not in result:
-                # Resolve system c4_id to domain.system path
+                # Resolve system c4_id to domain(.subdomain).system path
                 sys_c4_id = iface_path.split('.')[0]
                 domain = sys_domain.get(sys_c4_id, 'unassigned')
-                result[iface_id] = f'{domain}.{iface_path}'
+                sd = sys_subdomain.get(sys_c4_id, '') if sys_subdomain else ''
+                if sd:
+                    result[iface_id] = f'{domain}.{sd}.{iface_path}'
+                else:
+                    result[iface_id] = f'{domain}.{iface_path}'
     return result
 
 
