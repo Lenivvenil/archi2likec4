@@ -12,13 +12,13 @@
 
 ### Task 1: Define Subdomain Data Model and Detection Strategy
 Добавить в `models.py` датакласс `Subdomain` и определить источник данных для субдоменов в Archi XML.
-- [ ] Прочитать `archi2likec4/models.py` и добавить `@dataclass class Subdomain` с полями: `c4_id: str`, `name: str`, `domain_id: str`, `system_ids: list[str]` (по аналогии с `System`)
-- [ ] В `archi2likec4/models.py` добавить `Subdomain` в `__all__` / экспорт рядом с `System`, `Domain`
-- [ ] Прочитать `archi2likec4/parsers.py` — найти, как сканируются папки `functional_areas/{domain}/`, и определить, какая структура используется для субдоменов: вложенные папки `{domain}/{subdomain}/` или naming-pattern `Parent.Child` в ApplicationComponent на уровне домена
-- [ ] В `archi2likec4/parsers.py` добавить извлечение субдоменов: собирать промежуточный уровень папок (`functional_areas/{domain}/{subdomain}/`) в новый `ParsedSubdomain(archi_id, name, domain_folder, component_ids)`; если вложенных папок нет — документировать fallback (субдомен = домен, уровень пропускается)
-- [ ] Добавить `parsed_subdomains: list[ParsedSubdomain]` в `ParseResult` NamedTuple
-- [ ] Add/update tests for the above changes (`tests/test_parsers.py`: тест `test_subdomain_folder_extraction` с фиктивным XML-деревом с двумя уровнями папок)
-- [ ] Mark completed
+- [x] Прочитать `archi2likec4/models.py` и добавить `@dataclass class Subdomain` с полями: `c4_id: str`, `name: str`, `domain_id: str`, `system_ids: list[str]` (по аналогии с `System`)
+- [x] В `archi2likec4/models.py` добавить `Subdomain` в `__all__` / экспорт рядом с `System`, `Domain`
+- [x] Прочитать `archi2likec4/parsers.py` — найти, как сканируются папки `functional_areas/{domain}/`, и определить, какая структура используется для субдоменов: вложенные папки `{domain}/{subdomain}/` или naming-pattern `Parent.Child` в ApplicationComponent на уровне домена
+- [x] В `archi2likec4/parsers.py` добавить извлечение субдоменов: собирать промежуточный уровень папок (`functional_areas/{domain}/{subdomain}/`) в новый `ParsedSubdomain(archi_id, name, domain_folder, component_ids)`; если вложенных папок нет — документировать fallback (субдомен = домен, уровень пропускается)
+- [x] Добавить `parsed_subdomains: list[ParsedSubdomain]` в `ParseResult` NamedTuple
+- [x] Add/update tests for the above changes (`tests/test_parsers.py`: тест `test_subdomain_folder_extraction` с фиктивным XML-деревом с двумя уровнями папок)
+- [x] Mark completed
 
 ---
 

@@ -15,6 +15,7 @@ from .models import (
     AppInterface,
     DataObject,
     DomainInfo,
+    ParsedSubdomain,
     RawRelationship,
     SolutionView,
     TechElement,
@@ -497,6 +498,99 @@ def parse_domain_mapping(
         ))
 
     return domains
+
+
+def parse_subdomains(
+    model_root: Path,
+    domain_renames: dict[str, tuple[str, str]] | None = None,
+) -> list[ParsedSubdomain]:
+    """Parse subdomain folders from diagrams/functional_areas/{domain}/{subdomain}/.
+
+    If a domain folder has direct child directories with folder.xml, each is treated
+    as a subdomain.  ApplicationComponent refs are gathered from diagrams within
+    each subdomain directory (recursively).  Domains without subdomain subdirectories
+    produce no ParsedSubdomain entries (fallback: subdomain level skipped).
+    """
+    diagrams_dir = model_root / 'diagrams'
+    if not diagrams_dir.is_dir():
+        return []
+
+    # Locate functional_areas folder
+    func_areas_dir = None
+    for child in sorted(diagrams_dir.iterdir()):
+        if not child.is_dir():
+            continue
+        folder_xml = child / 'folder.xml'
+        if not folder_xml.exists():
+            continue
+        try:
+            tree = ET.parse(folder_xml)
+            name = tree.getroot().get('name', '').strip()
+            if name.lower().replace(' ', '_') == 'functional_areas':
+                func_areas_dir = child
+                break
+        except ET.ParseError:
+            logger.debug('Skipping malformed folder.xml: %s', folder_xml)
+
+    if not func_areas_dir:
+        return []
+
+    renames = domain_renames if domain_renames is not None else DOMAIN_RENAMES
+    results: list[ParsedSubdomain] = []
+
+    for domain_dir in sorted(func_areas_dir.iterdir()):
+        if not domain_dir.is_dir():
+            continue
+        folder_xml = domain_dir / 'folder.xml'
+        if not folder_xml.exists():
+            continue
+        try:
+            tree = ET.parse(folder_xml)
+            domain_name = tree.getroot().get('name', '').strip()
+        except ET.ParseError:
+            logger.debug('Skipping malformed folder.xml: %s', folder_xml)
+            continue
+        if not domain_name:
+            continue
+
+        domain_c4_id = make_id(domain_name)
+        if domain_c4_id in renames:
+            domain_c4_id, _ = renames[domain_c4_id]
+
+        # Look for subdomain folders (direct children with folder.xml)
+        for subdomain_dir in sorted(domain_dir.iterdir()):
+            if not subdomain_dir.is_dir():
+                continue
+            sub_folder_xml = subdomain_dir / 'folder.xml'
+            if not sub_folder_xml.exists():
+                continue
+            try:
+                sub_tree = ET.parse(sub_folder_xml)
+                subdomain_name = sub_tree.getroot().get('name', '').strip()
+            except ET.ParseError:
+                logger.debug('Skipping malformed folder.xml: %s', sub_folder_xml)
+                continue
+            if not subdomain_name:
+                continue
+
+            component_ids: set[str] = set()
+            for view_xml in sorted(subdomain_dir.rglob('ArchimateDiagramModel_*.xml')):
+                try:
+                    view_tree = ET.parse(view_xml)
+                except ET.ParseError:
+                    logger.debug('Skipping malformed diagram XML: %s', view_xml)
+                    continue
+                _extract_app_component_refs(view_tree.getroot(), component_ids)
+
+            subdomain_c4_id = make_id(subdomain_name)
+            results.append(ParsedSubdomain(
+                archi_id=subdomain_c4_id,
+                name=subdomain_name,
+                domain_folder=domain_c4_id,
+                component_ids=sorted(component_ids),
+            ))
+
+    return results
 
 
 def parse_location_elements(model_root: Path) -> list[TechElement]:

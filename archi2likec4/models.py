@@ -139,6 +139,24 @@ class System:
 
 
 @dataclass
+class ParsedSubdomain:
+    """Intermediate parse-time structure: a subdomain folder under a domain."""
+    archi_id: str        # generated ID (make_id of folder name)
+    name: str            # folder name (raw subdomain name)
+    domain_folder: str   # domain c4_id this subdomain belongs to
+    component_ids: list[str] = field(default_factory=list)  # AppComponent archi_ids in views
+
+
+@dataclass
+class Subdomain:
+    """A business subdomain (L2) in the output model."""
+    c4_id: str
+    name: str
+    domain_id: str
+    system_ids: list[str] = field(default_factory=list)
+
+
+@dataclass
 class DomainInfo:
     """A business domain extracted from Archi view hierarchy."""
     c4_id: str

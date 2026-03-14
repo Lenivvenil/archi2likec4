@@ -17,6 +17,7 @@ from .parsers import (
     parse_location_elements,
     parse_relationships,
     parse_solution_views,
+    parse_subdomains,
     parse_technology_elements,
 )
 from .builders import (
@@ -68,6 +69,7 @@ class ParseResult(NamedTuple):
     domains_info: list
     solution_views: list
     tech_elements: list
+    parsed_subdomains: list
 
 
 class BuildResult(NamedTuple):
@@ -139,6 +141,10 @@ def _parse(model_root: Path, config: ConvertConfig) -> ParseResult:
     logger.info('Found %d Location elements', len(location_elements))
     tech_elements = tech_elements + location_elements
 
+    logger.info('Parsing subdomains...')
+    parsed_subdomains = parse_subdomains(model_root, config.domain_renames)
+    logger.info('Found %d subdomain folder(s)', len(parsed_subdomains))
+
     return ParseResult(
         components=components,
         functions=functions,
@@ -148,6 +154,7 @@ def _parse(model_root: Path, config: ConvertConfig) -> ParseResult:
         domains_info=domains_info,
         solution_views=solution_views,
         tech_elements=tech_elements,
+        parsed_subdomains=parsed_subdomains,
     )
 
 

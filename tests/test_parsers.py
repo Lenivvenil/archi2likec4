@@ -22,6 +22,7 @@ from archi2likec4.parsers import (
     parse_location_elements,
     parse_relationships,
     parse_solution_views,
+    parse_subdomains,
     parse_technology_elements,
 )
 
@@ -672,3 +673,116 @@ class TestParseSolutionViewsFuncInteg:
         assert len(result) == 2
         slugs = {sv.solution for sv in result}
         assert len(slugs) == 2, f'Expected distinct slugs for different names, got {slugs}'
+
+
+# ── parse_subdomains ─────────────────────────────────────────────────────
+
+def _write_diagram_with_components(path: Path, diagram_name: str, component_ids: list[str]):
+    """Write an ArchimateDiagramModel XML with ApplicationComponent refs."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    el_xml = ''
+    for cid in component_ids:
+        el_xml += (
+            f'<child>'
+            f'<archimateElement '
+            f'xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+            f'xsi:type="archimate:ApplicationComponent" href="x.xml#{cid}"/>'
+            f'</child>'
+        )
+    path.write_text(
+        f'<archimate:ArchimateDiagramModel '
+        f'xmlns:archimate="http://www.archimatetool.com/archimate" '
+        f'name="{diagram_name}" id="v-1">{el_xml}'
+        f'</archimate:ArchimateDiagramModel>',
+        encoding='utf-8',
+    )
+
+
+class TestParseSubdomains:
+    def test_subdomain_folder_extraction(self, tmp_path):
+        """Two subdomain folders under a domain each produce a ParsedSubdomain."""
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+
+        domain_dir = fa_dir / 'channels_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+
+        # Subdomain 1: Retail
+        retail_dir = domain_dir / 'retail_sub'
+        _write_folder_xml(retail_dir, 'Retail')
+        _write_diagram_with_components(
+            retail_dir / 'ArchimateDiagramModel_r1.xml',
+            'Retail view',
+            component_ids=['sys-retail-1', 'sys-retail-2'],
+        )
+
+        # Subdomain 2: Corporate
+        corp_dir = domain_dir / 'corp_sub'
+        _write_folder_xml(corp_dir, 'Corporate')
+        _write_diagram_with_components(
+            corp_dir / 'ArchimateDiagramModel_c1.xml',
+            'Corporate view',
+            component_ids=['sys-corp-1'],
+        )
+
+        result = parse_subdomains(tmp_path, domain_renames={})
+
+        assert len(result) == 2
+        names = {sd.name for sd in result}
+        assert names == {'Retail', 'Corporate'}
+
+        retail = next(sd for sd in result if sd.name == 'Retail')
+        assert retail.domain_folder == 'channels'
+        assert retail.archi_id == 'retail'
+        assert set(retail.component_ids) == {'sys-retail-1', 'sys-retail-2'}
+
+        corp = next(sd for sd in result if sd.name == 'Corporate')
+        assert corp.domain_folder == 'channels'
+        assert set(corp.component_ids) == {'sys-corp-1'}
+
+    def test_no_subdomain_folders_returns_empty(self, tmp_path):
+        """Domain without subdomain subdirectories produces no ParsedSubdomain."""
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'channels_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+        # No subdomain subdirs, only a diagram directly in domain
+        _write_diagram_with_components(
+            domain_dir / 'ArchimateDiagramModel_v1.xml',
+            'Channels view',
+            component_ids=['sys-1'],
+        )
+        result = parse_subdomains(tmp_path, domain_renames={})
+        assert result == []
+
+    def test_no_diagrams_dir_returns_empty(self, tmp_path):
+        result = parse_subdomains(tmp_path)
+        assert result == []
+
+    def test_no_functional_areas_returns_empty(self, tmp_path):
+        diagrams = tmp_path / 'diagrams'
+        other = diagrams / 'other'
+        _write_folder_xml(other, 'other_views')
+        result = parse_subdomains(tmp_path)
+        assert result == []
+
+    def test_domain_rename_applied_to_domain_folder(self, tmp_path):
+        """domain_renames are applied to domain_folder in ParsedSubdomain."""
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'old_dir'
+        _write_folder_xml(domain_dir, 'Channels')  # c4_id = 'channels'
+        sub_dir = domain_dir / 'retail_sub'
+        _write_folder_xml(sub_dir, 'Retail')
+        _write_diagram_with_components(
+            sub_dir / 'ArchimateDiagramModel_r1.xml',
+            'Retail view',
+            component_ids=['sys-1'],
+        )
+        result = parse_subdomains(
+            tmp_path, domain_renames={'channels': ('digital_channels', 'Digital Channels')})
+        assert len(result) == 1
+        assert result[0].domain_folder == 'digital_channels'
