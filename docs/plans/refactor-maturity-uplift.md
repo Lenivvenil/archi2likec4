@@ -46,18 +46,18 @@
 
 ### Task 3: Split generators.py into Package
 Разбить `archi2likec4/generators.py` (1208 строк, 21 функция) на логические подмодули по аналогии с Task 2.
-- [ ] Прочитать `archi2likec4/generators.py` полностью; определить группы функций
-- [ ] Создать `archi2likec4/generators/` пакет с `__init__.py` — реэкспорт всего публичного API: `generate_specification`, `generate_domain_files`, `generate_subdomain_content`, `generate_system_detail`, `generate_relationships`, `generate_landscape_view`, `generate_functional_views`, `generate_integration_views`, `generate_solution_views`, `generate_deployment_views`, `generate_audit_markdown`, `generate_data_entities`
-- [ ] Создать `archi2likec4/generators/spec.py` — перенести: `generate_specification`, `_kind_block`, `_rel_block`
-- [ ] Создать `archi2likec4/generators/domains.py` — перенести: `generate_domain_files`, `generate_subdomain_content`, `_domain_header`, `_system_element`
-- [ ] Создать `archi2likec4/generators/systems.py` — перенести: `generate_system_detail`, `_interface_section`, `_function_section`, `_render_system`
-- [ ] Создать `archi2likec4/generators/relationships.py` — перенести: `generate_relationships`
-- [ ] Создать `archi2likec4/generators/views.py` — перенести: `generate_landscape_view`, `generate_functional_views`, `generate_integration_views`, `generate_solution_views`, `generate_deployment_views`
-- [ ] Создать `archi2likec4/generators/audit.py` — перенести: `generate_audit_markdown`, `_incident_block`, `_build_persistence_map`
-- [ ] Создать `archi2likec4/generators/entities.py` — перенести: `generate_data_entities`, `_entity_block`
-- [ ] Удалить оригинальный `archi2likec4/generators.py`
-- [ ] Add/update tests: запустить `tests/test_generators.py` — убедиться что все тесты проходят без изменений; исправить если что-то сломалось
-- [ ] Mark completed
+- [x] Прочитать `archi2likec4/generators.py` полностью; определить группы функций
+- [x] Создать `archi2likec4/generators/` пакет с `__init__.py` — реэкспорт всего публичного API: `generate_specification`, `generate_domain_files`, `generate_subdomain_content`, `generate_system_detail`, `generate_relationships`, `generate_landscape_view`, `generate_functional_views`, `generate_integration_views`, `generate_solution_views`, `generate_deployment_views`, `generate_audit_markdown`, `generate_data_entities`
+- [x] Создать `archi2likec4/generators/spec.py` — перенести: `generate_specification`, `_kind_block`, `_rel_block`
+- [x] Создать `archi2likec4/generators/domains.py` — перенести: `generate_domain_files`, `generate_subdomain_content`, `_domain_header`, `_system_element`
+- [x] Создать `archi2likec4/generators/systems.py` — перенести: `generate_system_detail`, `_interface_section`, `_function_section`, `_render_system`
+- [x] Создать `archi2likec4/generators/relationships.py` — перенести: `generate_relationships`
+- [x] Создать `archi2likec4/generators/views.py` — перенести: `generate_landscape_view`, `generate_functional_views`, `generate_integration_views`, `generate_solution_views`, `generate_deployment_views`
+- [x] Создать `archi2likec4/generators/audit.py` — перенести: `generate_audit_markdown`, `_incident_block`, `_build_persistence_map`
+- [x] Создать `archi2likec4/generators/entities.py` — перенести: `generate_data_entities`, `_entity_block`
+- [x] Удалить оригинальный `archi2likec4/generators.py`
+- [x] Add/update tests: запустить `tests/test_generators.py` — убедиться что все тесты проходят без изменений; исправить если что-то сломалось
+- [x] Mark completed
 
 ---
 
