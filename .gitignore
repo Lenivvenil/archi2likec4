@@ -33,3 +33,6 @@ prototype/
 .vscode/
 *.swp
 *.swo
+
+# ralphex progress logs
+.ralphex/progress/

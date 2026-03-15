@@ -837,6 +837,39 @@ def assign_subdomains(
         subdomains_by_key[sd_key].system_ids.append(sys.c4_id)
         subdomain_systems.setdefault(sd_key, []).append(sys.c4_id)
 
+    # Collision guard: if an unassigned system's c4_id equals a subdomain c4_id
+    # in the same domain, auto-assign it to that subdomain.  Without this a
+    # system named "AIM" and a subdomain folder also named "AIM" would both
+    # generate ``aim = ...`` at the domain level, causing a LikeC4 duplicate-
+    # element-name error.
+    domain_sd_ids: dict[str, set[str]] = {}
+    for psd in parsed_subdomains:
+        domain_sd_ids.setdefault(psd.domain_folder, set()).add(psd.archi_id)
+
+    for sys in systems:
+        if sys.subdomain or not sys.domain:
+            continue
+        if sys.c4_id not in domain_sd_ids.get(sys.domain, set()):
+            continue
+        matched_psd = sd_id_to_psd.get((sys.domain, sys.c4_id))
+        if matched_psd is None:
+            continue
+        sd_key = (matched_psd.domain_folder, matched_psd.archi_id)
+        if sd_key not in subdomains_by_key:
+            subdomains_by_key[sd_key] = Subdomain(
+                c4_id=matched_psd.archi_id,
+                name=matched_psd.name,
+                domain_id=matched_psd.domain_folder,
+                system_ids=[],
+            )
+        sys.subdomain = matched_psd.archi_id
+        subdomains_by_key[sd_key].system_ids.append(sys.c4_id)
+        subdomain_systems.setdefault(sd_key, []).append(sys.c4_id)
+        logger.info(
+            'Collision guard: system %r auto-assigned to subdomain %r (same c4_id)',
+            sys.c4_id, matched_psd.archi_id,
+        )
+
     subdomains = sorted(subdomains_by_key.values(), key=lambda s: (s.domain_id, s.c4_id))
     return subdomains, subdomain_systems
 

@@ -58,6 +58,8 @@ class ConvertConfig:
 
     # Domain overrides: system name → domain c4_id (highest priority in assign_domains)
     domain_overrides: dict[str, str] = field(default_factory=dict)
+    # Subdomain overrides: system name → subdomain c4_id (overrides folder-based auto-detection)
+    subdomain_overrides: dict[str, str] = field(default_factory=dict)
     # Reviewed systems: strip to_review tag during build
     reviewed_systems: list[str] = field(default_factory=list)
 
@@ -110,7 +112,7 @@ _KNOWN_YAML_KEYS: set[str] = {
     'domain_renames', 'extra_domain_patterns',
     'quality_gates',
     'audit_suppress', 'audit_suppress_incidents',
-    'domain_overrides', 'reviewed_systems',
+    'domain_overrides', 'subdomain_overrides', 'reviewed_systems',
     'language', 'strict',
 }
 
@@ -249,6 +251,19 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                     f"'{val}' (must match {_VALID_C4_ID.pattern})")
             overrides[str(k)] = val
         config.domain_overrides = overrides
+    if 'subdomain_overrides' in data:
+        if not isinstance(data['subdomain_overrides'], dict):
+            raise ValueError(
+                f"subdomain_overrides: expected mapping, got {type(data['subdomain_overrides']).__name__}")
+        sd_overrides: dict[str, str] = {}
+        for k, v in data['subdomain_overrides'].items():
+            val = str(v)
+            if not _VALID_C4_ID.match(val):
+                raise ValueError(
+                    f"subdomain_overrides['{k}']: invalid C4 identifier "
+                    f"'{val}' (must match {_VALID_C4_ID.pattern})")
+            sd_overrides[str(k)] = val
+        config.subdomain_overrides = sd_overrides
     if 'reviewed_systems' in data:
         if not isinstance(data['reviewed_systems'], list):
             raise ValueError(

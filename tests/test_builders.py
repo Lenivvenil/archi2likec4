@@ -1441,6 +1441,55 @@ class TestAssignSubdomains:
         assert subdomains == []
         assert subdomain_systems == {}
 
+    def test_collision_guard_system_same_name_as_subdomain(self):
+        """System whose c4_id equals a subdomain c4_id gets auto-assigned to that subdomain."""
+        # Mirrors real-world: system "AIM" and subdomain folder "AIM" → both make_id → 'aim'
+        sys = System(c4_id='aim', name='AIM', archi_id='sys-aim', domain='channels')
+        psd = ParsedSubdomain(
+            archi_id='aim',
+            name='AIM',
+            domain_folder='channels',
+            component_ids=[],  # system NOT in component_ids (no folder membership)
+        )
+        subdomains, subdomain_systems = assign_subdomains([sys], [psd])
+        assert sys.subdomain == 'aim', 'collision guard must assign system to matching subdomain'
+        assert len(subdomains) == 1
+        assert subdomains[0].c4_id == 'aim'
+        assert 'aim' in subdomains[0].system_ids
+        assert ('channels', 'aim') in subdomain_systems
+        assert 'aim' in subdomain_systems[('channels', 'aim')]
+
+    def test_collision_guard_only_same_domain(self):
+        """Collision guard must NOT fire across different domains."""
+        sys = System(c4_id='loan', name='Loan', archi_id='sys-loan', domain='products')
+        psd = ParsedSubdomain(
+            archi_id='loan',
+            name='Loan',
+            domain_folder='channels',  # different domain!
+            component_ids=[],
+        )
+        subdomains, subdomain_systems = assign_subdomains([sys], [psd])
+        assert sys.subdomain == '', 'cross-domain collision guard must not fire'
+        assert subdomains == []
+
+    def test_collision_guard_skipped_when_already_assigned(self):
+        """Collision guard must not re-assign a system that already has a subdomain."""
+        sys = System(c4_id='aim', name='AIM', archi_id='sys-aim', domain='channels')
+        psd_banking = ParsedSubdomain(
+            archi_id='banking',
+            name='Banking',
+            domain_folder='channels',
+            component_ids=['sys-aim'],  # folder membership → assigned via normal path
+        )
+        psd_aim = ParsedSubdomain(
+            archi_id='aim',
+            name='AIM',
+            domain_folder='channels',
+            component_ids=[],
+        )
+        subdomains, _ = assign_subdomains([sys], [psd_banking, psd_aim])
+        assert sys.subdomain == 'banking', 'normal assignment must not be overwritten by collision guard'
+
 
 # ── apply_domain_prefix with subdomain ──────────────────────────────────
 

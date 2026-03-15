@@ -95,7 +95,7 @@ class BuildResult(NamedTuple):
     intg_skipped: int
     intg_total_eligible: int
     subdomains: list  # list[Subdomain]
-    subdomain_systems: dict  # subdomain c4_id → list[system c4_id]
+    subdomain_systems: dict  # (domain_folder, subdomain_c4_id) → list[system c4_id]
 
 
 # ── Phases ───────────────────────────────────────────────────────────────
@@ -222,7 +222,29 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
 
     # Assign systems to subdomains (Pass 4)
     logger.info('Assigning systems to subdomains...')
-    subdomains, subdomain_systems = assign_subdomains(systems, parsed.parsed_subdomains)
+    # Validate subdomain_overrides: warn about unknown system names or subdomain ids
+    if config.subdomain_overrides:
+        sys_by_name = {s.name: s for s in systems}
+        sd_ids_by_domain: dict[str, set[str]] = {}
+        for psd in parsed.parsed_subdomains:
+            sd_ids_by_domain.setdefault(psd.domain_folder, set()).add(psd.archi_id)
+        for sys_name, sd_c4_id in config.subdomain_overrides.items():
+            if sys_name not in sys_by_name:
+                logger.warning('subdomain_overrides: system %r not found, skipping', sys_name)
+            else:
+                sys_domain_val = sys_by_name[sys_name].domain or ''
+                valid_sd_ids = sd_ids_by_domain.get(sys_domain_val, set())
+                if sd_c4_id not in valid_sd_ids:
+                    logger.warning(
+                        'subdomain_overrides: subdomain %r not found in domain %r'
+                        ' for system %r, skipping',
+                        sd_c4_id, sys_domain_val, sys_name,
+                    )
+
+    subdomains, subdomain_systems = assign_subdomains(
+        systems, parsed.parsed_subdomains,
+        manual_overrides=config.subdomain_overrides or None,
+    )
     logger.info('%d subdomain(s) assigned, %d system(s) with subdomain',
                 len(subdomains), sum(len(v) for v in subdomain_systems.values()))
     sys_subdomain: dict[str, str] = {s.c4_id: s.subdomain for s in systems if s.subdomain}
@@ -313,6 +335,12 @@ def _validate(built: BuildResult, config: ConvertConfig) -> tuple[int, int, dict
     errors = 0
 
     # Generate solution views (needed for both validation and output)
+    sys_subdomain_built: dict[str, str] = {
+        s.c4_id: s.subdomain
+        for d_sys_list in built.domain_systems.values()
+        for s in d_sys_list
+        if s.subdomain
+    }
     solution_view_files, sv_unresolved, sv_total = generate_solution_views(
         built.solution_views, built.archi_to_c4, built.sys_domain,
         built.relationships,
@@ -320,6 +348,7 @@ def _validate(built: BuildResult, config: ConvertConfig) -> tuple[int, int, dict
         tech_archi_to_c4=built.tech_archi_to_c4,
         entity_archi_ids={e.archi_id for e in built.entities},
         deployment_map=built.deployment_map,
+        sys_subdomain=sys_subdomain_built or None,
     )
 
     # Gate 1: Solution view unresolved ratio

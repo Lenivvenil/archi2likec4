@@ -791,3 +791,190 @@ class TestSolutionViewDeployment:
         assert 'server_1' in content
         assert unresolved == 0  # resolved via tech_archi_to_c4
         assert total == 2
+
+
+# ── generate_solution_views: subdomain-aware paths ───────────────────────
+
+class TestSolutionViewsSubdomainPaths:
+    def test_functional_subdomain_single_system_scoped_view(self):
+        """Functional view for a subdomain path should scope to the full 3-part path."""
+        sv = SolutionView(
+            name='functional_architecture.AutoRepay',
+            view_type='functional',
+            solution='auto_repay',
+            element_archi_ids=['sys-1'],
+        )
+        # channels.retail.efs — subdomain path
+        archi_to_c4 = {'sys-1': 'channels.retail.efs'}
+        sys_domain = {'efs': 'channels'}
+        sys_subdomain = {'efs': 'retail'}
+        files, _, _ = generate_solution_views(
+            [sv], archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        content = files['auto_repay']
+        # Must scope to the system, not just the subdomain
+        assert 'view functional_auto_repay of channels.retail.efs' in content
+        assert 'view functional_auto_repay of channels.retail {' not in content
+
+    def test_integration_subdomain_same_subdomain_no_self_edge(self):
+        """Two systems in the same subdomain must not collapse to a self-edge."""
+        sv = SolutionView(
+            name='integration_architecture.Retail',
+            view_type='integration',
+            solution='retail',
+            element_archi_ids=['sys-1', 'sys-2'],
+            relationship_archi_ids=['rel-1'],
+        )
+        archi_to_c4 = {
+            'sys-1': 'channels.retail.efs',
+            'sys-2': 'channels.retail.cards',
+        }
+        rels = [
+            RawRelationship(
+                rel_id='rel-1', rel_type='FlowRelationship', name='pay',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='ApplicationComponent', target_id='sys-2',
+            ),
+        ]
+        sys_domain = {'efs': 'channels', 'cards': 'channels'}
+        sys_subdomain = {'efs': 'retail', 'cards': 'retail'}
+        files, _, _ = generate_solution_views(
+            [sv], archi_to_c4, sys_domain, rels,
+            sys_subdomain=sys_subdomain)
+        content = files['retail']
+        # The two systems are distinct — relationship must appear
+        assert 'channels.retail.efs -> channels.retail.cards' in content
+
+    def test_integration_cross_domain_relationship(self):
+        """Integration view: cross-domain subdomain paths produce correct endpoints."""
+        sv = SolutionView(
+            name='integration_architecture.CrossDomain',
+            view_type='integration',
+            solution='cross',
+            element_archi_ids=['sys-1', 'sys-2'],
+            relationship_archi_ids=['rel-1'],
+        )
+        archi_to_c4 = {
+            'sys-1': 'channels.retail.efs',
+            'sys-2': 'products.abs',
+        }
+        rels = [
+            RawRelationship(
+                rel_id='rel-1', rel_type='FlowRelationship', name='pay',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='ApplicationComponent', target_id='sys-2',
+            ),
+        ]
+        sys_domain = {'efs': 'channels', 'abs': 'products'}
+        sys_subdomain = {'efs': 'retail'}
+        files, _, _ = generate_solution_views(
+            [sv], archi_to_c4, sys_domain, rels,
+            sys_subdomain=sys_subdomain)
+        content = files['cross']
+        assert 'channels.retail.efs -> products.abs' in content
+
+    def test_functional_subsystem_path_collapses_to_system(self):
+        """Functional view: deeper paths (system.subsystem) collapse to system path."""
+        sv = SolutionView(
+            name='functional_architecture.AutoRepay',
+            view_type='functional',
+            solution='auto_repay',
+            element_archi_ids=['fn-1'],
+        )
+        # channels.retail.efs.do_loan — function inside subdomain system
+        archi_to_c4 = {'fn-1': 'channels.retail.efs.do_loan'}
+        sys_domain = {'efs': 'channels'}
+        sys_subdomain = {'efs': 'retail'}
+        files, _, _ = generate_solution_views(
+            [sv], archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        content = files['auto_repay']
+        # Should scope to channels.retail.efs, not channels.retail
+        assert 'of channels.retail.efs' in content
+
+    def test_functional_subsystem_not_confused_with_subdomain_system(self):
+        """Subsystem path must not be treated as a subdomain.system path.
+
+        Scenario: system 'efs' has subsystem 'core' (path channels.efs.core).
+        Separately, system 'core' is in subdomain 'efs' (sys_subdomain['core']='efs').
+        Without sys_ids context the check sys_subdomain.get('core')=='efs' fires and
+        would return channels.efs.core as the system path for the subsystem.
+        With sys_ids, parts[2]='core' is verified to be a known system first —
+        but 'efs' (parts[1]) is NOT a known system in sys_domain for this element,
+        so the subsystem path should collapse to the system path channels.efs.
+        """
+        sv = SolutionView(
+            name='functional_architecture.Channels',
+            view_type='functional',
+            solution='channels',
+            element_archi_ids=['sub-1'],
+        )
+        # channels.efs.core — subsystem 'core' under system 'efs'
+        # sys_domain contains 'efs' (real system) but NOT 'core' as a system in this scenario
+        archi_to_c4 = {'sub-1': 'channels.efs.core'}
+        # 'efs' is a real system (no subdomain); 'core' is a system in subdomain 'efs' elsewhere
+        # but here we only have 'efs' in sys_domain
+        sys_domain = {'efs': 'channels'}
+        # sys_subdomain says 'core' maps to subdomain 'efs'
+        sys_subdomain = {'core': 'efs'}
+        files, _, _ = generate_solution_views(
+            [sv], archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        content = files['channels']
+        # Should scope to channels.efs (the actual system), not channels.efs.core
+        # because 'core' is not in sys_domain (not a known system in this context)
+        assert 'of channels.efs' in content
+        assert 'of channels.efs.core' not in content
+
+    def test_functional_subsystem_not_confused_with_cross_domain_system(self):
+        """Subsystem path must not be treated as a subdomain.system path when the
+        colliding system exists in sys_domain but belongs to a different domain.
+
+        Scenario: system 'efs' is in domain 'channels' (no subdomain).
+        System 'core' is a real system in domain 'products' (sys_domain has it).
+        sys_subdomain says 'core' maps to subdomain 'efs'.
+        Path channels.efs.core is a subsystem of 'efs', NOT system 'core'.
+        The sys_ids guard alone is insufficient: 'core' IS in sys_ids, so the
+        ambiguity is only resolved by also checking sys_domain['core']=='channels'.
+        """
+        sv = SolutionView(
+            name='functional_architecture.Channels',
+            view_type='functional',
+            solution='channels',
+            element_archi_ids=['sub-1'],
+        )
+        archi_to_c4 = {'sub-1': 'channels.efs.core'}
+        # 'core' is a known system in sys_domain, but in domain 'products', not 'channels'
+        sys_domain = {'efs': 'channels', 'core': 'products'}
+        sys_subdomain = {'core': 'efs'}
+        files, _, _ = generate_solution_views(
+            [sv], archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        content = files['channels']
+        # Should collapse to channels.efs (system), not channels.efs.core
+        assert 'of channels.efs' in content
+        assert 'of channels.efs.core' not in content
+
+    def test_functional_system_in_subdomain_with_same_name_as_sibling_system(self):
+        """Path resolves to the subdomain.system form when sys_subdomain is authoritative.
+
+        Scenario: system 'efs' is in domain 'channels' (no subdomain).
+        System 'core' is ALSO in domain 'channels', assigned to subdomain 'efs'.
+        sys_subdomain = {'core': 'efs'} and sys_domain = {'efs': 'channels', 'core': 'channels'}.
+        Path 'channels.efs.core.fn' belongs to system 'core' (in subdomain 'efs'), NOT to
+        a subsystem of 'efs'.  A subsystem would not appear in sys_domain; since 'core' IS in
+        sys_domain, sys_subdomain.get('core')=='efs' is authoritative and the 3-part system
+        path channels.efs.core is correct.
+        """
+        sv = SolutionView(
+            name='functional_architecture.Channels',
+            view_type='functional',
+            solution='channels',
+            element_archi_ids=['sub-1'],
+        )
+        # 4-part path: domain.subdomain.system.fn (core is the system in subdomain efs)
+        archi_to_c4 = {'sub-1': 'channels.efs.core.fn'}
+        # Both 'efs' and 'core' are known systems in 'channels'; 'core' is in subdomain 'efs'
+        sys_domain = {'efs': 'channels', 'core': 'channels'}
+        sys_subdomain = {'core': 'efs'}
+        files, _, _ = generate_solution_views(
+            [sv], archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        content = files['channels']
+        # sys_subdomain is authoritative: core is in subdomain efs, so path is channels.efs.core
+        assert 'of channels.efs.core' in content

@@ -507,6 +507,49 @@ views {
 """
 
 
+def _system_path_from_c4(
+    path: str,
+    sys_subdomain: dict[str, str] | None,
+    sys_ids: set[str] | None = None,
+    sys_domain: dict[str, str] | None = None,
+) -> str:
+    """Extract the domain-qualified system path from a full c4 element path.
+
+    Handles both 2-part (domain.system) and 3-part (domain.subdomain.system)
+    paths as well as deeper paths (subsystems, functions).  When sys_subdomain
+    is provided it is used to detect whether the second segment is a subdomain
+    rather than the system itself.
+
+    ``sys_ids`` is the set of all known system c4_ids.  When provided, the
+    3-part path is only returned if parts[2] is a known system, preventing a
+    false match when parts[2] is a subsystem whose archi_id coincidentally
+    equals a system that has parts[1] as its subdomain.
+
+    ``sys_domain`` maps system c4_id → domain name.  When provided, the
+    3-part path is only returned if parts[2] belongs to the same domain as
+    parts[0], preventing a false match when a same-named system exists in a
+    different domain.
+    """
+    parts = path.split('.')
+    if sys_subdomain and len(parts) >= 3:
+        # parts[2] is the system if its mapped subdomain equals parts[1]
+        # (authoritative via sys_subdomain lookup),
+        # AND parts[2] is a known system id (not a subsystem),
+        # AND parts[2] belongs to the same domain as parts[0].
+        # Note: parts[1] may itself also be a system id in the same domain
+        # (subdomain name collision); that does NOT change the interpretation
+        # because sys_subdomain.get(parts[2]) == parts[1] is definitive.
+        if sys_subdomain.get(parts[2]) == parts[1] and (
+            sys_ids is None or parts[2] in sys_ids
+        ) and (
+            sys_domain is None or sys_domain.get(parts[2]) == parts[0]
+        ):
+            return f'{parts[0]}.{parts[1]}.{parts[2]}'
+    if len(parts) >= 2:
+        return f'{parts[0]}.{parts[1]}'
+    return path
+
+
 def generate_solution_views(
     solution_views: list[SolutionView],
     archi_to_c4: dict[str, str],
@@ -516,6 +559,7 @@ def generate_solution_views(
     tech_archi_to_c4: dict[str, str] | None = None,
     entity_archi_ids: set[str] | None = None,
     deployment_map: list[tuple[str, str]] | None = None,
+    sys_subdomain: dict[str, str] | None = None,
 ) -> tuple[dict[str, str], int, int]:
     """Generate solution view .c4 files.
 
@@ -547,6 +591,9 @@ def generate_solution_views(
     if deployment_map:
         for app_path, infra_id in deployment_map:
             _deploy_targets.setdefault(app_path, set()).add(infra_id)
+
+    # Precompute system c4_id set for subdomain path disambiguation
+    _sys_ids: set[str] = set(sys_domain.keys())
 
     # Build relationship lookup: rel_archi_id → (source_archi_id, target_archi_id, rel_type)
     rel_lookup: dict[str, tuple[str, str, str]] = {}
@@ -683,9 +730,8 @@ def generate_solution_views(
                 seen_sys: set[str] = set()
                 sys_element_count: dict[str, int] = {}
                 for p in unique_paths:
-                    parts = p.split('.')
-                    if len(parts) >= 2:
-                        sys_path = f'{parts[0]}.{parts[1]}'
+                    if len(p.split('.')) >= 2:
+                        sys_path = _system_path_from_c4(p, sys_subdomain, _sys_ids, sys_domain)
                         sys_element_count[sys_path] = sys_element_count.get(sys_path, 0) + 1
                         if sys_path not in seen_sys:
                             seen_sys.add(sys_path)
@@ -739,9 +785,8 @@ def generate_solution_views(
                 system_paths = []
                 seen_sys = set()
                 for p in unique_paths:
-                    parts = p.split('.')
-                    if len(parts) >= 2:
-                        sys_path = f'{parts[0]}.{parts[1]}'
+                    if len(p.split('.')) >= 2:
+                        sys_path = _system_path_from_c4(p, sys_subdomain, _sys_ids, sys_domain)
                         if sys_path not in seen_sys:
                             seen_sys.add(sys_path)
                             system_paths.append(sys_path)
@@ -761,22 +806,26 @@ def generate_solution_views(
                     src_sys_set: set[str] = set()
                     if src_aid in archi_to_c4:
                         src_path = archi_to_c4[src_aid]
-                        src_parts = src_path.split('.')
-                        src_sys_set.add(f'{src_parts[0]}.{src_parts[1]}' if len(src_parts) >= 2 else src_path)
+                        src_sys_set.add(
+                            _system_path_from_c4(src_path, sys_subdomain, _sys_ids, sys_domain)
+                            if len(src_path.split('.')) >= 2 else src_path)
                     elif promoted_archi_to_c4 and src_aid in promoted_archi_to_c4:
                         for child_path in promoted_archi_to_c4[src_aid]:
-                            parts = child_path.split('.')
-                            src_sys_set.add(f'{parts[0]}.{parts[1]}' if len(parts) >= 2 else child_path)
+                            src_sys_set.add(
+                                _system_path_from_c4(child_path, sys_subdomain, _sys_ids, sys_domain)
+                                if len(child_path.split('.')) >= 2 else child_path)
 
                     tgt_sys_set: set[str] = set()
                     if tgt_aid in archi_to_c4:
                         tgt_path = archi_to_c4[tgt_aid]
-                        tgt_parts = tgt_path.split('.')
-                        tgt_sys_set.add(f'{tgt_parts[0]}.{tgt_parts[1]}' if len(tgt_parts) >= 2 else tgt_path)
+                        tgt_sys_set.add(
+                            _system_path_from_c4(tgt_path, sys_subdomain, _sys_ids, sys_domain)
+                            if len(tgt_path.split('.')) >= 2 else tgt_path)
                     elif promoted_archi_to_c4 and tgt_aid in promoted_archi_to_c4:
                         for child_path in promoted_archi_to_c4[tgt_aid]:
-                            parts = child_path.split('.')
-                            tgt_sys_set.add(f'{parts[0]}.{parts[1]}' if len(parts) >= 2 else child_path)
+                            tgt_sys_set.add(
+                                _system_path_from_c4(child_path, sys_subdomain, _sys_ids, sys_domain)
+                                if len(child_path.split('.')) >= 2 else child_path)
 
                     if not src_sys_set or not tgt_sys_set:
                         continue

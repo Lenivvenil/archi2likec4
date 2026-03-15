@@ -474,6 +474,34 @@ class TestDomainOverrides:
             _apply_yaml(config, {'domain_overrides': {'CRM': 'bad id'}})
 
 
+class TestSubdomainOverrides:
+    """subdomain_overrides config option."""
+
+    def test_default_empty(self):
+        config = ConvertConfig()
+        assert config.subdomain_overrides == {}
+
+    def test_yaml_override(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'subdomain_overrides': {'PaymentCore': 'payments', 'Reports': 'analytics'}})
+        assert config.subdomain_overrides == {'PaymentCore': 'payments', 'Reports': 'analytics'}
+
+    def test_invalid_type_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='subdomain_overrides.*expected mapping'):
+            _apply_yaml(config, {'subdomain_overrides': 'not-a-dict'})
+
+    def test_invalid_c4_id_value_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='invalid C4 identifier'):
+            _apply_yaml(config, {'subdomain_overrides': {'CRM': 'bad id'}})
+
+    def test_not_flagged_as_unknown_key(self):
+        """subdomain_overrides must be recognized — no warning logged."""
+        from archi2likec4.config import _KNOWN_YAML_KEYS
+        assert 'subdomain_overrides' in _KNOWN_YAML_KEYS
+
+
 class TestReviewedSystems:
     """reviewed_systems config option."""
 
