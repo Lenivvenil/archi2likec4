@@ -37,11 +37,41 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov=archi2likec4 --cov-fail-under=80"
+
+[tool.coverage.run]
+source = ["archi2likec4"]
+omit = ["archi2likec4/scripts/federate_template.py"]
+
+[tool.coverage.report]
+show_missing = true
 
 [tool.mypy]
 python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
+disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = "archi2likec4.web"
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "archi2likec4.parsers"
+disallow_untyped_defs = false
+
+[[tool.mypy.overrides]]
+module = "archi2likec4.builders"
+disallow_untyped_defs = false
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "archi2likec4.config"
+disallow_untyped_defs = false
+ignore_errors = true
+
+[[tool.mypy.overrides]]
+module = "archi2likec4.scripts.federate_template"
 disallow_untyped_defs = false
 
 [tool.ruff]
@@ -49,7 +79,21 @@ target-version = "py310"
 line-length = 120
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]
+select = ["E", "F", "W", "I", "B", "UP", "SIM", "C90", "PT"]
+
+[tool.ruff.lint.mccabe]
+max-complexity = 15
+
+[tool.ruff.lint.per-file-ignores]
+# Large modules being split in Tasks 2-4; C901 will be resolved when split
+"archi2likec4/builders.py" = ["C901"]
+"archi2likec4/generators.py" = ["C901"]
+"archi2likec4/web.py" = ["C901"]
+"archi2likec4/audit_data.py" = ["C901"]
+"archi2likec4/pipeline.py" = ["C901"]
+"archi2likec4/parsers.py" = ["C901"]
+"archi2likec4/scripts/federate_template.py" = ["C901"]
+"archi2likec4/config.py" = ["C901"]
 
 [tool.setuptools.packages.find]
 include = ["archi2likec4*"]

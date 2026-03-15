@@ -8,6 +8,7 @@ from .models import (
     _RESERVED,
     _STANDARD_KEYS,
     AppComponent,
+    DeploymentNode,
 )
 
 
@@ -47,6 +48,15 @@ def escape_str(text: str) -> str:
     text = text.replace("'", "\\'")
     text = re.sub(r'\s+', ' ', text).strip()
     return text
+
+
+def flatten_deployment_nodes(nodes: list[DeploymentNode]) -> list[DeploymentNode]:
+    """Recursively flatten a tree of DeploymentNodes into a flat list."""
+    result: list[DeploymentNode] = []
+    for node in nodes:
+        result.append(node)
+        result.extend(flatten_deployment_nodes(node.children))
+    return result
 
 
 def build_metadata(ac: AppComponent) -> dict[str, str]:

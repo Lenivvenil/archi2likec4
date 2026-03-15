@@ -1,8 +1,8 @@
 """Tests for archi2likec4.utils — transliteration, ID generation, escaping."""
 
 
-from archi2likec4.models import AppComponent
-from archi2likec4.utils import build_metadata, escape_str, make_id, transliterate
+from archi2likec4.models import AppComponent, DeploymentNode
+from archi2likec4.utils import build_metadata, escape_str, flatten_deployment_nodes, make_id, transliterate
 
 # ── transliterate ────────────────────────────────────────────────────────
 
@@ -140,3 +140,48 @@ class TestBuildMetadata:
             'business_owner_dep', 'dev_team', 'architect', 'is_officer', 'placement',
         }
         assert set(meta.keys()) == expected_keys
+
+
+# ── flatten_deployment_nodes ─────────────────────────────────────────────
+
+def _dn(c4_id: str, children: list | None = None) -> DeploymentNode:
+    return DeploymentNode(
+        c4_id=c4_id, name=c4_id, archi_id=c4_id, tech_type='Node',
+        children=children or [],
+    )
+
+
+class TestFlattenDeploymentNodes:
+    def test_empty_list(self):
+        assert flatten_deployment_nodes([]) == []
+
+    def test_flat_list(self):
+        nodes = [_dn('a'), _dn('b'), _dn('c')]
+        result = flatten_deployment_nodes(nodes)
+        assert [n.c4_id for n in result] == ['a', 'b', 'c']
+
+    def test_single_level_nesting(self):
+        child = _dn('child')
+        parent = _dn('parent', children=[child])
+        result = flatten_deployment_nodes([parent])
+        assert len(result) == 2
+        ids = {n.c4_id for n in result}
+        assert ids == {'parent', 'child'}
+
+    def test_deep_nesting(self):
+        leaf = _dn('leaf')
+        mid = _dn('mid', children=[leaf])
+        root = _dn('root', children=[mid])
+        result = flatten_deployment_nodes([root])
+        assert len(result) == 3
+        assert result[0].c4_id == 'root'
+        assert result[1].c4_id == 'mid'
+        assert result[2].c4_id == 'leaf'
+
+    def test_multiple_roots_with_children(self):
+        root1 = _dn('r1', children=[_dn('r1c1'), _dn('r1c2')])
+        root2 = _dn('r2', children=[_dn('r2c1')])
+        result = flatten_deployment_nodes([root1, root2])
+        assert len(result) == 5
+        ids = [n.c4_id for n in result]
+        assert ids == ['r1', 'r1c1', 'r1c2', 'r2', 'r2c1']

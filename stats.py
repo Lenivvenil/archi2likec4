@@ -19,7 +19,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 from archi2likec4.config import load_config
 from archi2likec4.pipeline import _parse, _build
-from archi2likec4.builders import _flatten_deployment_nodes, _build_comp_c4_path
+from archi2likec4.utils import flatten_deployment_nodes
+from archi2likec4.builders import _build_comp_c4_path
 
 logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
@@ -425,7 +426,7 @@ def main():
     section('6. DEPLOYMENT')
 
     deployment_nodes = built.deployment_nodes
-    all_dn = _flatten_deployment_nodes(deployment_nodes)
+    all_dn = flatten_deployment_nodes(deployment_nodes)
     kv('Root deployment nodes', len(deployment_nodes))
     kv('Total deployment nodes (all levels)', len(all_dn))
     kv('Deployment mappings (app <-> infra)', len(built.deployment_map))

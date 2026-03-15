@@ -693,15 +693,14 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
 
         # Slug collision: reuse existing slug when solution_name matches,
         # only disambiguate when genuinely different names produce the same slug.
-        if solution_slug in seen_slugs:
-            if seen_slugs[solution_slug] != solution_name:
-                # Genuine collision ("A B" vs "A_B") — disambiguate
-                unique_slug = solution_slug
-                counter = 2
-                while unique_slug in seen_slugs:
-                    unique_slug = f'{solution_slug}_{counter}'
-                    counter += 1
-                solution_slug = unique_slug
+        if solution_slug in seen_slugs and seen_slugs[solution_slug] != solution_name:
+            # Genuine collision ("A B" vs "A_B") — disambiguate
+            unique_slug = solution_slug
+            counter = 2
+            while unique_slug in seen_slugs:
+                unique_slug = f'{solution_slug}_{counter}'
+                counter += 1
+            solution_slug = unique_slug
         seen_slugs[solution_slug] = solution_name
 
         results.append(SolutionView(

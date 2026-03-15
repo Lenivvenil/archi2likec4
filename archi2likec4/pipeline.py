@@ -284,8 +284,8 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     if reparented:
         logger.info('Visual nesting enrichment: %d nodes re-parented', reparented)
 
-    from .builders import _flatten_deployment_nodes
-    all_dn = _flatten_deployment_nodes(deployment_nodes)
+    from .utils import flatten_deployment_nodes
+    all_dn = flatten_deployment_nodes(deployment_nodes)
     logger.info('%d top-level deployment nodes, %d total',
                 len(deployment_nodes), len(all_dn))
 
@@ -566,7 +566,7 @@ def _generate(
 
 # ── CLI entry point ──────────────────────────────────────────────────────
 
-def main():
+def main() -> None:
     import sys as _sys
 
     # Subcommand dispatch (before argparse — backward compatible)

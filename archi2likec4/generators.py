@@ -300,10 +300,7 @@ def generate_system_detail_c4(domain_c4_id: str, sys: System) -> str:
     If the system belongs to a subdomain, the path is
     ``{domain}.{subdomain}.{system}`` instead of ``{domain}.{system}``.
     """
-    if sys.subdomain:
-        full_path = f'{domain_c4_id}.{sys.subdomain}.{sys.c4_id}'
-    else:
-        full_path = f'{domain_c4_id}.{sys.c4_id}'
+    full_path = f'{domain_c4_id}.{sys.subdomain}.{sys.c4_id}' if sys.subdomain else f'{domain_c4_id}.{sys.c4_id}'
     lines = [
         f'// ── {sys.name} (detail) ──────────────────────────────────',
         'model {',
@@ -531,20 +528,21 @@ def _system_path_from_c4(
     different domain.
     """
     parts = path.split('.')
-    if sys_subdomain and len(parts) >= 3:
-        # parts[2] is the system if its mapped subdomain equals parts[1]
-        # (authoritative via sys_subdomain lookup),
-        # AND parts[2] is a known system id (not a subsystem),
-        # AND parts[2] belongs to the same domain as parts[0].
-        # Note: parts[1] may itself also be a system id in the same domain
-        # (subdomain name collision); that does NOT change the interpretation
-        # because sys_subdomain.get(parts[2]) == parts[1] is definitive.
-        if sys_subdomain.get(parts[2]) == parts[1] and (
-            sys_ids is None or parts[2] in sys_ids
-        ) and (
-            sys_domain is None or sys_domain.get(parts[2]) == parts[0]
-        ):
-            return f'{parts[0]}.{parts[1]}.{parts[2]}'
+    # parts[2] is the system if its mapped subdomain equals parts[1]
+    # (authoritative via sys_subdomain lookup),
+    # AND parts[2] is a known system id (not a subsystem),
+    # AND parts[2] belongs to the same domain as parts[0].
+    # Note: parts[1] may itself also be a system id in the same domain
+    # (subdomain name collision); that does NOT change the interpretation
+    # because sys_subdomain.get(parts[2]) == parts[1] is definitive.
+    if (
+        sys_subdomain
+        and len(parts) >= 3
+        and sys_subdomain.get(parts[2]) == parts[1]
+        and (sys_ids is None or parts[2] in sys_ids)
+        and (sys_domain is None or sys_domain.get(parts[2]) == parts[0])
+    ):
+        return f'{parts[0]}.{parts[1]}.{parts[2]}'
     if len(parts) >= 2:
         return f'{parts[0]}.{parts[1]}'
     return path
@@ -892,9 +890,9 @@ def generate_solution_views(
                     app_paths: list[str] = []
                     infra_paths: list[str] = []
                     for rp in resolved_unique:
-                        if tech_archi_to_c4 and rp in tech_archi_to_c4.values():
-                            infra_paths.append(rp)
-                        elif any(rp == v for v in (tech_archi_to_c4 or {}).values()):
+                        if tech_archi_to_c4 and rp in tech_archi_to_c4.values() or any(
+                            rp == v for v in (tech_archi_to_c4 or {}).values()
+                        ):
                             infra_paths.append(rp)
                         else:
                             # Check if it was resolved from archi_to_c4 (app element)
@@ -1142,7 +1140,7 @@ def generate_audit_md(
     return header + '\n' + summary_md + '\n---\n\n' + body + footer
 
 
-def _render_affected_table(inc: 'AuditIncident', lang: str) -> str:
+def _render_affected_table(inc: AuditIncident, lang: str) -> str:
     """Render incident's affected items as a markdown table."""
     _L = lambda k, **kw: get_audit_label(k, lang, **kw)  # noqa: E731
 
@@ -1189,7 +1187,7 @@ def _render_affected_table(inc: 'AuditIncident', lang: str) -> str:
     return header + '\n'.join(rows) + suffix + '\n'
 
 
-def _render_qa2_table(inc: 'AuditIncident', lang: str) -> str:
+def _render_qa2_table(inc: AuditIncident, lang: str) -> str:
     """Render QA-2 metadata gap tables (field completeness + top systems)."""
     _L = lambda k, **kw: get_audit_label(k, lang, **kw)  # noqa: E731
 

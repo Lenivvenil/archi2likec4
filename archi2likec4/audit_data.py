@@ -69,9 +69,9 @@ def compute_audit_incidents(
 
     # Flat list of all systems + subsystems
     all_sys: list[System | Subsystem] = []
-    for s in systems:
-        all_sys.append(s)
-        all_sys.extend(s.subsystems)
+    for sys_item in systems:
+        all_sys.append(sys_item)
+        all_sys.extend(sys_item.subsystems)
 
     suppress: set[str] = set(getattr(config, 'audit_suppress', []))
     suppress_incidents: set[str] = set(getattr(config, 'audit_suppress_incidents', []))
@@ -317,8 +317,8 @@ def compute_audit_incidents(
     # ── QA-10: Deployment hierarchy issues ─────────────────────────
     deployment_nodes: list = built.deployment_nodes  # type: ignore[attr-defined]
     if deployment_nodes:
-        from .builders import _flatten_deployment_nodes
-        all_dn = _flatten_deployment_nodes(deployment_nodes)
+        from .utils import flatten_deployment_nodes
+        all_dn = flatten_deployment_nodes(deployment_nodes)
 
         qa10_affected: list[dict] = []
 

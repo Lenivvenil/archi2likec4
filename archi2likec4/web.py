@@ -717,14 +717,14 @@ def create_app(
     config_path: Path | None,
     model_root: Path,
     output_dir: Path,
-) -> 'Flask':
+) -> Flask:
     """Create Flask app for quality audit dashboard (without starting the server)."""
     try:
         from flask import Flask, redirect, render_template_string, request
-    except ImportError:
+    except ImportError as err:
         raise SystemExit(
             'Flask is required for web UI: pip install "archi2likec4[web]"'
-        )
+        ) from err
 
     from . import __version__
     from .audit_data import compute_audit_incidents
@@ -759,9 +759,8 @@ def create_app(
         if origin:
             if not origin.startswith(request.host_url.rstrip('/')):
                 return 'Forbidden: cross-origin POST', 403
-        elif referer:
-            if not referer.startswith(request.host_url):
-                return 'Forbidden: cross-origin POST', 403
+        elif referer and not referer.startswith(request.host_url):
+            return 'Forbidden: cross-origin POST', 403
         return None
 
     _cache: dict[str, object] = {}
@@ -786,7 +785,7 @@ def create_app(
         _, _, _, sv_unresolved, sv_total = _validate(built, config)
         summary, incidents = compute_audit_incidents(built, sv_unresolved, sv_total, config)
         available_domains = sorted(
-            d for d in built.domain_systems.keys()
+            d for d in built.domain_systems
             if d != 'unassigned' and built.domain_systems[d]
         )
         result = config, summary, incidents, available_domains, built

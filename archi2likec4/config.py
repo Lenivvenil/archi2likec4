@@ -94,10 +94,10 @@ def load_config(config_path: Path | None) -> ConvertConfig:
             return config  # auto-detect miss — return defaults
         try:
             import yaml  # type: ignore[import-untyped]
-        except ImportError:
+        except ImportError as err:
             raise RuntimeError(
-                f'Config file {config_path} requires PyYAML: pip install pyyaml')
-        with open(config_path, 'r', encoding='utf-8') as fh:
+                f'Config file {config_path} requires PyYAML: pip install pyyaml') from err
+        with open(config_path, encoding='utf-8') as fh:
             data = yaml.safe_load(fh) or {}
         if not isinstance(data, dict):
             raise ValueError(
@@ -311,7 +311,7 @@ def save_suppress(
 
     data: dict = {}
     if config_path.exists():
-        with open(config_path, 'r', encoding='utf-8') as fh:
+        with open(config_path, encoding='utf-8') as fh:
             raw = yaml.safe_load(fh)
             data = raw if isinstance(raw, dict) else {}
 
@@ -343,7 +343,7 @@ def update_config_field(
 
     data: dict = {}
     if config_path.exists():
-        with open(config_path, 'r', encoding='utf-8') as fh:
+        with open(config_path, encoding='utf-8') as fh:
             raw = yaml.safe_load(fh)
             data = raw if isinstance(raw, dict) else {}
 

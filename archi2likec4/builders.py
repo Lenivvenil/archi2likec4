@@ -21,7 +21,7 @@ from .models import (
     System,
     TechElement,
 )
-from .utils import build_metadata, make_id
+from .utils import build_metadata, flatten_deployment_nodes, make_id
 
 logger = logging.getLogger('archi2likec4')
 
@@ -220,9 +220,8 @@ def build_systems(
 
         tags = _assign_tags(ac.source_folder)
 
-        if reviewed_systems and name in reviewed_systems:
-            if 'to_review' in tags:
-                tags.remove('to_review')
+        if reviewed_systems and name in reviewed_systems and 'to_review' in tags:
+            tags.remove('to_review')
 
         sys_extra_ids = list(extra_ids.get(name, []))
 
@@ -326,10 +325,7 @@ def attach_functions(
     orphans = 0
     for fn in functions:
         # Prefer explicit relationship parent over filesystem hierarchy
-        if fn.archi_id in rel_parent:
-            parent_id = rel_parent[fn.archi_id]
-        else:
-            parent_id = fn.parent_archi_id
+        parent_id = rel_parent.get(fn.archi_id, fn.parent_archi_id)
         if not parent_id:
             orphans += 1
             continue
@@ -403,9 +399,9 @@ def attach_interfaces(
                 if rel.source_id in comp_index and rel.target_id in iface_index:
                     iface_owner[rel.target_id] = comp_index[rel.source_id]
             # Reverse direction: Interface → Component
-            elif rel.source_type == 'ApplicationInterface' and rel.target_type == 'ApplicationComponent':
-                if rel.target_id in comp_index and rel.source_id in iface_index:
-                    iface_owner.setdefault(rel.source_id, comp_index[rel.target_id])
+            elif (rel.source_type == 'ApplicationInterface' and rel.target_type == 'ApplicationComponent'
+                    and rel.target_id in comp_index and rel.source_id in iface_index):
+                iface_owner.setdefault(rel.source_id, comp_index[rel.target_id])
 
     name_to_sys: dict[str, System] = {s.name: s for s in systems}
     name_to_sub: dict[str, tuple[System, Subsystem]] = {}
@@ -915,10 +911,7 @@ def build_archi_to_c4_map(
     for sys in systems:
         domain = sys_domain.get(sys.c4_id, 'unassigned')
         subdomain = sys_subdomain.get(sys.c4_id, '') if sys_subdomain else sys.subdomain
-        if subdomain:
-            sys_path = f'{domain}.{subdomain}.{sys.c4_id}'
-        else:
-            sys_path = f'{domain}.{sys.c4_id}'
+        sys_path = f'{domain}.{subdomain}.{sys.c4_id}' if subdomain else f'{domain}.{sys.c4_id}'
         if sys.archi_id:
             result[sys.archi_id] = sys_path
         for eid in sys.extra_archi_ids:
@@ -1051,7 +1044,7 @@ def enrich_deployment_from_visual_nesting(
         return 0
 
     # Build flat index: archi_id → DeploymentNode
-    all_nodes = _flatten_deployment_nodes(deployment_nodes)
+    all_nodes = flatten_deployment_nodes(deployment_nodes)
     by_archi: dict[str, DeploymentNode] = {dn.archi_id: dn for dn in all_nodes}
     root_ids = {dn.archi_id for dn in deployment_nodes}
 
@@ -1105,13 +1098,7 @@ def _is_descendant(node: DeploymentNode, target_archi_id: str) -> bool:
     return False
 
 
-def _flatten_deployment_nodes(nodes: list[DeploymentNode]) -> list[DeploymentNode]:
-    """Recursively flatten a tree of DeploymentNodes into a flat list."""
-    result: list[DeploymentNode] = []
-    for node in nodes:
-        result.append(node)
-        result.extend(_flatten_deployment_nodes(node.children))
-    return result
+_flatten_deployment_nodes = flatten_deployment_nodes
 
 
 def _build_deployment_path_index(
@@ -1219,7 +1206,7 @@ def build_datastore_entity_links(
     if not deployment_nodes or not entities:
         return []
 
-    all_dn = _flatten_deployment_nodes(deployment_nodes)
+    all_dn = flatten_deployment_nodes(deployment_nodes)
     datastore_nodes = [dn for dn in all_dn if dn.kind == 'dataStore']
     if not datastore_nodes:
         return []
