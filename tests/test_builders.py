@@ -1181,8 +1181,8 @@ class TestAssignSubdomains:
         assert subdomains[0].name == 'Banking'
         assert subdomains[0].domain_id == 'channels'
         assert 'efs' in subdomains[0].system_ids
-        assert 'banking' in subdomain_systems
-        assert 'efs' in subdomain_systems['banking']
+        assert ('channels', 'banking') in subdomain_systems
+        assert 'efs' in subdomain_systems[('channels', 'banking')]
 
     def test_system_without_subdomain_falls_back(self):
         """System not in any ParsedSubdomain keeps empty subdomain."""
@@ -1253,7 +1253,193 @@ class TestAssignSubdomains:
         subdomains, subdomain_systems = assign_subdomains([sys1, sys2], [psd])
         assert len(subdomains) == 1
         assert sorted(subdomains[0].system_ids) == ['cards', 'efs']
-        assert sorted(subdomain_systems['banking']) == ['cards', 'efs']
+        assert sorted(subdomain_systems[('channels', 'banking')]) == ['cards', 'efs']
+
+    def test_foreign_domain_subdomain_not_assigned(self):
+        """System moved to a different domain must not keep the parsed subdomain."""
+        # System appears in parsed subdomain for 'channels', but its final domain is 'products'
+        # (e.g. moved by domain_overrides). Should not receive the foreign subdomain.
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='products')
+        psd = ParsedSubdomain(
+            archi_id='retail',
+            name='Retail',
+            domain_folder='channels',  # different domain
+            component_ids=['sys-1'],
+        )
+        subdomains, subdomain_systems = assign_subdomains([sys], [psd])
+        assert sys.subdomain == ''
+        assert subdomains == []
+        assert subdomain_systems == {}
+
+    def test_merged_system_extra_archi_id_finds_same_domain_subdomain(self):
+        """Merged system whose primary archi_id hits a foreign subdomain must
+        keep searching extra_archi_ids until a same-domain candidate is found.
+
+        Regression: previously the loop broke on the first match regardless of
+        domain, then the outer domain guard skipped the system entirely.
+        """
+        # Merged system: primary id came from 'products', extra id from 'channels'
+        sys = System(
+            c4_id='efs',
+            name='EFS',
+            archi_id='sys-foreign',   # component_id in products/retail
+            extra_archi_ids=['sys-correct'],  # component_id in channels/banking
+            domain='channels',
+        )
+        psd_foreign = ParsedSubdomain(
+            archi_id='retail',
+            name='Retail',
+            domain_folder='products',   # foreign domain
+            component_ids=['sys-foreign'],
+        )
+        psd_correct = ParsedSubdomain(
+            archi_id='banking',
+            name='Banking',
+            domain_folder='channels',   # correct domain
+            component_ids=['sys-correct'],
+        )
+        subdomains, subdomain_systems = assign_subdomains(
+            [sys], [psd_foreign, psd_correct]
+        )
+        assert sys.subdomain == 'banking', (
+            'extra_archi_id hit in same domain must be used when primary id '
+            'points to a foreign-domain subdomain'
+        )
+        assert any(sd.c4_id == 'banking' for sd in subdomains)
+        assert 'efs' in subdomain_systems.get(('channels', 'banking'), [])
+
+    def test_manual_overrides_take_precedence(self):
+        """manual_overrides override folder-based auto-detection."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='channels')
+        # Auto-detection would assign to 'retail'
+        psd_retail = ParsedSubdomain(
+            archi_id='retail',
+            name='Retail',
+            domain_folder='channels',
+            component_ids=['sys-1'],
+        )
+        # Manual override targets 'banking'
+        psd_banking = ParsedSubdomain(
+            archi_id='banking',
+            name='Banking',
+            domain_folder='channels',
+            component_ids=[],  # no auto components
+        )
+        subdomains, subdomain_systems = assign_subdomains(
+            [sys], [psd_retail, psd_banking],
+            manual_overrides={'EFS': 'banking'},
+        )
+        assert sys.subdomain == 'banking'
+        assert any(sd.c4_id == 'banking' for sd in subdomains)
+        assert 'efs' in subdomain_systems.get(('channels', 'banking'), [])
+        assert 'efs' not in subdomain_systems.get(('channels', 'retail'), [])
+
+    def test_manual_overrides_unknown_system_skipped(self):
+        """manual_overrides with an unknown system name is silently skipped."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='channels')
+        psd = ParsedSubdomain(
+            archi_id='retail',
+            name='Retail',
+            domain_folder='channels',
+            component_ids=[],
+        )
+        # 'NoSuchSystem' doesn't exist — should not raise
+        subdomains, _ = assign_subdomains(
+            [sys], [psd],
+            manual_overrides={'NoSuchSystem': 'retail'},
+        )
+        assert sys.subdomain == ''
+
+    def test_manual_overrides_invalid_subdomain_falls_back_to_auto(self):
+        """manual_overrides with a non-existent subdomain must not clear auto-detection.
+
+        A bad override like {'EFS': 'missing'} should be ignored so that the system
+        still receives its folder-based subdomain assignment instead of getting none.
+        """
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='channels')
+        psd = ParsedSubdomain(
+            archi_id='banking',
+            name='Banking',
+            domain_folder='channels',
+            component_ids=['sys-1'],
+        )
+        # 'missing' subdomain does not exist — auto-detection should still run
+        subdomains, subdomain_systems = assign_subdomains(
+            [sys], [psd],
+            manual_overrides={'EFS': 'missing'},
+        )
+        assert sys.subdomain == 'banking', (
+            'invalid override target must not clear auto-detected subdomain'
+        )
+        assert len(subdomains) == 1
+        assert 'efs' in subdomain_systems.get(('channels', 'banking'), [])
+
+    def test_manual_overrides_cross_domain_collision(self):
+        """manual_overrides use domain-scoped lookup to avoid cross-domain collisions.
+
+        When two domains each have a subdomain with the same archi_id (e.g. 'core'),
+        the override must assign the system to the subdomain in its own domain,
+        not the one from the other domain.
+        """
+        sys_efs = System(c4_id='efs', name='EFS', archi_id='sys-efs', domain='channels')
+        # channels/core — correct target for EFS override
+        psd_channels_core = ParsedSubdomain(
+            archi_id='core',
+            name='Core',
+            domain_folder='channels',
+            component_ids=[],
+        )
+        # products/core — same archi_id in a different domain
+        psd_products_core = ParsedSubdomain(
+            archi_id='core',
+            name='Core',
+            domain_folder='products',
+            component_ids=[],
+        )
+        subdomains, subdomain_systems = assign_subdomains(
+            [sys_efs],
+            [psd_channels_core, psd_products_core],
+            manual_overrides={'EFS': 'core'},
+        )
+        assert sys_efs.subdomain == 'core', (
+            'EFS should be assigned to channels/core, not left empty due to collision'
+        )
+        assert 'efs' in subdomain_systems.get(('channels', 'core'), [])
+        # Only the channels-domain subdomain should appear (domain_id='channels')
+        matching = [sd for sd in subdomains if sd.c4_id == 'core']
+        assert len(matching) == 1
+        assert matching[0].domain_id == 'channels'
+
+    def test_unassigned_system_not_placed_in_subdomain(self):
+        """System with no domain (domain='') must not be assigned to any subdomain."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='')
+        psd = ParsedSubdomain(
+            archi_id='banking',
+            name='Banking',
+            domain_folder='channels',
+            component_ids=['sys-1'],
+        )
+        subdomains, subdomain_systems = assign_subdomains([sys], [psd])
+        assert sys.subdomain == '', 'unassigned system must not receive a subdomain'
+        assert subdomains == []
+        assert subdomain_systems == {}
+
+    def test_unassigned_system_not_placed_via_manual_override(self):
+        """manual_overrides must not assign a subdomain to an unassigned (domain='') system."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='')
+        psd = ParsedSubdomain(
+            archi_id='banking',
+            name='Banking',
+            domain_folder='channels',
+            component_ids=[],
+        )
+        subdomains, subdomain_systems = assign_subdomains(
+            [sys], [psd],
+            manual_overrides={'EFS': 'banking'},
+        )
+        assert sys.subdomain == '', 'unassigned system must not receive a subdomain via override'
+        assert subdomains == []
+        assert subdomain_systems == {}
 
 
 # ── apply_domain_prefix with subdomain ──────────────────────────────────

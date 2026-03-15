@@ -738,39 +738,88 @@ def assign_domains(
 def assign_subdomains(
     systems: list[System],
     parsed_subdomains: list[ParsedSubdomain],
-) -> tuple[list[Subdomain], dict[str, list[str]]]:
+    manual_overrides: dict[str, str] | None = None,
+) -> tuple[list[Subdomain], dict[tuple[str, str], list[str]]]:
     """Assign each system to a subdomain (Pass 4 of hierarchy assignment).
 
     Checks if any archi_id of a system appears in a ParsedSubdomain's
     component_ids list. Sets system.subdomain to the matched subdomain c4_id.
 
+    ``manual_overrides`` maps system *name* → subdomain c4_id and takes
+    precedence over folder-based auto-detection.  The referenced subdomain
+    must already exist in *parsed_subdomains*.
+
     Returns (subdomains, subdomain_systems) where subdomain_systems maps
-    subdomain c4_id → list of system c4_ids.
+    (domain_folder, subdomain_c4_id) → list of system c4_ids.
     """
     # Build archi_id → ParsedSubdomain index
     archi_to_psd: dict[str, ParsedSubdomain] = {}
+    # Build (domain_folder, subdomain_archi_id) → ParsedSubdomain index for manual overrides.
+    # Keyed by domain to avoid cross-domain collisions when two domains share the same
+    # subdomain id (e.g. channels/core and products/core).
+    sd_id_to_psd: dict[tuple[str, str], ParsedSubdomain] = {}
     for psd in parsed_subdomains:
         for cid in psd.component_ids:
             archi_to_psd[cid] = psd
+        sd_id_to_psd[(psd.domain_folder, psd.archi_id)] = psd
 
-    subdomain_systems: dict[str, list[str]] = {}
+    subdomain_systems: dict[tuple[str, str], list[str]] = {}
     subdomains_by_key: dict[tuple[str, str], Subdomain] = {}
 
-    for sys in systems:
-        # Collect all archi_ids for this system
-        all_ids: list[str] = []
-        if sys.archi_id:
-            all_ids.append(sys.archi_id)
-        all_ids.extend(sys.extra_archi_ids)
+    # Build name → system index for manual overrides
+    sys_by_name: dict[str, System] = {s.name: s for s in systems} if manual_overrides else {}
+    # Set of system c4_ids that have a manual override (skip auto-detection for these)
+    override_sys_ids: set[str] = set()
+    if manual_overrides:
+        for sys_name, sd_c4_id in manual_overrides.items():
+            target = sys_by_name.get(sys_name)
+            if target is None:
+                continue
+            # Only register as override when the target subdomain actually exists.
+            # If the subdomain id is invalid, fall through to auto-detection instead
+            # of silently clearing the system's subdomain assignment.
+            if (target.domain or '', sd_c4_id) in sd_id_to_psd:
+                override_sys_ids.add(target.c4_id)
 
-        # Find matching subdomain (first archi_id match wins)
+    for sys in systems:
+        if not sys.domain:
+            # Unassigned systems have no domain context — cannot belong to a subdomain.
+            continue
+
         matched_psd: ParsedSubdomain | None = None
-        for aid in all_ids:
-            matched_psd = archi_to_psd.get(aid)
-            if matched_psd:
+
+        if manual_overrides and sys.c4_id in override_sys_ids:
+            # Manual override takes precedence over folder-based detection.
+            # Look up by (domain, subdomain_id) to avoid cross-domain collisions.
+            sd_c4_id = manual_overrides.get(sys.name)
+            if sd_c4_id:
+                matched_psd = sd_id_to_psd.get((sys.domain or '', sd_c4_id))
+        else:
+            # Collect all archi_ids for this system
+            all_ids: list[str] = []
+            if sys.archi_id:
+                all_ids.append(sys.archi_id)
+            all_ids.extend(sys.extra_archi_ids)
+
+            # Find matching subdomain - keep searching until a same-domain
+            # candidate is found.  A merged system may carry extra_archi_ids
+            # from a foreign domain; the first hit might therefore belong to
+            # the wrong domain, so we must not stop at the first match.
+            for aid in all_ids:
+                candidate = archi_to_psd.get(aid)
+                if candidate is None:
+                    continue
+                if sys.domain != candidate.domain_folder:
+                    continue
+                matched_psd = candidate
                 break
 
         if matched_psd is None:
+            continue
+
+        # Safety-net: manual-override path already uses domain-scoped lookup,
+        # but guard here as well in case future paths slip through.
+        if sys.domain != matched_psd.domain_folder:
             continue
 
         # Key by (domain_folder, archi_id) to avoid cross-domain collisions
@@ -786,7 +835,7 @@ def assign_subdomains(
         # Assign system to subdomain
         sys.subdomain = matched_psd.archi_id
         subdomains_by_key[sd_key].system_ids.append(sys.c4_id)
-        subdomain_systems.setdefault(matched_psd.archi_id, []).append(sys.c4_id)
+        subdomain_systems.setdefault(sd_key, []).append(sys.c4_id)
 
     subdomains = sorted(subdomains_by_key.values(), key=lambda s: (s.domain_id, s.c4_id))
     return subdomains, subdomain_systems
