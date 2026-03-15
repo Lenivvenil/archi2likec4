@@ -50,6 +50,16 @@ def escape_str(text: str) -> str:
     return text
 
 
+def make_unique_id(base_id: str, used_ids: set[str]) -> str:
+    """Return *base_id* if unused, otherwise append _2, _3, … until unique."""
+    if base_id not in used_ids:
+        return base_id
+    suffix = 2
+    while f'{base_id}_{suffix}' in used_ids:
+        suffix += 1
+    return f'{base_id}_{suffix}'
+
+
 def flatten_deployment_nodes(nodes: list[DeploymentNode]) -> list[DeploymentNode]:
     """Recursively flatten a tree of DeploymentNodes into a flat list."""
     result: list[DeploymentNode] = []

@@ -30,17 +30,17 @@
 
 ### Task 2: Split builders.py into Package
 Разбить `archi2likec4/builders.py` (1258 строк, 23 функции) на логические подмодули. Внешний API не меняется — всё реэкспортируется через `__init__.py`.
-- [ ] Прочитать `archi2likec4/builders.py` полностью; определить группы функций: systems, domains, integrations, deployment, data
-- [ ] Создать директорию `archi2likec4/builders/` и файл `archi2likec4/builders/__init__.py` — реэкспорт всего публичного API: `BuildResult`, `build_systems`, `assign_domains`, `build_integrations`, `build_deployment`, `build_data_entities`, `build_data_access`, `datastore_entity_links`, `assign_subdomains`, `apply_domain_prefix`; также реэкспортировать `_flatten_deployment_nodes` (backward compat alias → `flatten_deployment_nodes` из utils)
-- [ ] Создать `archi2likec4/builders/systems.py` — перенести: `build_systems`, `_resolve_app_services`, `attach_functions`, `attach_interfaces`, `_classify_interface`, `_attach_subsystems`, `_assign_tags`, `_make_unique_id`, `_extract_url`; прописать все необходимые imports из models, utils
-- [ ] Создать `archi2likec4/builders/domains.py` — перенести: `assign_domains`, `assign_subdomains`, `apply_domain_prefix`, `_match_extra_domain`; прописать imports
-- [ ] Создать `archi2likec4/builders/integrations.py` — перенести: `build_integrations`, `_dedup_integrations`; прописать imports
-- [ ] Создать `archi2likec4/builders/deployment.py` — перенести: `build_deployment`, `_build_deployment_path_index`, `_build_comp_c4_path`, `_build_comp_index`, `enrich_deployment_from_visual_nesting`, `build_tech_archi_to_c4_map`; прописать imports
-- [ ] Создать `archi2likec4/builders/data.py` — перенести: `build_data_entities`, `build_data_access`, `datastore_entity_links`, `_is_db_software`; прописать imports
-- [ ] Перенести `BuildResult` NamedTuple в `archi2likec4/builders/__init__.py` или в отдельный `archi2likec4/builders/_result.py` (импортировать в __init__)
-- [ ] Удалить оригинальный `archi2likec4/builders.py`
-- [ ] Add/update tests: запустить `tests/test_builders.py` — убедиться что все тесты проходят без изменений (реэкспорт должен обеспечить полную совместимость); исправить если что-то сломалось
-- [ ] Mark completed
+- [x] Прочитать `archi2likec4/builders.py` полностью; определить группы функций: systems, domains, integrations, deployment, data
+- [x] Создать директорию `archi2likec4/builders/` и файл `archi2likec4/builders/__init__.py` — реэкспорт всего публичного API: `BuildResult`, `build_systems`, `assign_domains`, `build_integrations`, `build_deployment`, `build_data_entities`, `build_data_access`, `datastore_entity_links`, `assign_subdomains`, `apply_domain_prefix`; также реэкспортировать `_flatten_deployment_nodes` (backward compat alias → `flatten_deployment_nodes` из utils)
+- [x] Создать `archi2likec4/builders/systems.py` — перенести: `build_systems`, `_resolve_app_services`, `attach_functions`, `attach_interfaces`, `_classify_interface`, `_attach_subsystems`, `_assign_tags`, `_make_unique_id`, `_extract_url`; прописать все необходимые imports из models, utils
+- [x] Создать `archi2likec4/builders/domains.py` — перенести: `assign_domains`, `assign_subdomains`, `apply_domain_prefix`, `_match_extra_domain`; прописать imports
+- [x] Создать `archi2likec4/builders/integrations.py` — перенести: `build_integrations`, `_dedup_integrations`; прописать imports
+- [x] Создать `archi2likec4/builders/deployment.py` — перенести: `build_deployment`, `_build_deployment_path_index`, `_build_comp_c4_path`, `_build_comp_index`, `enrich_deployment_from_visual_nesting`, `build_tech_archi_to_c4_map`; прописать imports
+- [x] Создать `archi2likec4/builders/data.py` — перенести: `build_data_entities`, `build_data_access`, `datastore_entity_links`, `_is_db_software`; прописать imports
+- [x] Перенести `BuildResult` NamedTuple в `archi2likec4/builders/__init__.py` или в отдельный `archi2likec4/builders/_result.py` (импортировать в __init__)
+- [x] Удалить оригинальный `archi2likec4/builders.py`
+- [x] Add/update tests: запустить `tests/test_builders.py` — убедиться что все тесты проходят без изменений (реэкспорт должен обеспечить полную совместимость); исправить если что-то сломалось
+- [x] Mark completed
 
 ---
 
