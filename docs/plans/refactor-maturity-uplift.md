@@ -63,18 +63,18 @@
 
 ### Task 4: Web UI Detangle — Extract Templates, Unify i18n
 Разгрузить `archi2likec4/web.py` (1081 строк): вынести inline HTML-шаблоны в файлы, объединить `_UI_STRINGS` в web.py с `i18n.py`.
-- [ ] Прочитать `archi2likec4/web.py` полностью; найти все строковые константы-шаблоны (`_DASHBOARD_TEMPLATE`, `_DETAIL_TEMPLATE`, `_REMEDIATIONS_TEMPLATE`, `_HIERARCHY_TEMPLATE`, `_BASE_CSS`, `_THEME_JS`) и dict `_UI_STRINGS`
-- [ ] Создать директорию `archi2likec4/templates/`
-- [ ] Создать `archi2likec4/templates/base.html` с общим layout: перенести CSS из `_BASE_CSS` и JS из `_THEME_JS`; использовать Jinja2 блоки (`{% block title %}`, `{% block content %}`)
-- [ ] Создать `archi2likec4/templates/dashboard.html` из `_DASHBOARD_TEMPLATE` — наследовать base.html через `{% extends "base.html" %}`
-- [ ] Создать `archi2likec4/templates/detail.html` из `_DETAIL_TEMPLATE`
-- [ ] Создать `archi2likec4/templates/remediations.html` из `_REMEDIATIONS_TEMPLATE`
-- [ ] Создать `archi2likec4/templates/hierarchy.html` из `_HIERARCHY_TEMPLATE`
-- [ ] Прочитать `archi2likec4/i18n.py`; добавить в него `WEB_MESSAGES: dict[str, dict[str, str]]` — перенести содержимое `_UI_STRINGS` из web.py; добавить публичную функцию `get_web_msg(key: str, lang: str) -> str`
-- [ ] Обновить `archi2likec4/web.py`: удалить `_UI_STRINGS` и все строковые шаблоны; загружать шаблоны через Flask `render_template()`; i18n через `from .i18n import get_web_msg`; Flask app создавать с `template_folder=Path(__file__).parent / "templates"`; целевой размер ≤ 400 строк
-- [ ] Обновить `pyproject.toml`: в `[tool.setuptools.packages.find]` добавить `package_data = {"archi2likec4" = ["templates/*.html"]}` (или секцию `[tool.setuptools.package-data]`)
-- [ ] Add/update tests: запустить `tests/test_web.py` — адаптировать если изменился способ создания Flask app; убедиться что все тесты зелёные
-- [ ] Mark completed
+- [x] Прочитать `archi2likec4/web.py` полностью; найти все строковые константы-шаблоны (`_DASHBOARD_TEMPLATE`, `_DETAIL_TEMPLATE`, `_REMEDIATIONS_TEMPLATE`, `_HIERARCHY_TEMPLATE`, `_BASE_CSS`, `_THEME_JS`) и dict `_UI_STRINGS`
+- [x] Создать директорию `archi2likec4/templates/`
+- [x] Создать `archi2likec4/templates/base.html` с общим layout: перенести CSS из `_BASE_CSS` и JS из `_THEME_JS`; использовать Jinja2 блоки (`{% block title %}`, `{% block content %}`)
+- [x] Создать `archi2likec4/templates/dashboard.html` из `_DASHBOARD_TEMPLATE` — наследовать base.html через `{% extends "base.html" %}`
+- [x] Создать `archi2likec4/templates/detail.html` из `_DETAIL_TEMPLATE`
+- [x] Создать `archi2likec4/templates/remediations.html` из `_REMEDIATIONS_TEMPLATE`
+- [x] Создать `archi2likec4/templates/hierarchy.html` из `_HIERARCHY_TEMPLATE`
+- [x] Прочитать `archi2likec4/i18n.py`; добавить в него `WEB_MESSAGES: dict[str, dict[str, str]]` — перенести содержимое `_UI_STRINGS` из web.py; добавить публичную функцию `get_web_msg(key: str, lang: str) -> str`
+- [x] Обновить `archi2likec4/web.py`: удалить `_UI_STRINGS` и все строковые шаблоны; загружать шаблоны через Flask `render_template()`; i18n через `from .i18n import get_web_msg`; Flask app создавать с `template_folder=Path(__file__).parent / "templates"`; целевой размер ≤ 400 строк
+- [x] Обновить `pyproject.toml`: в `[tool.setuptools.packages.find]` добавить `package_data = {"archi2likec4" = ["templates/*.html"]}` (или секцию `[tool.setuptools.package-data]`)
+- [x] Add/update tests: запустить `tests/test_web.py` — адаптировать если изменился способ создания Flask app; убедиться что все тесты зелёные
+- [x] Mark completed
 
 ---
 

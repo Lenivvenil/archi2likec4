@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}archi2likec4 — {{ t.remed_review }}{% endblock %}
+
+{% block content %}
+  <div class="back"><a href="/">&larr; {{ t.back }}</a></div>
+  <h1>{{ t.remed_review }}</h1>
+  <div class="subtitle">{{ t.remed_subtitle }}</div>
+
+  {% if domain_overrides %}
+  <div class="section-block">
+    <h2>{{ t.domain_overrides }} ({{ domain_overrides|length }}) <small style="color:#999">QA-1</small></h2>
+    <table>
+      <thead><tr><th>#</th><th>{{ t.system }}</th><th>&rarr; {{ t.domain }}</th><th>{{ t.action }}</th></tr></thead>
+      <tbody>
+        {% for name, domain in domain_overrides.items() %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ name }}</td>
+          <td>{{ domain }}</td>
+          <td>
+            <form method="post" action="/undo-assign-domain" style="display:inline">
+              <input type="hidden" name="name" value="{{ name }}">
+              <input type="hidden" name="redirect" value="/remediations">
+              <button type="submit" class="btn btn-danger">{{ t.undo }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if reviewed_systems %}
+  <div class="section-block">
+    <h2>{{ t.reviewed_systems }} ({{ reviewed_systems|length }}) <small style="color:#999">QA-3</small></h2>
+    <table>
+      <thead><tr><th>#</th><th>{{ t.system }}</th><th>{{ t.action }}</th></tr></thead>
+      <tbody>
+        {% for name in reviewed_systems %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ name }}</td>
+          <td>
+            <form method="post" action="/undo-mark-reviewed" style="display:inline">
+              <input type="hidden" name="name" value="{{ name }}">
+              <input type="hidden" name="redirect" value="/remediations">
+              <button type="submit" class="btn btn-danger">{{ t.undo }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if promote_children %}
+  <div class="section-block">
+    <h2>{{ t.promoted_children }} ({{ promote_children|length }}) <small style="color:#999">QA-4</small></h2>
+    <table>
+      <thead><tr><th>#</th><th>{{ t.parent }}</th><th>&rarr; {{ t.domain }}</th><th>{{ t.action }}</th></tr></thead>
+      <tbody>
+        {% for name, domain in promote_children.items() %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ name }}</td>
+          <td>{{ domain }}</td>
+          <td>
+            <form method="post" action="/undo-promote" style="display:inline">
+              <input type="hidden" name="name" value="{{ name }}">
+              <input type="hidden" name="redirect" value="/remediations">
+              <button type="submit" class="btn btn-danger">{{ t.undo }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if suppress_names %}
+  <div class="section-block">
+    <h2>{{ t.suppressed_systems }} ({{ suppress_names|length }}) <small style="color:#999">All QA</small></h2>
+    <table>
+      <thead><tr><th>#</th><th>{{ t.system }}</th><th>{{ t.action }}</th></tr></thead>
+      <tbody>
+        {% for name in suppress_names %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ name }}</td>
+          <td>
+            <form method="post" action="/unsuppress/system" style="display:inline">
+              <input type="hidden" name="name" value="{{ name }}">
+              <input type="hidden" name="redirect" value="/remediations">
+              <button type="submit" class="btn btn-danger">{{ t.unsuppress }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if suppress_incidents_list %}
+  <div class="section-block">
+    <h2>{{ t.suppressed_incidents }} ({{ suppress_incidents_list|length }})</h2>
+    <table>
+      <thead><tr><th>#</th><th>QA-ID</th><th>{{ t.action }}</th></tr></thead>
+      <tbody>
+        {% for qid in suppress_incidents_list %}
+        <tr>
+          <td>{{ loop.index }}</td>
+          <td>{{ qid }}</td>
+          <td>
+            <form method="post" action="/unsuppress/incident" style="display:inline">
+              <input type="hidden" name="qa_id" value="{{ qid }}">
+              <input type="hidden" name="redirect" value="/remediations">
+              <button type="submit" class="btn btn-danger">{{ t.unsuppress }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% endif %}
+
+  {% if not domain_overrides and not reviewed_systems and not promote_children
+      and not suppress_names and not suppress_incidents_list %}
+  <p>{{ t.no_remed }}</p>
+  {% endif %}
+
+  <div class="subtitle" style="margin-top:20px">
+    <a href="/">&larr; {{ t.back }}</a>
+  </div>
+{% endblock %}

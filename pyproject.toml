@@ -97,3 +97,6 @@ max-complexity = 15
 
 [tool.setuptools.packages.find]
 include = ["archi2likec4*"]
+
+[tool.setuptools.package-data]
+archi2likec4 = ["templates/*.html"]

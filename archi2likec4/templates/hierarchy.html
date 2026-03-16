@@ -1,0 +1,99 @@
+{% extends "base.html" %}
+{% block title %}archi2likec4 — {{ t.system_hierarchy }}{% endblock %}
+
+{% block extra_css %}
+.hier-domain { margin-bottom: 20px; }
+.hier-domain h3 { background: #e9ecef; padding: 8px 12px; border-radius: 6px 6px 0 0;
+                   margin: 0; font-size: 0.95em; }
+.hier-subdomain { border: 1px solid #dee2e6; border-top: none; }
+.hier-subdomain-header { background: #f5f0ff; padding: 5px 12px; font-size: 0.85em;
+                          color: #6f42c1; font-weight: 600; border-bottom: 1px solid #e2d9f3; }
+.hier-sys { padding: 6px 12px; border: 1px solid #dee2e6; border-top: none; font-size: 0.9em; }
+.hier-subdomain .hier-sys { border-left: none; border-right: none; border-top: none;
+                             padding-left: 20px; }
+.hier-sys:last-child { border-radius: 0 0 6px 6px; }
+.hier-sub { margin-left: 24px; color: #555; font-size: 0.85em; }
+.hier-fn-count { color: #999; font-size: 0.8em; }
+.hier-tag { font-size: 0.7em; padding: 1px 6px; border-radius: 3px; color: #fff; margin-left: 4px; }
+.tag-promoted { background: #6f42c1; }
+.tag-to_review { background: #fd7e14; }
+.tag-external { background: #6c757d; }
+{% endblock %}
+
+{% block content %}
+  <div class="back"><a href="/">&larr; {{ t.back }}</a></div>
+  <h1>{{ t.system_hierarchy }}</h1>
+  <div class="subtitle">{{ total_systems }} {{ t.systems|lower }}, {{ total_subsystems }} {{ t.subsystems|lower }}</div>
+
+  {% for domain_id, sd_map in domain_groups.items() %}
+  <div class="hier-domain">
+    <h3>{{ domain_id }} ({{ domain_totals[domain_id] }})</h3>
+    {% for sd_id, systems in sd_map.items() %}
+    {% if sd_id %}
+    <div class="hier-subdomain">
+      <div class="hier-subdomain-header">
+        {{ subdomain_names.get(sd_id, sd_id) }}
+        <code style="color:#999;font-size:0.8em">{{ sd_id }}</code>
+        <span style="color:#999;font-size:0.8em">({{ systems|length }})</span>
+      </div>
+      {% for sys in systems %}
+      <div class="hier-sys" style="background:#fff">
+        <strong>{{ sys.name }}</strong>
+        <code style="color:#999;font-size:0.8em">{{ sys.c4_id }}</code>
+        {% if sys.name.split('.')[0] in promoted_parents %}
+          <span class="hier-tag tag-promoted">promoted</span>
+        {% endif %}
+        {% for tag in sys.tags %}
+          <span class="hier-tag tag-{{ tag }}">{{ tag }}</span>
+        {% endfor %}
+        {% if sys.functions %}
+          <span class="hier-fn-count">{{ sys.functions|length }} fn</span>
+        {% endif %}
+        {% if sys.subsystems %}
+        {% for sub in sys.subsystems|sort(attribute='name') %}
+          <div class="hier-sub">
+            &#x2514; {{ sub.name }} <code style="color:#bbb;font-size:0.8em">{{ sub.c4_id }}</code>
+            {% if sub.functions %}
+              <span class="hier-fn-count">{{ sub.functions|length }} fn</span>
+            {% endif %}
+          </div>
+        {% endfor %}
+        {% endif %}
+      </div>
+      {% endfor %}
+    </div>
+    {% else %}
+    {% for sys in systems %}
+    <div class="hier-sys" style="background:#fff">
+      <strong>{{ sys.name }}</strong>
+      <code style="color:#999;font-size:0.8em">{{ sys.c4_id }}</code>
+      {% if sys.name.split('.')[0] in promoted_parents %}
+        <span class="hier-tag tag-promoted">promoted</span>
+      {% endif %}
+      {% for tag in sys.tags %}
+        <span class="hier-tag tag-{{ tag }}">{{ tag }}</span>
+      {% endfor %}
+      {% if sys.functions %}
+        <span class="hier-fn-count">{{ sys.functions|length }} fn</span>
+      {% endif %}
+      {% if sys.subsystems %}
+      {% for sub in sys.subsystems|sort(attribute='name') %}
+        <div class="hier-sub">
+          &#x2514; {{ sub.name }} <code style="color:#bbb;font-size:0.8em">{{ sub.c4_id }}</code>
+          {% if sub.functions %}
+            <span class="hier-fn-count">{{ sub.functions|length }} fn</span>
+          {% endif %}
+        </div>
+      {% endfor %}
+      {% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+    {% endfor %}
+  </div>
+  {% endfor %}
+
+  <div class="subtitle" style="margin-top:20px">
+    <a href="/">&larr; {{ t.back }}</a>
+  </div>
+{% endblock %}

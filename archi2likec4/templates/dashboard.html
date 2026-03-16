@@ -1,0 +1,119 @@
+{% extends "base.html" %}
+{% block title %}archi2likec4 — {{ t.title }}{% endblock %}
+
+{% block content %}
+  <h1>archi2likec4 — {{ t.dashboard }}</h1>
+  <div class="subtitle">v{{ version }}</div>
+
+  <div class="metrics">
+    <div class="metric {{ health.systems }}">
+      <div class="metric-value">{{ summary.total_systems }}</div>
+      <div class="metric-label">{{ t.systems }}</div>
+    </div>
+    <div class="metric {{ health.subsystems }}">
+      <div class="metric-value">{{ summary.total_subsystems }}</div>
+      <div class="metric-label">{{ t.subsystems }}</div>
+    </div>
+    <div class="metric {{ health.meta }}">
+      <div class="metric-value">{{ summary.meta_completeness_pct }}%</div>
+      <div class="metric-label">{{ t.metadata }}</div>
+    </div>
+    <div class="metric {{ health.domain }}">
+      <div class="metric-value">{{ summary.assigned_count }}/{{ summary.total_systems }}</div>
+      <div class="metric-label">{{ t.with_domain }}</div>
+    </div>
+    <div class="metric {{ health.intg }}">
+      <div class="metric-value">{{ summary.total_integrations }}</div>
+      <div class="metric-label">{{ t.integrations }}</div>
+    </div>
+    <div class="metric {{ health.deploy }}">
+      <div class="metric-value">{{ summary.deployment_mappings }}</div>
+      <div class="metric-label">{{ t.deploy_maps }}</div>
+    </div>
+  </div>
+
+  {% if suppress_names or suppress_incidents_list %}
+  <div class="suppress-bar">
+    <strong>{{ t.suppressed }}:</strong>
+    {% for name in suppress_names %}
+      <span class="suppress-item">
+        {{ name }}
+        <form method="post" action="/unsuppress/system">
+          <input type="hidden" name="name" value="{{ name }}">
+          <button type="submit" class="btn btn-danger" style="padding:0 4px;border:0;font-size:0.7em;">&times;</button>
+        </form>
+      </span>
+    {% endfor %}
+    {% for qid in suppress_incidents_list %}
+      <span class="suppress-item">
+        {{ qid }}
+        <form method="post" action="/unsuppress/incident">
+          <input type="hidden" name="qa_id" value="{{ qid }}">
+          <button type="submit" class="btn btn-danger" style="padding:0 4px;border:0;font-size:0.7em;">&times;</button>
+        </form>
+      </span>
+    {% endfor %}
+  </div>
+  {% endif %}
+
+  {% if remed_total > 0 %}
+  <div class="remed-bar">
+    <strong>{{ t.remediations }}:</strong>
+    {% if remed_domain > 0 %}{{ remed_domain }} domain override{{ 's' if remed_domain != 1 }}{% endif %}
+    {% if remed_reviewed > 0 %}{% if remed_domain > 0 %}, {% endif %}{{ remed_reviewed }} reviewed{% endif %}
+    &rarr; <a href="/remediations">{{ t.review_all }}</a>
+  </div>
+  {% endif %}
+
+  <h2>{{ t.incidents }} ({{ active_count }}{% if suppressed_count > 0 %},
+      {{ suppressed_count }} {{ t.suppressed|lower }}{% endif %})</h2>
+  {% if incidents %}
+  <table>
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>{{ t.severity }}</th>
+        <th>{{ t.incident }}</th>
+        <th style="text-align:right">{{ t.count }}</th>
+        <th>{{ t.actions }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for inc in incidents %}
+      <tr{% if inc.suppressed %} class="suppressed-row"{% endif %}>
+        <td>{{ inc.qa_id }}</td>
+        <td><span class="badge" style="background:{{ severity_colors[inc.severity] }}">{{ inc.severity }}</span></td>
+        <td>
+          {% if inc.suppressed %}<s>{% endif %}
+          <a href="/incident/{{ inc.qa_id }}">{{ inc.title }}</a>
+          {% if inc.suppressed %}</s> <small>({{ t.suppressed|lower }})</small>{% endif %}
+        </td>
+        <td style="text-align:right">{{ inc.count }}</td>
+        <td>
+          {% if inc.suppressed %}
+            <form method="post" action="/unsuppress/incident" style="display:inline">
+              <input type="hidden" name="qa_id" value="{{ inc.qa_id }}">
+              <button type="submit" class="btn btn-success">{{ t.unsuppress }}</button>
+            </form>
+          {% else %}
+            <a href="/incident/{{ inc.qa_id }}" class="btn">{{ t.details }}</a>
+            <form method="post" action="/suppress/incident" style="display:inline">
+              <input type="hidden" name="qa_id" value="{{ inc.qa_id }}">
+              <button type="submit" class="btn">{{ t.suppress }}</button>
+            </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+  <p>{{ t.no_incidents }}</p>
+  {% endif %}
+
+  <div class="subtitle" style="margin-top:20px">
+    Config: {{ config_path }} |
+    <a href="/hierarchy">{{ t.hierarchy }}</a> |
+    <a href="/">{{ t.refresh }}</a>
+  </div>
+{% endblock %}

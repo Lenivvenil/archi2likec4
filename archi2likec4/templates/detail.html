@@ -1,0 +1,91 @@
+{% extends "base.html" %}
+{% block title %}{{ incident.qa_id }} — {{ incident.title }}{% endblock %}
+
+{% block content %}
+  <div class="back"><a href="/">&larr; {{ t.back }}</a></div>
+
+  <h1>
+    {{ incident.qa_id }}
+    <span class="badge" style="background:{{ severity_colors[incident.severity] }}">{{ incident.severity }}</span>
+    {{ incident.title }}
+    ({{ incident.count }})
+    {% if incident.suppressed %}<small style="color:#999">(suppressed)</small>{% endif %}
+  </h1>
+
+  <div class="detail-block">
+    <p><strong>{{ t.problem }}:</strong> {{ incident.description }}</p>
+    <p><strong>{{ t.impact }}:</strong> {{ incident.impact }}</p>
+    <p><strong>{{ t.remediation }}:</strong></p>
+    <pre>{{ incident.remediation }}</pre>
+  </div>
+
+  {% if incident.affected %}
+  <h2>{{ t.affected }} ({{ incident.affected|length
+      }}{% if incident.count > incident.affected|length %} of {{ incident.count }}{% endif %})</h2>
+  <table>
+    <thead>
+      <tr>
+        <th>#</th>
+        {% for key in columns %}
+        <th>{{ key }}</th>
+        {% endfor %}
+        <th>{{ t.action }}</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for item in incident.affected %}
+      <tr>
+        <td>{{ loop.index }}</td>
+        {% for key in columns %}
+        <td>{{ item.get(key, '') }}</td>
+        {% endfor %}
+        <td>
+          {% if incident.qa_id == 'QA-1' and 'name' in item %}
+          <form method="post" action="/assign-domain" style="display:inline">
+            <input type="hidden" name="name" value="{{ item['name'] }}">
+            <input type="hidden" name="redirect" value="/incident/QA-1">
+            <select name="domain" class="btn">
+              {% for d in available_domains %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+            </select>
+            <button type="submit" class="btn btn-success">{{ t.assign }}</button>
+          </form>
+          {% elif incident.qa_id == 'QA-3' and 'name' in item %}
+          <form method="post" action="/mark-reviewed" style="display:inline">
+            <input type="hidden" name="name" value="{{ item['name'] }}">
+            <input type="hidden" name="redirect" value="/incident/QA-3">
+            <button type="submit" class="btn btn-success">{{ t.mark_reviewed }}</button>
+          </form>
+          {% elif incident.qa_id == 'QA-4' and 'name' in item %}
+          <form method="post" action="/promote-system" style="display:inline">
+            <input type="hidden" name="name" value="{{ item['name'] }}">
+            <input type="hidden" name="redirect" value="/incident/QA-4">
+            <select name="domain" class="btn">
+              {% for d in available_domains %}<option value="{{ d }}">{{ d }}</option>{% endfor %}
+            </select>
+            <button type="submit" class="btn btn-success">{{ t.promote }}</button>
+          </form>
+          {% endif %}
+          {% if 'name' in item %}
+          <form method="post" action="/suppress/system" style="display:inline">
+            <input type="hidden" name="name" value="{{ item['name'] }}">
+            <input type="hidden" name="redirect" value="/incident/{{ incident.qa_id }}">
+            <button type="submit" class="btn">{{ t.suppress }}</button>
+          </form>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% endif %}
+
+  {% if incident.suppressed_count > 0 %}
+  <p style="margin-top:12px;color:#666;font-size:0.85em">
+    {{ incident.suppressed_count }} {{ t.hidden_by_suppress }}
+  </p>
+  {% endif %}
+
+  <div class="subtitle" style="margin-top:20px">
+    <a href="/">&larr; {{ t.back }}</a>
+  </div>
+{% endblock %}

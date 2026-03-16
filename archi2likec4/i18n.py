@@ -432,6 +432,72 @@ _SUMMARY_LABELS: dict[str, dict[str, str]] = {
 }
 
 
+# ── Web UI strings ───────────────────────────────────────────────────────
+
+WEB_MESSAGES: dict[str, dict[str, str]] = {
+    'title': {'ru': 'Аудит качества', 'en': 'Quality Audit'},
+    'dashboard': {'ru': 'Панель аудита качества', 'en': 'Quality Audit Dashboard'},
+    'systems': {'ru': 'Системы', 'en': 'Systems'},
+    'subsystems': {'ru': 'Подсистемы', 'en': 'Subsystems'},
+    'metadata': {'ru': 'Метаданные', 'en': 'Metadata'},
+    'with_domain': {'ru': 'С доменом', 'en': 'With Domain'},
+    'integrations': {'ru': 'Интеграции', 'en': 'Integrations'},
+    'deploy_maps': {'ru': 'Deploy-маппинги', 'en': 'Deploy Maps'},
+    'suppressed': {'ru': 'Скрыто', 'en': 'Suppressed'},
+    'remediations': {'ru': 'Ремедиации', 'en': 'Remediations'},
+    'review_all': {'ru': 'Обзор всех', 'en': 'Review all'},
+    'incidents': {'ru': 'Инциденты', 'en': 'Incidents'},
+    'severity': {'ru': 'Серьёзность', 'en': 'Severity'},
+    'incident': {'ru': 'Инцидент', 'en': 'Incident'},
+    'count': {'ru': 'Кол-во', 'en': 'Count'},
+    'actions': {'ru': 'Действия', 'en': 'Actions'},
+    'details': {'ru': 'Подробнее', 'en': 'Details'},
+    'suppress': {'ru': 'Скрыть', 'en': 'Suppress'},
+    'unsuppress': {'ru': 'Показать', 'en': 'Unsuppress'},
+    'no_incidents': {'ru': 'Инцидентов качества не найдено.', 'en': 'No quality incidents found.'},
+    'hierarchy': {'ru': 'Иерархия', 'en': 'Hierarchy'},
+    'refresh': {'ru': 'Обновить', 'en': 'Refresh'},
+    'back': {'ru': 'Назад к панели', 'en': 'Back to dashboard'},
+    'problem': {'ru': 'Проблема', 'en': 'Problem'},
+    'impact': {'ru': 'Влияние', 'en': 'Impact'},
+    'remediation': {'ru': 'Рекомендация', 'en': 'Remediation'},
+    'affected': {'ru': 'Затронутые элементы', 'en': 'Affected Elements'},
+    'action': {'ru': 'Действие', 'en': 'Action'},
+    'assign': {'ru': 'Назначить', 'en': 'Assign'},
+    'mark_reviewed': {'ru': 'Проверено', 'en': 'Mark reviewed'},
+    'promote': {'ru': 'Промоутить', 'en': 'Promote'},
+    'undo': {'ru': 'Отменить', 'en': 'Undo'},
+    'hidden_by_suppress': {
+        'ru': 'элемент(ов) скрыто через audit_suppress.',
+        'en': 'element(s) hidden by audit_suppress.',
+    },
+    'remed_review': {'ru': 'Обзор ремедиаций', 'en': 'Remediations Review'},
+    'remed_subtitle': {
+        'ru': 'Все конфиг-решения для этой конвертации',
+        'en': 'All config-driven decisions for this conversion',
+    },
+    'domain_overrides': {'ru': 'Назначения доменов', 'en': 'Domain Overrides'},
+    'reviewed_systems': {'ru': 'Проверенные системы', 'en': 'Reviewed Systems'},
+    'promoted_children': {'ru': 'Промоутированные', 'en': 'Promoted Children'},
+    'suppressed_systems': {'ru': 'Скрытые системы', 'en': 'Suppressed Systems'},
+    'suppressed_incidents': {'ru': 'Скрытые инциденты', 'en': 'Suppressed Incidents'},
+    'no_remed': {'ru': 'Ремедиации ещё не настроены.', 'en': 'No remediations configured yet.'},
+    'system_hierarchy': {'ru': 'Иерархия систем', 'en': 'System Hierarchy'},
+    'system': {'ru': 'Система', 'en': 'System'},
+    'domain': {'ru': 'Домен', 'en': 'Domain'},
+    'parent': {'ru': 'Родитель', 'en': 'Parent'},
+    'dark_mode': {'ru': 'Тёмная тема', 'en': 'Dark mode'},
+    'light_mode': {'ru': 'Светлая тема', 'en': 'Light mode'},
+    'subdomain': {'ru': 'Субдомен', 'en': 'Subdomain'},
+}
+
+
+def get_web_msg(key: str, lang: str = 'ru') -> str:
+    """Get a localized web UI string."""
+    entry = WEB_MESSAGES.get(key, {})
+    return entry.get(lang, entry.get('ru', key))
+
+
 def get_msg(qa_id: str, field: str, lang: str = 'ru', **kwargs: object) -> str:
     """Get a localized message for a QA incident field.
 
