@@ -7,8 +7,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from collections import Counter, defaultdict
 
-# Ensure the package is importable
-sys.path.insert(0, str(Path(__file__).parent))
+# Ensure the project root is on sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from archi2likec4.config import load_config
 from archi2likec4.pipeline import _parse, _build

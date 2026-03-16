@@ -17,6 +17,7 @@ from archi2likec4.builders import (
     build_systems,
     build_tech_archi_to_c4_map,
 )
+from archi2likec4.builders.deployment import enrich_deployment_from_visual_nesting
 from archi2likec4.models import (
     AppComponent,
     AppFunction,
@@ -1552,8 +1553,6 @@ class TestBuildArchiToC4MapSubdomain:
 
 
 # ── enrich_deployment_from_visual_nesting ────────────────────────────────
-
-from archi2likec4.builders.deployment import enrich_deployment_from_visual_nesting
 
 
 class TestEnrichDeploymentFromVisualNesting:

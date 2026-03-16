@@ -10,8 +10,8 @@ import logging
 from collections import Counter
 from pathlib import Path
 
-# Ensure the package is importable
-sys.path.insert(0, str(Path(__file__).parent))
+# Ensure the project root is on sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from archi2likec4.config import load_config
 from archi2likec4.pipeline import _parse, _build
@@ -144,7 +144,6 @@ def main():
                 if eid in all_elements:
                     elem_type, elem_name = all_elements[eid]
                     # It's a known component but not in comp_c4_path
-                    # Check if it was excluded (e.g., trash, or became a subsystem that was dropped)
                     if eid in comp_c4_path:
                         reasons[endpoint] = 'resolved (unexpected)'
                     else:
@@ -195,11 +194,9 @@ def main():
         print(f"  {reason}: {count}")
 
     # ── Categorize unresolved AppComponents ──────────────────────────────
-    # Find AppComponents that ARE in parsed.components but NOT in comp_c4_path
     parsed_ac_ids = {ac.archi_id for ac in parsed.components}
     indexed_ids = set(comp_c4_path.keys())
     in_parsed_not_indexed = parsed_ac_ids - indexed_ids
-    # Exclude promoted parents
     promoted_ids = set(promoted_parents.keys()) if promoted_parents else set()
     truly_missing = in_parsed_not_indexed - promoted_ids
 
@@ -318,7 +315,6 @@ def main():
     print("-" * 200)
 
     shown = 0
-    # Show diverse examples from top systems
     seen_systems = set()
     for rel, sp, tp, classification in classification_details:
         if shown >= 15:

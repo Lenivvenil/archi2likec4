@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.1.0] — 2026-03-16
+
 ### Added
 - **Five-level application hierarchy**: L1 domain → L2 subdomain → L3 system → L4 subsystem → L5 function
 - **`subdomain` LikeC4 kind**: new element kind with amber colour between domain and system
@@ -11,6 +13,18 @@ All notable changes to this project will be documented in this file.
 - **Subdomain rendering**: systems grouped inside subdomain blocks in `domains/{id}.c4`; graceful fallback (no subdomain) for flat domain folders
 - **i18n keys**: `subdomain`, `subdomain_plural`, `l2_subdomain_label` in ru/en catalogs
 - **Web UI hierarchy**: `/hierarchy` page shows subdomain level between domain and system
+- **`tools/` directory**: diagnostic scripts (stats.py, diag_targets.py, diag_dupes.py, diag_views.py, diag_orphan_subsystems.py) moved out of root for cleaner project layout
+
+### Changed
+- **`builders/` package**: `builders.py` split into `builders/` package (`systems.py`, `domains.py`, `integrations.py`, `deployment.py`, `datastore.py`)
+- **`generators/` package**: `generators.py` split into `generators/` package (`domains.py`, `systems.py`, `relationships.py`, `deployment.py`, `views.py`, `audit.py`)
+- **`templates/` directory**: Jinja2 templates extracted from inline Python strings to `.j2` files
+- **Coverage gate**: test coverage gated at 85%, 413+ tests across 12 files
+- **Public API**: `archi2likec4/__init__.py` exports clean public surface (`ConvertConfig`, `load_config`, `run_pipeline`)
+
+### Removed
+- `convert.py` root script (duplicated `archi2likec4` console_scripts entrypoint)
+- `NOTES.md` (development scratch notes; added to `.gitignore`)
 
 ## [1.0.0] — 2026-03-09
 

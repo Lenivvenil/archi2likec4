@@ -14,8 +14,8 @@ import sys
 from collections import defaultdict
 from pathlib import Path
 
-# Ensure the project is on sys.path
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Ensure the project root is on sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from archi2likec4.config import load_config
 from archi2likec4.pipeline import _parse, _build

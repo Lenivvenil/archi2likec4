@@ -60,10 +60,26 @@ See the example file for all available options.
 - `archi2likec4/models.py` — dataclasses and default constants
 - `archi2likec4/config.py` — configuration loading (YAML + CLI)
 - `archi2likec4/parsers.py` — coArchi XML parsing
-- `archi2likec4/builders.py` — system hierarchy and domain assignment
-- `archi2likec4/generators.py` — LikeC4 .c4 file generation
+- `archi2likec4/builders/` — system hierarchy and domain assignment (package)
+- `archi2likec4/generators/` — LikeC4 .c4 file generation (package)
+- `archi2likec4/templates/` — Jinja2 templates for .c4 and AUDIT.md
+- `archi2likec4/audit_data.py` — structured QA incident computation
+- `archi2likec4/i18n.py` — ru/en message catalog
 - `archi2likec4/federation.py` — federation script generation
+- `archi2likec4/web.py` — Flask UI (dashboard, remediations, hierarchy)
 - `archi2likec4/pipeline.py` — main orchestration
+
+## Diagnostic Tools
+
+Diagnostic scripts live in `tools/` and are not part of the installed package:
+
+- `tools/stats.py` — deep model statistics (systems, integrations, domains)
+- `tools/diag_targets.py` — lost integration targets and self-loop analysis
+- `tools/diag_dupes.py` — duplicate integration diagnostics
+- `tools/diag_views.py` — solution view element resolution
+- `tools/diag_orphan_subsystems.py` — orphaned subsystem detection
+
+Run from the project root: `python tools/stats.py`
 
 ## Pull Requests
 

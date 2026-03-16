@@ -165,9 +165,9 @@ def assign_subdomains(  # noqa: C901
         if manual_overrides and sys.c4_id in override_sys_ids:
             # Manual override takes precedence over folder-based detection.
             # Look up by (domain, subdomain_id) to avoid cross-domain collisions.
-            sd_c4_id = manual_overrides.get(sys.name)
-            if sd_c4_id:
-                matched_psd = sd_id_to_psd.get((sys.domain or '', sd_c4_id))
+            override_sd_id = manual_overrides.get(sys.name)
+            if override_sd_id:
+                matched_psd = sd_id_to_psd.get((sys.domain or '', override_sd_id))
         else:
             # Collect all archi_ids for this system
             all_ids: list[str] = []

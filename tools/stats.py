@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Deep statistics for the archi2likec4 converter pipeline.
 
-Usage: python3 stats.py [model_root] [--config path]
+Usage: python3 tools/stats.py [model_root] [--config path]
 
 Runs parse + build phases and prints detailed analytics about
 systems, integrations, data access, solution views, and deployment.
@@ -14,8 +14,8 @@ import sys
 from collections import Counter
 from pathlib import Path
 
-# Ensure the package is importable
-sys.path.insert(0, str(Path(__file__).resolve().parent))
+# Ensure the project root is on sys.path
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from archi2likec4.config import load_config
 from archi2likec4.pipeline import _parse, _build

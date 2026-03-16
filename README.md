@@ -155,15 +155,16 @@ graph LR
 
 ```
 archi2likec4/
-  models.py       dataclasses: System, Integration, DeploymentNode…
-  config.py       ConvertConfig, YAML-загрузка, валидация
-  parsers.py      coArchi XML → dataclasses
-  builders.py     сборка систем, доменов, интеграций, deployment
-  generators.py   dataclasses → .c4 контент + AUDIT.md
-  audit_data.py   compute_audit_incidents() — структурированные QA-данные
-  i18n.py         каталог сообщений ru/en
-  web.py          Flask UI (dashboard, ремедиации, иерархия)
-  pipeline.py     main() — оркестрация
+  models.py         dataclasses: System, Integration, DeploymentNode…
+  config.py         ConvertConfig, YAML-загрузка, валидация
+  parsers.py        coArchi XML → dataclasses
+  builders/         сборка систем, доменов, интеграций, deployment (пакет)
+  generators/       dataclasses → .c4 контент + AUDIT.md (пакет)
+  templates/        Jinja2-шаблоны .c4 и AUDIT.md
+  audit_data.py     compute_audit_incidents() — структурированные QA-данные
+  i18n.py           каталог сообщений ru/en
+  web.py            Flask UI (dashboard, ремедиации, иерархия)
+  pipeline.py       main() — оркестрация
 ```
 
 ---
@@ -172,7 +173,7 @@ archi2likec4/
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest tests/ -v   # 359+ тестов
+python -m pytest tests/ -v   # 413+ тестов
 ```
 
 Python >= 3.10. Базовая конвертация — zero dependencies (stdlib only).

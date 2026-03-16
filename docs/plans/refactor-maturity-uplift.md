@@ -94,16 +94,16 @@
 
 ### Task 6: Cleanup, Documentation, Git Hygiene, and Roadmap
 Финальная зачистка: удалить мусор, переместить diagnostic скрипты, актуализировать документацию, создать roadmap, выпустить версию 1.1.0.
-- [ ] Удалить `convert.py` (6 строк — дублирует console_scripts entrypoint `archi2likec4 = "archi2likec4.pipeline:main"`)
-- [ ] Создать директорию `tools/`; переместить туда `diag_dupes.py`, `diag_orphan_subsystems.py`, `diag_targets.py`, `diag_views.py`, `stats.py`; исправить в каждом `sys.path.insert(...)` на корректный import пакета
-- [ ] Удалить `NOTES.md` из git tracking: `git rm NOTES.md`; добавить `NOTES.md` в `.gitignore`
-- [ ] Git cleanup: удалить локальную ветку `fix/p1-release-blockers` (уже влита в main): `git branch -d fix/p1-release-blockers`; проверить ветку `v2-backlog` на наличие полезных изменений, затем удалить: `git branch -d v2-backlog`
-- [ ] Удалить устаревшие артефакты сборки: `rm -rf build/ output_backup/ output_before_promote/` (если существуют)
-- [ ] Обновить `README.md`: актуализировать счётчик тестов, добавить описание новой структуры пакетов `builders/` и `generators/` в секцию architecture
-- [ ] Обновить `CONTRIBUTING.md`: добавить в code structure описание `builders/`, `generators/`, `templates/`, `audit_data.py`, `i18n.py`
-- [ ] Обновить `CHANGELOG.md`: добавить секцию `## [Unreleased]` с описанием рефакторинга (module split, lint uplift, template extraction, test gap fill)
-- [ ] Обновить `.archi2likec4.example.yaml`: заменить bank-specific имена (EFS, EFS_PLT, ASBT, Korona, SAP_HCM) на generic (crm, erp, payment_gateway, core_banking)
-- [ ] В `pyproject.toml` и `archi2likec4/__init__.py`: bump version `1.0.0` → `1.1.0`
-- [ ] Создать `docs/ROADMAP.md` с секциями: PyPI publish workflow, Pydantic config validation, plugin architecture, JSON/YAML output, CI auto-generation, Web UI SSE/diff/dark-theme
-- [ ] Add/update tests: убедиться что перемещение diag-скриптов не сломало imports; прогнать `tests/test_cli.py` — должен быть зелёным
-- [ ] Mark completed
+- [x] Удалить `convert.py` (6 строк — дублирует console_scripts entrypoint `archi2likec4 = "archi2likec4.pipeline:main"`)
+- [x] Создать директорию `tools/`; переместить туда `diag_dupes.py`, `diag_orphan_subsystems.py`, `diag_targets.py`, `diag_views.py`, `stats.py`; исправить в каждом `sys.path.insert(...)` на корректный import пакета
+- [x] Удалить `NOTES.md` из git tracking: `git rm NOTES.md`; добавить `NOTES.md` в `.gitignore`
+- [x] Git cleanup: удалить локальную ветку `fix/p1-release-blockers` (уже влита в main): `git branch -d fix/p1-release-blockers`; проверить ветку `v2-backlog` на наличие полезных изменений, затем удалить: `git branch -d v2-backlog`
+- [x] Удалить устаревшие артефакты сборки: `rm -rf build/ output_backup/ output_before_promote/` (если существуют)
+- [x] Обновить `README.md`: актуализировать счётчик тестов, добавить описание новой структуры пакетов `builders/` и `generators/` в секцию architecture
+- [x] Обновить `CONTRIBUTING.md`: добавить в code structure описание `builders/`, `generators/`, `templates/`, `audit_data.py`, `i18n.py`
+- [x] Обновить `CHANGELOG.md`: добавить секцию `## [Unreleased]` с описанием рефакторинга (module split, lint uplift, template extraction, test gap fill)
+- [x] Обновить `.archi2likec4.example.yaml`: заменить bank-specific имена (EFS, EFS_PLT, ASBT, Korona, SAP_HCM) на generic (crm, erp, payment_gateway, core_banking)
+- [x] В `pyproject.toml` и `archi2likec4/__init__.py`: bump version `1.0.0` → `1.1.0`
+- [x] Создать `docs/ROADMAP.md` с секциями: PyPI publish workflow, Pydantic config validation, plugin architecture, JSON/YAML output, CI auto-generation, Web UI SSE/diff/dark-theme
+- [x] Add/update tests: убедиться что перемещение diag-скриптов не сломало imports; прогнать `tests/test_cli.py` — должен быть зелёным
+- [x] Mark completed

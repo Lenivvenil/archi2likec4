@@ -2,6 +2,7 @@
 
 import logging
 import re
+from collections.abc import Callable
 
 from ..models import (
     PROMOTE_WARN_THRESHOLD,
@@ -39,8 +40,8 @@ def _assign_tags(source_folder: str) -> list[str]:
 def _attach_subsystems(
     parent_systems: dict[str, System],
     subsystem_acs: list[AppComponent],
-    parent_name_fn,
-    sub_name_fn,
+    parent_name_fn: Callable[[AppComponent], str],
+    sub_name_fn: Callable[[AppComponent], str],
 ) -> None:
     """Attach a list of subsystem AppComponents to their parent Systems.
 
@@ -378,15 +379,15 @@ def attach_interfaces(  # noqa: C901
         logger.warning('%d ApplicationInterface(s) could not be resolved to a system', unresolved)
 
     for iface_id, (owner_sys, owner_sub) in iface_owner.items():
-        iface = iface_index.get(iface_id)
-        if not iface:
+        iface_obj = iface_index.get(iface_id)
+        if not iface_obj:
             continue
         tgt = owner_sub if owner_sub else owner_sys
-        if iface.name not in owner_sys.api_interfaces:
-            owner_sys.api_interfaces.append(iface.name)
-        url = _extract_url(iface.documentation)
+        if iface_obj.name not in owner_sys.api_interfaces:
+            owner_sys.api_interfaces.append(iface_obj.name)
+        url = _extract_url(iface_obj.documentation)
         if url:
-            tgt.links.append((url, iface.name))
+            tgt.links.append((url, iface_obj.name))
 
     iface_c4_path: dict[str, str] = {}
     for iface_id, (owner_sys, owner_sub) in iface_owner.items():

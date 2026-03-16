@@ -20,7 +20,6 @@ from archi2likec4.models import (
     TechElement,
 )
 
-
 # ── Constants ──────────────────────────────────────────────────────────────
 
 class TestNS:
