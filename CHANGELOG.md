@@ -16,9 +16,9 @@ All notable changes to this project will be documented in this file.
 - **`tools/` directory**: diagnostic scripts (stats.py, diag_targets.py, diag_dupes.py, diag_views.py, diag_orphan_subsystems.py) moved out of root for cleaner project layout
 
 ### Changed
-- **`builders/` package**: `builders.py` split into `builders/` package (`systems.py`, `domains.py`, `integrations.py`, `deployment.py`, `datastore.py`)
+- **`builders/` package**: `builders.py` split into `builders/` package (`systems.py`, `domains.py`, `integrations.py`, `deployment.py`, `data.py`)
 - **`generators/` package**: `generators.py` split into `generators/` package (`domains.py`, `systems.py`, `relationships.py`, `deployment.py`, `views.py`, `audit.py`)
-- **`templates/` directory**: Jinja2 templates extracted from inline Python strings to `.j2` files
+- **`templates/` directory**: Jinja2 templates extracted from inline Python strings to `.html` files
 - **Coverage gate**: test coverage gated at 85%, 413+ tests across 12 files
 - **Public API**: `archi2likec4/__init__.py` exports clean public surface (`ConvertConfig`, `load_config`, `run_pipeline`)
 
