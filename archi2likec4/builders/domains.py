@@ -126,15 +126,25 @@ def assign_subdomains(  # noqa: C901
     Returns (subdomains, subdomain_systems) where subdomain_systems maps
     (domain_folder, subdomain_c4_id) → list of system c4_ids.
     """
-    # Build archi_id → ParsedSubdomain index
-    archi_to_psd: dict[str, ParsedSubdomain] = {}
+    # Build archi_id → list[ParsedSubdomain] index.
+    # A component may (incorrectly) appear in multiple subdomain folders; keeping all
+    # candidates allows the lookup below to pick the same-domain one even when another
+    # domain's entry was parsed last.
+    archi_to_psds: dict[str, list[ParsedSubdomain]] = {}
     # Build (domain_folder, subdomain_archi_id) → ParsedSubdomain index for manual overrides.
     # Keyed by domain to avoid cross-domain collisions when two domains share the same
     # subdomain id (e.g. channels/core and products/core).
     sd_id_to_psd: dict[tuple[str, str], ParsedSubdomain] = {}
     for psd in parsed_subdomains:
         for cid in psd.component_ids:
-            archi_to_psd[cid] = psd
+            if cid in archi_to_psds:
+                existing_names = [p.name for p in archi_to_psds[cid]]
+                logger.warning(
+                    'Component %s appears in multiple subdomain folders: %r and %r '
+                    '— all candidates kept; check your model for duplicate assignments.',
+                    cid, existing_names, psd.name,
+                )
+            archi_to_psds.setdefault(cid, []).append(psd)
         sd_id_to_psd[(psd.domain_folder, psd.archi_id)] = psd
 
     subdomain_systems: dict[tuple[str, str], list[str]] = {}
@@ -169,24 +179,51 @@ def assign_subdomains(  # noqa: C901
             if override_sd_id:
                 matched_psd = sd_id_to_psd.get((sys.domain or '', override_sd_id))
         else:
-            # Collect all archi_ids for this system
-            all_ids: list[str] = []
+            # Step 1: check authoritative IDs first (system's own archi_id +
+            # extra_archi_ids from merged duplicates).  First same-domain match wins.
+            primary_ids: list[str] = []
             if sys.archi_id:
-                all_ids.append(sys.archi_id)
-            all_ids.extend(sys.extra_archi_ids)
+                primary_ids.append(sys.archi_id)
+            primary_ids.extend(sys.extra_archi_ids)
 
-            # Find matching subdomain - keep searching until a same-domain
-            # candidate is found.  A merged system may carry extra_archi_ids
-            # from a foreign domain; the first hit might therefore belong to
-            # the wrong domain, so we must not stop at the first match.
-            for aid in all_ids:
-                candidate = archi_to_psd.get(aid)
-                if candidate is None:
+            for aid in primary_ids:
+                candidates = archi_to_psds.get(aid)
+                if not candidates:
                     continue
-                if sys.domain != candidate.domain_folder:
-                    continue
-                matched_psd = candidate
-                break
+                for candidate in candidates:
+                    if sys.domain == candidate.domain_folder:
+                        matched_psd = candidate
+                        break
+                if matched_psd is not None:
+                    break
+
+            # Step 2: if primary IDs don't match any subdomain, fall back to
+            # subsystem archi_ids using majority-vote (same approach as domain
+            # assignment in assign_domains).  This handles models where the
+            # system itself is not listed in subdomain views but its child
+            # components are.  Using majority-vote instead of first-match makes
+            # the result deterministic when subsystems span different subdomain
+            # folders (which is a model error, but we should degrade gracefully).
+            if matched_psd is None and sys.subsystems:
+                sub_hits: dict[tuple[str, str], int] = {}
+                psd_by_key: dict[tuple[str, str], ParsedSubdomain] = {}
+                for sub in sys.subsystems:
+                    if not sub.archi_id:
+                        continue
+                    sub_candidates = archi_to_psds.get(sub.archi_id)
+                    if not sub_candidates:
+                        continue
+                    for candidate in sub_candidates:
+                        if sys.domain == candidate.domain_folder:
+                            key = (candidate.domain_folder, candidate.archi_id)
+                            sub_hits[key] = sub_hits.get(key, 0) + 1
+                            psd_by_key[key] = candidate
+                if sub_hits:
+                    # Most hits wins; ties broken alphabetically by subdomain id
+                    best_key = min(
+                        sub_hits.items(), key=lambda x: (-x[1], x[0][1])
+                    )[0]
+                    matched_psd = psd_by_key[best_key]
 
         if matched_psd is None:
             continue

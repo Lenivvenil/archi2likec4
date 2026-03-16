@@ -1491,6 +1491,94 @@ class TestAssignSubdomains:
         subdomains, _ = assign_subdomains([sys], [psd_banking, psd_aim])
         assert sys.subdomain == 'banking', 'normal assignment must not be overwritten by collision guard'
 
+    def test_subsystem_fallback_basic(self):
+        """System with no archi_id in any subdomain gets assigned via its subsystems' archi_ids."""
+        sub1 = Subsystem(c4_id='sub-a', name='Sub A', archi_id='sub-archi-1')
+        sub2 = Subsystem(c4_id='sub-b', name='Sub B', archi_id='sub-archi-2')
+        sys = System(
+            c4_id='efs',
+            name='EFS',
+            archi_id='sys-not-in-any-subdomain',
+            domain='channels',
+            subsystems=[sub1, sub2],
+        )
+        psd = ParsedSubdomain(
+            archi_id='banking',
+            name='Banking',
+            domain_folder='channels',
+            component_ids=['sub-archi-1', 'sub-archi-2'],
+        )
+        subdomains, subdomain_systems = assign_subdomains([sys], [psd])
+        assert sys.subdomain == 'banking', (
+            'system whose own archi_id is absent must be assigned via subsystem archi_ids'
+        )
+        assert len(subdomains) == 1
+        assert 'efs' in subdomain_systems.get(('channels', 'banking'), [])
+
+    def test_subsystem_fallback_majority_vote(self):
+        """When subsystems point to two subdomains, the one with more hits wins."""
+        # 2 subsystems in 'payments', 1 in 'retail' → 'payments' wins
+        subs = [
+            Subsystem(c4_id='s1', name='S1', archi_id='sa1'),
+            Subsystem(c4_id='s2', name='S2', archi_id='sa2'),
+            Subsystem(c4_id='s3', name='S3', archi_id='sa3'),
+        ]
+        sys = System(
+            c4_id='efs',
+            name='EFS',
+            archi_id='sys-no-match',
+            domain='channels',
+            subsystems=subs,
+        )
+        psd_payments = ParsedSubdomain(
+            archi_id='payments',
+            name='Payments',
+            domain_folder='channels',
+            component_ids=['sa1', 'sa2'],
+        )
+        psd_retail = ParsedSubdomain(
+            archi_id='retail',
+            name='Retail',
+            domain_folder='channels',
+            component_ids=['sa3'],
+        )
+        subdomains, subdomain_systems = assign_subdomains([sys], [psd_payments, psd_retail])
+        assert sys.subdomain == 'payments', (
+            'majority-vote must pick the subdomain with the most subsystem hits'
+        )
+        assert 'efs' in subdomain_systems.get(('channels', 'payments'), [])
+
+    def test_subsystem_fallback_tie_break_alphabetical(self):
+        """When subsystem vote is tied, the subdomain with the lower archi_id wins."""
+        subs = [
+            Subsystem(c4_id='s1', name='S1', archi_id='sa1'),
+            Subsystem(c4_id='s2', name='S2', archi_id='sa2'),
+        ]
+        sys = System(
+            c4_id='efs',
+            name='EFS',
+            archi_id='sys-no-match',
+            domain='channels',
+            subsystems=subs,
+        )
+        psd_beta = ParsedSubdomain(
+            archi_id='beta',
+            name='Beta',
+            domain_folder='channels',
+            component_ids=['sa1'],
+        )
+        psd_alpha = ParsedSubdomain(
+            archi_id='alpha',
+            name='Alpha',
+            domain_folder='channels',
+            component_ids=['sa2'],
+        )
+        subdomains, subdomain_systems = assign_subdomains([sys], [psd_beta, psd_alpha])
+        assert sys.subdomain == 'alpha', (
+            'on equal vote counts, alphabetically earlier subdomain archi_id must win'
+        )
+        assert 'efs' in subdomain_systems.get(('channels', 'alpha'), [])
+
 
 # ── apply_domain_prefix with subdomain ──────────────────────────────────
 
