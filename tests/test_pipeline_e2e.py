@@ -3,7 +3,7 @@
 from pathlib import Path
 
 from archi2likec4.config import ConvertConfig
-from archi2likec4.pipeline import _build, _generate, _parse
+from archi2likec4.pipeline import BuildResult, _build, _generate, _parse, _validate
 
 
 def _create_minimal_model(tmp_path: Path) -> Path:
@@ -152,3 +152,94 @@ class TestPipelineE2E:
         # Pipeline skips _generate when dry_run=True
         assert config.dry_run is True
         assert not output.exists()
+
+
+def _make_empty_built() -> BuildResult:
+    """Create a minimal BuildResult with all-empty data for _validate() tests."""
+    return BuildResult(
+        systems=[],
+        integrations=[],
+        data_access=[],
+        entities=[],
+        domain_systems={},
+        sys_domain={},
+        archi_to_c4={},
+        promoted_archi_to_c4={},
+        promoted_parents={},
+        iface_c4_path={},
+        orphan_fns=0,
+        solution_views=[],
+        relationships=[],
+        domains_info=[],
+        deployment_nodes=[],
+        deployment_map=[],
+        tech_archi_to_c4={},
+        datastore_entity_links=[],
+        intg_skipped=0,
+        intg_total_eligible=0,
+        subdomains=[],
+        subdomain_systems={},
+    )
+
+
+class TestValidate:
+    def test_clean_build_no_warnings_no_errors(self):
+        """Empty build produces 0 warnings and 0 errors."""
+        built = _make_empty_built()
+        config = ConvertConfig()
+        warnings, errors, sv_files, sv_unresolved, sv_total = _validate(built, config)
+        assert warnings == 0
+        assert errors == 0
+        assert sv_total == 0
+        assert sv_unresolved == 0
+        assert isinstance(sv_files, dict)
+
+    def test_orphan_fns_above_threshold_produces_warning(self):
+        """orphan_fns exceeding max_orphan_functions_warn triggers a warning."""
+        built = _make_empty_built()._replace(orphan_fns=10)
+        config = ConvertConfig(max_orphan_functions_warn=5)
+        warnings, errors, _, _, _ = _validate(built, config)
+        assert warnings >= 1
+        assert errors == 0
+
+    def test_orphan_fns_at_threshold_no_warning(self):
+        """orphan_fns exactly at threshold does NOT trigger a warning."""
+        built = _make_empty_built()._replace(orphan_fns=5)
+        config = ConvertConfig(max_orphan_functions_warn=5)
+        warnings, errors, _, _, _ = _validate(built, config)
+        assert warnings == 0
+
+    def test_unassigned_above_threshold_produces_warning(self):
+        """Many unassigned systems trigger a warning."""
+        from archi2likec4.models import System
+        unassigned = [
+            System(c4_id=f's{i}', name=f'Sys{i}', archi_id=f'a-{i}')
+            for i in range(25)
+        ]
+        built = _make_empty_built()._replace(
+            systems=unassigned,
+            domain_systems={'unassigned': unassigned},
+        )
+        config = ConvertConfig(max_unassigned_systems_warn=20)
+        warnings, errors, _, _, _ = _validate(built, config)
+        assert warnings >= 1
+
+    def test_unassigned_below_threshold_no_warning(self):
+        """Unassigned count below threshold does not trigger a warning."""
+        from archi2likec4.models import System
+        unassigned = [System(c4_id='s1', name='S1', archi_id='a-1')]
+        built = _make_empty_built()._replace(
+            systems=unassigned,
+            domain_systems={'unassigned': unassigned},
+        )
+        config = ConvertConfig(max_unassigned_systems_warn=20)
+        warnings, errors, _, _, _ = _validate(built, config)
+        assert warnings == 0
+
+    def test_strict_mode_no_criticals_no_extra_warnings(self):
+        """strict=True with no critical incidents does not add warnings."""
+        built = _make_empty_built()
+        config = ConvertConfig(strict=True)
+        warnings, errors, _, _, _ = _validate(built, config)
+        assert warnings == 0
+        assert errors == 0

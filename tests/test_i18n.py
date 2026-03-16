@@ -1,6 +1,6 @@
 """Tests for archi2likec4.i18n module."""
 
-from archi2likec4.i18n import get_audit_label, get_msg, get_qa10_issue
+from archi2likec4.i18n import get_audit_label, get_msg, get_qa10_issue, get_web_msg
 
 
 class TestGetMsg:
@@ -80,8 +80,7 @@ class TestLanguageInAuditData:
             systems=[sys1],
             domain_systems={'unassigned': [sys1]},
         )
-        config = MockConfig()
-        config.language = 'en'
+        config = MockConfig(language='en')
         summary, incidents = compute_audit_incidents(built, 0, 0, config)
         qa1 = next(i for i in incidents if i.qa_id == 'QA-1')
         assert qa1.title == 'Systems without domain'
@@ -106,3 +105,41 @@ class TestLanguageInAuditData:
         summary, incidents = compute_audit_incidents(built, 0, 0, config)
         qa1 = next(i for i in incidents if i.qa_id == 'QA-1')
         assert qa1.title == 'Системы без домена'
+
+
+class TestGetWebMsg:
+    def test_known_key_ru(self):
+        result = get_web_msg('dashboard', 'ru')
+        assert isinstance(result, str)
+        assert result != ''
+
+    def test_known_key_en(self):
+        result = get_web_msg('dashboard', 'en')
+        assert isinstance(result, str)
+        assert result != ''
+
+    def test_unknown_key_returns_key(self):
+        result = get_web_msg('nonexistent_key_xyz', 'ru')
+        assert result == 'nonexistent_key_xyz'
+
+    def test_default_lang_is_ru(self):
+        result_explicit = get_web_msg('dashboard', 'ru')
+        result_default = get_web_msg('dashboard')
+        assert result_explicit == result_default
+
+
+class TestFormatErrorHandling:
+    """Verify that bad kwargs fall back to returning the raw template."""
+
+    def test_get_msg_bad_kwarg_returns_template(self):
+        # QA-1 description template uses {count}; passing wrong kwarg triggers KeyError
+        result = get_msg('QA-1', 'description', 'en', wrong_key='x')
+        # Should return the raw template string (not raise)
+        assert isinstance(result, str)
+        assert result != ''
+
+    def test_get_audit_label_bad_kwarg_returns_template(self):
+        # auto_generated uses {version} and {date}; wrong kwarg triggers KeyError
+        result = get_audit_label('auto_generated', 'en', bad_key='x')
+        assert isinstance(result, str)
+        assert result != ''

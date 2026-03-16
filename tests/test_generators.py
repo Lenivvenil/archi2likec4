@@ -132,6 +132,49 @@ class TestGenerateDomainC4:
         # CRM rendered after subdomain block closes
         assert idx_crm > idx_sd_close
 
+    def test_system_with_documentation(self):
+        # Covers _render_system documentation branch (lines 23-26)
+        sys = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
+                     documentation='An enterprise file system')
+        result = generate_domain_c4('channels', 'Channels', [sys])
+        assert "description 'An enterprise file system'" in result
+
+    def test_system_long_documentation_truncated(self):
+        # Covers _render_system documentation truncation (lines 24-25)
+        long_doc = 'z' * 600
+        sys = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
+                     documentation=long_doc)
+        result = generate_domain_c4('channels', 'Channels', [sys])
+        assert '...' in result
+
+    def test_system_with_links(self):
+        # Covers _render_system links (line 28)
+        sys = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
+                     links=[('https://docs.example.com', 'Docs')])
+        result = generate_domain_c4('channels', 'Channels', [sys])
+        assert 'https://docs.example.com' in result
+
+    def test_system_with_api_interfaces(self):
+        # Covers _render_system api_interfaces (lines 34-35)
+        sys = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
+                     api_interfaces=['REST', 'gRPC'])
+        result = generate_domain_c4('channels', 'Channels', [sys])
+        assert 'api_interfaces' in result
+        assert 'REST' in result
+
+    def test_subdomain_with_no_systems_skipped(self):
+        # Covers line 80: subdomain skipped when it has no systems assigned
+        sd_empty = Subdomain(c4_id='empty_sd', name='EmptySD', domain_id='channels',
+                             system_ids=[])
+        sd_full = Subdomain(c4_id='payments', name='Payments', domain_id='channels',
+                            system_ids=['efs'])
+        sys = System(c4_id='efs', name='EFS', archi_id='s1', metadata={},
+                     subdomain='payments')
+        result = generate_domain_c4('channels', 'Channels', [sys],
+                                    subdomains=[sd_empty, sd_full])
+        assert 'empty_sd' not in result
+        assert 'payments' in result
+
 
 # ── generate_system_detail_c4 ───────────────────────────────────────────
 
@@ -179,6 +222,65 @@ class TestGenerateSystemDetailC4:
         result = generate_system_detail_c4('channels', sys)
         assert 'extend channels.efs {' in result
         assert 'view efs_detail of channels.efs' in result
+
+    def test_appfunction_long_doc_truncated(self):
+        # Covers _render_appfunction truncation branch (line 18)
+        long_doc = 'x' * 400
+        fn = AppFunction(archi_id='fn-1', name='DoStuff', c4_id='do_stuff',
+                         documentation=long_doc)
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     functions=[fn], metadata={})
+        result = generate_system_detail_c4('channels', sys)
+        assert '...' in result
+
+    def test_subsystem_with_tags_and_doc(self):
+        # Covers _render_subsystem tag (line 38) and documentation (lines 40-43)
+        sub = Subsystem(c4_id='core', name='Core', archi_id='sub-1',
+                        tags=['internal'], documentation='A core subsystem',
+                        metadata={})
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     subsystems=[sub], metadata={})
+        result = generate_system_detail_c4('channels', sys)
+        assert '#internal' in result
+        assert "description 'A core subsystem'" in result
+
+    def test_subsystem_long_doc_truncated(self):
+        # Covers _render_subsystem truncation branch (lines 41-42)
+        long_doc = 'y' * 600
+        sub = Subsystem(c4_id='core', name='Core', archi_id='sub-1',
+                        documentation=long_doc, metadata={})
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     subsystems=[sub], metadata={})
+        result = generate_system_detail_c4('channels', sys)
+        assert '...' in result
+
+    def test_subsystem_with_links(self):
+        # Covers _render_subsystem links (line 45)
+        sub = Subsystem(c4_id='core', name='Core', archi_id='sub-1',
+                        links=[('https://wiki.example.com', 'Wiki')], metadata={})
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     subsystems=[sub], metadata={})
+        result = generate_system_detail_c4('channels', sys)
+        assert 'https://wiki.example.com' in result
+
+    def test_subsystem_with_metadata_items(self):
+        # Covers _render_subsystem metadata loop (line 49)
+        sub = Subsystem(c4_id='core', name='Core', archi_id='sub-1',
+                        metadata={'ci': 'CI-10', 'team': 'platform'})
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     subsystems=[sub], metadata={})
+        result = generate_system_detail_c4('channels', sys)
+        assert "ci 'CI-10'" in result
+
+    def test_subsystem_with_nested_appfunctions(self):
+        # Covers _render_subsystem functions block (lines 53-55)
+        fn = AppFunction(archi_id='fn-1', name='DoWork', c4_id='do_work')
+        sub = Subsystem(c4_id='core', name='Core', archi_id='sub-1',
+                        functions=[fn], metadata={})
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     subsystems=[sub], metadata={})
+        result = generate_system_detail_c4('channels', sys)
+        assert "do_work = appFunction 'DoWork'" in result
 
 
 # ── generate_relationships ───────────────────────────────────────────────

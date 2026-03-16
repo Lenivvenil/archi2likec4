@@ -1549,3 +1549,238 @@ class TestBuildArchiToC4MapSubdomain:
         sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='channels')
         result = build_archi_to_c4_map([sys], {'efs': 'channels'})
         assert result['sys-1'] == 'channels.efs'
+
+
+# ── enrich_deployment_from_visual_nesting ────────────────────────────────
+
+from archi2likec4.builders.deployment import enrich_deployment_from_visual_nesting
+
+
+class TestEnrichDeploymentFromVisualNesting:
+    def test_empty_pairs_returns_zero(self):
+        nodes = [DeploymentNode(c4_id='n1', name='N1', archi_id='a-1', tech_type='Node')]
+        assert enrich_deployment_from_visual_nesting(nodes, []) == 0
+
+    def test_reparents_root_to_parent(self):
+        parent = DeploymentNode(c4_id='parent', name='Parent', archi_id='p-1', tech_type='Node')
+        child = DeploymentNode(c4_id='child', name='Child', archi_id='c-1', tech_type='Node')
+        nodes = [parent, child]
+        count = enrich_deployment_from_visual_nesting(nodes, [('p-1', 'c-1')])
+        assert count == 1
+        assert child in parent.children
+        # child should no longer be a root node
+        assert child not in nodes
+
+    def test_unknown_archi_ids_ignored(self):
+        parent = DeploymentNode(c4_id='n1', name='N1', archi_id='a-1', tech_type='Node')
+        nodes = [parent]
+        count = enrich_deployment_from_visual_nesting(nodes, [('unknown', 'also-unknown')])
+        assert count == 0
+        assert len(nodes) == 1
+
+    def test_already_nested_not_reparented_again(self):
+        child = DeploymentNode(c4_id='child', name='Child', archi_id='c-1', tech_type='Node')
+        parent = DeploymentNode(c4_id='parent', name='Parent', archi_id='p-1', tech_type='Node',
+                                children=[child])
+        nodes = [parent]
+        # child is not in root_ids, so should be ignored
+        count = enrich_deployment_from_visual_nesting(nodes, [('p-1', 'c-1')])
+        assert count == 0
+
+    def test_self_reference_ignored(self):
+        node = DeploymentNode(c4_id='n1', name='N1', archi_id='a-1', tech_type='Node')
+        nodes = [node]
+        count = enrich_deployment_from_visual_nesting(nodes, [('a-1', 'a-1')])
+        assert count == 0
+
+    def test_no_cycle_created(self):
+        """Parent should not be reparented as child of one of its descendants."""
+        # A has child B → trying to make A child of B would create cycle
+        child_b = DeploymentNode(c4_id='b', name='B', archi_id='b-1', tech_type='Node')
+        parent_a = DeploymentNode(c4_id='a', name='A', archi_id='a-1', tech_type='Node',
+                                  children=[child_b])
+        nodes = [parent_a, child_b]
+        # b-1 is not in root_ids, but a-1 is; trying ('b-1', 'a-1') → make A child of B
+        # child_aid='a-1', parent_aid='b-1'
+        # _is_descendant(A, 'b-1') → A.children=[B], B.archi_id=='b-1' → True → skip
+        count = enrich_deployment_from_visual_nesting(nodes, [('b-1', 'a-1')])
+        assert count == 0
+
+    def test_deep_cycle_detection(self):
+        """Detect cycle through multiple levels of nesting (hits recursive _is_descendant)."""
+        # B (root) has grandchild C (not a root): B → X(hidden) → C
+        # X is not in deployment_nodes (not a root), only B and A are roots
+        # Setup: A(root), B(root), X is a child of A, C is a child of X
+        # Trying to make A a child of C forces _is_descendant(A, c-archi)
+        # A.children=[X], X.archi_id!='c-archi' → recurse: X.children=[C], C.archi_id=='c-archi' → True
+        c_node = DeploymentNode(c4_id='c', name='C', archi_id='c-1', tech_type='Node')
+        x_node = DeploymentNode(c4_id='x', name='X', archi_id='x-1', tech_type='Node',
+                                children=[c_node])
+        a_node = DeploymentNode(c4_id='a', name='A', archi_id='a-1', tech_type='Node',
+                                children=[x_node])
+        # B is a root, C is a root (both in deployment_nodes)
+        nodes = [a_node, c_node]
+        # Try making a-1 a child of c-1: ('c-1', 'a-1')
+        # child_aid='a-1', parent_aid='c-1'
+        # _is_descendant(a_node, 'c-1') → a.children=[x] → x.archi_id!='c-1' →
+        #   _is_descendant(x, 'c-1') → x.children=[c] → c.archi_id=='c-1' → True → lines 167-168
+        count = enrich_deployment_from_visual_nesting(nodes, [('c-1', 'a-1')])
+        assert count == 0
+
+    def test_multiple_children_reparented(self):
+        parent = DeploymentNode(c4_id='parent', name='Parent', archi_id='p-1', tech_type='Node')
+        child1 = DeploymentNode(c4_id='c1', name='Child1', archi_id='c-1', tech_type='Node')
+        child2 = DeploymentNode(c4_id='c2', name='Child2', archi_id='c-2', tech_type='Node')
+        nodes = [parent, child1, child2]
+        count = enrich_deployment_from_visual_nesting(nodes, [('p-1', 'c-1'), ('p-1', 'c-2')])
+        assert count == 2
+        assert len(nodes) == 1  # only parent remains as root
+
+
+# ── build_integrations edge cases ────────────────────────────────────────
+
+class TestBuildIntegrationsEdgeCases:
+    def test_access_relationship_skipped(self):
+        comps = [
+            AppComponent(archi_id='s-1', name='SysA'),
+            AppComponent(archi_id='s-2', name='SysB'),
+        ]
+        systems, _ = build_systems(comps, promote_children={})
+        rel = RawRelationship(
+            rel_id='r-1', rel_type='AccessRelationship', name='',
+            source_type='ApplicationComponent', source_id='s-1',
+            target_type='ApplicationComponent', target_id='s-2',
+        )
+        integrations, skipped, total = build_integrations(systems, [rel], {})
+        assert len(integrations) == 0
+        assert total == 0  # AccessRelationship not counted
+
+    def test_structural_relationship_skipped(self):
+        comps = [
+            AppComponent(archi_id='s-1', name='SysA'),
+            AppComponent(archi_id='s-2', name='SysB'),
+        ]
+        systems, _ = build_systems(comps, promote_children={})
+        for rel_type in ('CompositionRelationship', 'AggregationRelationship',
+                         'RealizationRelationship', 'AssignmentRelationship'):
+            rel = RawRelationship(
+                rel_id='r-1', rel_type=rel_type, name='',
+                source_type='ApplicationComponent', source_id='s-1',
+                target_type='ApplicationComponent', target_id='s-2',
+            )
+            integrations, skipped, total = build_integrations(systems, [rel], {})
+            assert len(integrations) == 0
+            assert total == 0
+
+    def test_application_function_relationship_skipped(self):
+        comps = [AppComponent(archi_id='s-1', name='SysA')]
+        systems, _ = build_systems(comps, promote_children={})
+        rel = RawRelationship(
+            rel_id='r-1', rel_type='FlowRelationship', name='',
+            source_type='ApplicationFunction', source_id='fn-1',
+            target_type='ApplicationComponent', target_id='s-1',
+        )
+        integrations, skipped, total = build_integrations(systems, [rel], {})
+        assert total == 0
+
+    def test_subsystem_archi_id_in_path(self):
+        sub = Subsystem(c4_id='core', name='Core', archi_id='sub-1')
+        sys1 = System(c4_id='sysa', name='SysA', archi_id='s-1', subsystems=[sub])
+        sys2 = System(c4_id='sysb', name='SysB', archi_id='s-2')
+        rel = RawRelationship(
+            rel_id='r-1', rel_type='FlowRelationship', name='data',
+            source_type='ApplicationComponent', source_id='sub-1',
+            target_type='ApplicationComponent', target_id='s-2',
+        )
+        integrations, skipped, total = build_integrations([sys1, sys2], [rel], {})
+        assert total == 1
+        assert skipped == 0
+        assert len(integrations) == 1
+        assert 'sysa' in integrations[0].source_path
+
+    def test_promoted_parents_fan_out_source(self):
+        sys1 = System(c4_id='sysa', name='SysA', archi_id='s-1')
+        sys2 = System(c4_id='sysb', name='SysB', archi_id='s-2')
+        # promoted_parents maps parent archi_id → list of child c4_ids
+        promoted = {'parent-1': ['sysa', 'sysb']}
+        rel = RawRelationship(
+            rel_id='r-1', rel_type='FlowRelationship', name='flow',
+            source_type='ApplicationComponent', source_id='parent-1',
+            target_type='ApplicationComponent', target_id='s-2',
+        )
+        integrations, skipped, total = build_integrations([sys1, sys2], [rel], {},
+                                                          promoted_parents=promoted)
+        assert total == 1
+        assert skipped == 0
+
+    def test_promoted_parents_fan_out_target(self):
+        sys1 = System(c4_id='sysa', name='SysA', archi_id='s-1')
+        sys2 = System(c4_id='sysb', name='SysB', archi_id='s-2')
+        promoted = {'parent-1': ['sysa', 'sysb']}
+        rel = RawRelationship(
+            rel_id='r-1', rel_type='FlowRelationship', name='flow',
+            source_type='ApplicationComponent', source_id='s-1',
+            target_type='ApplicationComponent', target_id='parent-1',
+        )
+        integrations, skipped, total = build_integrations([sys1, sys2], [rel], {},
+                                                          promoted_parents=promoted)
+        assert total == 1
+        assert skipped == 0
+
+    def test_interface_as_target(self):
+        sys1 = System(c4_id='sysa', name='SysA', archi_id='s-1')
+        sys2 = System(c4_id='sysb', name='SysB', archi_id='s-2')
+        iface_c4_path = {'iface-1': 'sysb'}
+        rel = RawRelationship(
+            rel_id='r-1', rel_type='FlowRelationship', name='call',
+            source_type='ApplicationComponent', source_id='s-1',
+            target_type='ApplicationInterface', target_id='iface-1',
+        )
+        integrations, skipped, total = build_integrations([sys1, sys2], [rel], iface_c4_path)
+        assert total == 1
+        assert skipped == 0
+
+    def test_interface_as_source(self):
+        sys1 = System(c4_id='sysa', name='SysA', archi_id='s-1')
+        sys2 = System(c4_id='sysb', name='SysB', archi_id='s-2')
+        iface_c4_path = {'iface-src': 'sysa'}
+        rel = RawRelationship(
+            rel_id='r-1', rel_type='FlowRelationship', name='call',
+            source_type='ApplicationInterface', source_id='iface-src',
+            target_type='ApplicationComponent', target_id='s-2',
+        )
+        integrations, skipped, total = build_integrations([sys1, sys2], [rel], iface_c4_path)
+        assert total == 1
+        assert skipped == 0
+
+    def test_two_flows_dedup_label_joined(self):
+        """2-3 flows between same pair get joined with '; '."""
+        sys1 = System(c4_id='sysa', name='SysA', archi_id='s-1')
+        sys2 = System(c4_id='sysb', name='SysB', archi_id='s-2')
+        rels = [
+            RawRelationship(
+                rel_id=f'r-{i}', rel_type='FlowRelationship', name=f'flow{i}',
+                source_type='ApplicationComponent', source_id='s-1',
+                target_type='ApplicationComponent', target_id='s-2',
+            )
+            for i in range(2)
+        ]
+        integrations, _, _ = build_integrations([sys1, sys2], rels, {})
+        assert len(integrations) == 1
+        assert '; ' in integrations[0].name
+
+    def test_many_flows_dedup_label(self):
+        """4+ flows between same pair produces truncated label."""
+        sys1 = System(c4_id='sysa', name='SysA', archi_id='s-1')
+        sys2 = System(c4_id='sysb', name='SysB', archi_id='s-2')
+        rels = [
+            RawRelationship(
+                rel_id=f'r-{i}', rel_type='FlowRelationship', name=f'flow{i}',
+                source_type='ApplicationComponent', source_id='s-1',
+                target_type='ApplicationComponent', target_id='s-2',
+            )
+            for i in range(5)
+        ]
+        integrations, _, _ = build_integrations([sys1, sys2], rels, {})
+        assert len(integrations) == 1
+        assert '...' in integrations[0].name or '5 flows' in integrations[0].name

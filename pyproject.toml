@@ -37,7 +37,7 @@ build-backend = "setuptools.build_meta"
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "--cov=archi2likec4 --cov-fail-under=80"
+addopts = "--cov=archi2likec4 --cov-fail-under=85"
 
 [tool.coverage.run]
 source = ["archi2likec4"]

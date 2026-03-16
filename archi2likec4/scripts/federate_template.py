@@ -33,7 +33,7 @@ def load_registry():
     if not os.path.exists(REGISTRY_PATH):
         print(f"Registry not found: {REGISTRY_PATH}")
         sys.exit(1)
-    with open(REGISTRY_PATH, "r", encoding="utf-8") as f:
+    with open(REGISTRY_PATH, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 
@@ -140,7 +140,7 @@ def federate(filter_name=None):
             src_c4 = os.path.join(local_path, c4_path)
             if os.path.exists(src_c4):
                 dst_c4 = os.path.join(SYSTEMS_DIR, f"{name}.c4")
-                with open(src_c4, "r", encoding="utf-8") as f:
+                with open(src_c4, encoding="utf-8") as f:
                     content = f.read()
                 with open(dst_c4, "w", encoding="utf-8") as f:
                     f.write(f"// Federated from: {repo}\n")
@@ -160,7 +160,7 @@ def federate(filter_name=None):
             src_yaml = os.path.join(local_path, yaml_path)
             if os.path.exists(src_yaml):
                 dst_yaml = os.path.join(SYSTEMS_DIR, f"{name}.yaml")
-                with open(src_yaml, "r", encoding="utf-8") as f:
+                with open(src_yaml, encoding="utf-8") as f:
                     content = f.read()
                 with open(dst_yaml, "w", encoding="utf-8") as f:
                     f.write(f"# Federated from: {repo}\n")
@@ -195,11 +195,11 @@ def federate(filter_name=None):
                 stale_path = os.path.join(SYSTEMS_DIR, fname)
                 # Only remove files created by federation (marker-based)
                 try:
-                    with open(stale_path, "r", encoding="utf-8") as f:
+                    with open(stale_path, encoding="utf-8") as f:
                         first_line = f.readline()
                     if not any(m in first_line for m in FEDERATION_MARKERS):
                         continue  # not a federated file, skip
-                except (IOError, UnicodeDecodeError):
+                except (OSError, UnicodeDecodeError):
                     continue  # can't read, skip
                 os.remove(stale_path)
                 stale += 1

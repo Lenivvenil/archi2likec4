@@ -80,15 +80,15 @@
 
 ### Task 5: Test Completeness — Gap Fill and Mock Cleanup
 Закрыть пробелы в тестовом покрытии: `models.py` (0 прямых тестов), `federation.py` (0 тестов), `pipeline._validate` (не тестирован). Привести `MockConfig`/`MockBuilt` в порядок.
-- [ ] Прочитать `archi2likec4/models.py` полностью; создать `tests/test_models.py` с тестами: конструкция всех dataclass, defaults, edge cases для NS constants, `TRANSLIT_MAP`, `RESERVED_WORDS`, `METADATA_MAPPING`
-- [ ] Прочитать `archi2likec4/federation.py` (39 строк); если `tests/test_federate.py` уже существует — расширить, иначе создать; добавить тесты для `generate_federate_script()` и `generate_registry()`
-- [ ] Прочитать `archi2likec4/pipeline.py`, найти функцию `_validate()`; расширить `tests/test_pipeline_e2e.py` тестами для `_validate()` — проверка QA gate violations, strict mode abort, verbose logging paths
-- [ ] Прочитать `tests/helpers.py`; обновить `MockConfig` — добавить все поля `ConvertConfig` с дефолтами: `language="ru"`, `subdomain_overrides={}`, `strict=False`, `verbose=False`, `dry_run=False`, все quality gate поля (читать `archi2likec4/config.py` для полного списка полей)
-- [ ] Обновить `MockBuilt` в `tests/helpers.py` — убедиться что все поля `BuildResult` покрыты дефолтами (читать `archi2likec4/builders/__init__.py` после Task 2)
-- [ ] Найти ad-hoc патчинг в тестах (например `config.language = 'en'` в `test_i18n.py`) — заменить на `MockConfig(language='en')`
-- [ ] В `pyproject.toml` поднять coverage gate: изменить `--cov-fail-under=80` → `--cov-fail-under=85`
-- [ ] Add/update tests: прогнать весь suite и убедиться что coverage ≥ 85%; если нет — добавить тесты для непокрытых путей
-- [ ] Mark completed
+- [x] Прочитать `archi2likec4/models.py` полностью; создать `tests/test_models.py` с тестами: конструкция всех dataclass, defaults, edge cases для NS constants, `TRANSLIT_MAP`, `RESERVED_WORDS`, `METADATA_MAPPING`
+- [x] Прочитать `archi2likec4/federation.py` (39 строк); если `tests/test_federate.py` уже существует — расширить, иначе создать; добавить тесты для `generate_federate_script()` и `generate_registry()`
+- [x] Прочитать `archi2likec4/pipeline.py`, найти функцию `_validate()`; расширить `tests/test_pipeline_e2e.py` тестами для `_validate()` — проверка QA gate violations, strict mode abort, verbose logging paths
+- [x] Прочитать `tests/helpers.py`; обновить `MockConfig` — добавить все поля `ConvertConfig` с дефолтами: `language="ru"`, `subdomain_overrides={}`, `strict=False`, `verbose=False`, `dry_run=False`, все quality gate поля (читать `archi2likec4/config.py` для полного списка полей)
+- [x] Обновить `MockBuilt` в `tests/helpers.py` — убедиться что все поля `BuildResult` покрыты дефолтами (читать `archi2likec4/builders/__init__.py` после Task 2)
+- [x] Найти ad-hoc патчинг в тестах (например `config.language = 'en'` в `test_i18n.py`) — заменить на `MockConfig(language='en')`
+- [x] В `pyproject.toml` поднять coverage gate: изменить `--cov-fail-under=80` → `--cov-fail-under=85`
+- [x] Add/update tests: прогнать весь suite и убедиться что coverage ≥ 85%; если нет — добавить тесты для непокрытых путей
+- [x] Mark completed
 
 ---
 

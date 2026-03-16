@@ -64,11 +64,11 @@ class TestFederateWorkflow:
             if stem not in known_names and fname != ".gitkeep":
                 fpath = systems_dir / fname
                 try:
-                    with open(fpath, "r", encoding="utf-8") as f:
+                    with open(fpath, encoding="utf-8") as f:
                         first_line = f.readline()
                     if not any(m in first_line for m in FEDERATION_MARKERS):
                         continue
-                except (IOError, UnicodeDecodeError):
+                except (OSError, UnicodeDecodeError):
                     continue
                 cleaned.append(fname)
 
@@ -81,3 +81,57 @@ class TestFederateWorkflow:
         # The function checks isinstance(project, dict) — verify the constant exists
         from archi2likec4.scripts.federate_template import REGISTRY_PATH
         assert isinstance(REGISTRY_PATH, str)
+
+
+# ── Tests for archi2likec4.federation module ──────────────────────────────
+
+class TestGenerateFederateScript:
+    """Tests for federation.generate_federate_script()."""
+
+    def test_returns_string(self):
+        from archi2likec4.federation import generate_federate_script
+        result = generate_federate_script()
+        assert isinstance(result, str)
+
+    def test_nonempty(self):
+        from archi2likec4.federation import generate_federate_script
+        result = generate_federate_script()
+        assert len(result) > 100
+
+    def test_contains_python_code(self):
+        from archi2likec4.federation import generate_federate_script
+        result = generate_federate_script()
+        assert 'def ' in result or 'import ' in result
+
+    def test_consistent_results(self):
+        from archi2likec4.federation import generate_federate_script
+        assert generate_federate_script() == generate_federate_script()
+
+
+class TestGenerateFederationRegistry:
+    """Tests for federation.generate_federation_registry()."""
+
+    def test_returns_string(self):
+        from archi2likec4.federation import generate_federation_registry
+        result = generate_federation_registry()
+        assert isinstance(result, str)
+
+    def test_contains_projects_key(self):
+        from archi2likec4.federation import generate_federation_registry
+        result = generate_federation_registry()
+        assert 'projects:' in result
+
+    def test_contains_template_comment(self):
+        from archi2likec4.federation import generate_federation_registry
+        result = generate_federation_registry()
+        assert 'Federation Registry' in result
+
+    def test_valid_yaml_structure(self):
+        from archi2likec4.federation import generate_federation_registry
+        result = generate_federation_registry()
+        # Should have 'projects: []' indicating empty default list
+        assert 'projects: []' in result
+
+    def test_consistent_results(self):
+        from archi2likec4.federation import generate_federation_registry
+        assert generate_federation_registry() == generate_federation_registry()
