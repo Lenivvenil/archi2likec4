@@ -20,7 +20,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from archi2likec4.config import load_config
 from archi2likec4.pipeline import _parse, _build
 from archi2likec4.utils import flatten_deployment_nodes
-from archi2likec4.builders import _build_comp_c4_path
+from archi2likec4.builders.integrations import _build_comp_c4_path
 
 logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
@@ -197,7 +197,7 @@ def main():
     # Re-run resolution logic to categorize skip reasons
     subsection('Skip reason breakdown')
 
-    from archi2likec4.builders import _build_comp_c4_path as build_paths
+    from archi2likec4.builders.integrations import _build_comp_c4_path as build_paths
     comp_c4_path, comp_system_id = build_paths(systems)
     iface_c4_path = built.iface_c4_path
 
@@ -466,7 +466,7 @@ def main():
             mapped_node_paths.add('.'.join(parts[:i]))
 
     # Build node path index
-    from archi2likec4.builders import _build_deployment_path_index
+    from archi2likec4.builders.deployment import _build_deployment_path_index
     path_index = _build_deployment_path_index(deployment_nodes)
     inv_path = {v: k for k, v in path_index.items()}
 

@@ -15,7 +15,8 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from archi2likec4.config import load_config
 from archi2likec4.pipeline import _parse, _build
-from archi2likec4.builders import _build_comp_c4_path, _build_comp_index
+from archi2likec4.builders.integrations import _build_comp_c4_path
+from archi2likec4.builders.systems import _build_comp_index
 
 logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 

@@ -16,7 +16,7 @@ logging.basicConfig(level=logging.WARNING, format='%(levelname)s: %(message)s')
 
 from archi2likec4.config import load_config
 from archi2likec4.pipeline import _parse, _build
-from archi2likec4.builders import _build_comp_c4_path
+from archi2likec4.builders.integrations import _build_comp_c4_path
 
 config = load_config(None)
 config.model_root = Path('architectural_repository/model').resolve()
