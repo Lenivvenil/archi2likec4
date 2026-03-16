@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import html
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -145,7 +146,7 @@ def create_app(
 
     @app.errorhandler(RuntimeError)
     def _handle_runtime_error(error):
-        return f'<h1>Configuration Error</h1><pre>{error}</pre>', 500
+        return f'<h1>Configuration Error</h1><pre>{html.escape(str(error))}</pre>', 500
 
     @app.route('/')
     def dashboard():
