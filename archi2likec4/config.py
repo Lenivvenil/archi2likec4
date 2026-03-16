@@ -244,12 +244,12 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                 f"domain_overrides: expected mapping, got {type(data['domain_overrides']).__name__}")
         overrides: dict[str, str] = {}
         for k, v in data['domain_overrides'].items():
-            val = str(v)
-            if not _VALID_C4_ID.match(val):
+            id_val = str(v)
+            if not _VALID_C4_ID.match(id_val):
                 raise ValueError(
                     f"domain_overrides['{k}']: invalid C4 identifier "
-                    f"'{val}' (must match {_VALID_C4_ID.pattern})")
-            overrides[str(k)] = val
+                    f"'{id_val}' (must match {_VALID_C4_ID.pattern})")
+            overrides[str(k)] = id_val
         config.domain_overrides = overrides
     if 'subdomain_overrides' in data:
         if not isinstance(data['subdomain_overrides'], dict):
@@ -257,12 +257,12 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                 f"subdomain_overrides: expected mapping, got {type(data['subdomain_overrides']).__name__}")
         sd_overrides: dict[str, str] = {}
         for k, v in data['subdomain_overrides'].items():
-            val = str(v)
-            if not _VALID_C4_ID.match(val):
+            id_val = str(v)
+            if not _VALID_C4_ID.match(id_val):
                 raise ValueError(
                     f"subdomain_overrides['{k}']: invalid C4 identifier "
-                    f"'{val}' (must match {_VALID_C4_ID.pattern})")
-            sd_overrides[str(k)] = val
+                    f"'{id_val}' (must match {_VALID_C4_ID.pattern})")
+            sd_overrides[str(k)] = id_val
         config.subdomain_overrides = sd_overrides
     if 'reviewed_systems' in data:
         if not isinstance(data['reviewed_systems'], list):

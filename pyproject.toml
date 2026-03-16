@@ -63,12 +63,10 @@ disallow_untyped_defs = false
 [[tool.mypy.overrides]]
 module = "archi2likec4.builders"
 disallow_untyped_defs = false
-ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = "archi2likec4.config"
 disallow_untyped_defs = false
-ignore_errors = true
 
 [[tool.mypy.overrides]]
 module = "archi2likec4.scripts.federate_template"

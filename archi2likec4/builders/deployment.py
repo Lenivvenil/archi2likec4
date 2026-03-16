@@ -274,7 +274,7 @@ def build_archi_to_c4_map(
     result: dict[str, str] = {}
     for sys in systems:
         domain = sys_domain.get(sys.c4_id, 'unassigned')
-        subdomain = sys_subdomain.get(sys.c4_id, '') if sys_subdomain else sys.subdomain
+        subdomain = sys_subdomain.get(sys.c4_id, '') if sys_subdomain else ''
         sys_path = f'{domain}.{subdomain}.{sys.c4_id}' if subdomain else f'{domain}.{sys.c4_id}'
         if sys.archi_id:
             result[sys.archi_id] = sys_path
