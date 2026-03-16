@@ -1,6 +1,5 @@
 """Tests for archi2likec4.generators — .c4 file content generation."""
 
-
 from archi2likec4.generators import (
     generate_audit_md,
     generate_datastore_mapping_c4,
@@ -18,6 +17,7 @@ from archi2likec4.generators import (
     generate_spec,
     generate_system_detail_c4,
 )
+from archi2likec4.generators.views import _system_path_from_c4
 from archi2likec4.models import (
     AppFunction,
     DataAccess,
@@ -1080,3 +1080,58 @@ class TestSolutionViewsSubdomainPaths:
         content = files['channels']
         # sys_subdomain is authoritative: core is in subdomain efs, so path is channels.efs.core
         assert 'of channels.efs.core' in content
+
+
+class TestSystemPathFromC4:
+    """Unit tests for _system_path_from_c4 path disambiguation helper."""
+
+    def test_two_part_path_no_subdomain(self):
+        """Simple domain.system path returned as-is."""
+        assert _system_path_from_c4('products.billing', None) == 'products.billing'
+
+    def test_two_part_path_with_subdomain_dict(self):
+        """Two-part path has no subdomain segment — returns domain.system unchanged."""
+        assert _system_path_from_c4('products.billing', {'billing': 'core'}) == 'products.billing'
+
+    def test_three_part_path_subsystem_no_subdomain_dict(self):
+        """Three-part path without sys_subdomain falls back to domain.segment1."""
+        assert _system_path_from_c4('products.billing.invoices', None) == 'products.billing'
+
+    def test_three_part_path_system_in_subdomain(self):
+        """Three-part path domain.subdomain.system identified via sys_subdomain lookup."""
+        sys_subdomain = {'payments': 'core'}
+        result = _system_path_from_c4('products.core.payments', sys_subdomain)
+        assert result == 'products.core.payments'
+
+    def test_three_part_path_segment2_not_in_subdomain(self):
+        """Three-part path where parts[2] has no subdomain mapping → domain.parts[1]."""
+        sys_subdomain = {'other': 'core'}
+        result = _system_path_from_c4('products.billing.invoices', sys_subdomain)
+        assert result == 'products.billing'
+
+    def test_four_part_path_system_in_subdomain(self):
+        """Four-part path domain.subdomain.system.fn extracts domain.subdomain.system."""
+        sys_subdomain = {'payments': 'core'}
+        result = _system_path_from_c4('products.core.payments.fn1', sys_subdomain)
+        assert result == 'products.core.payments'
+
+    def test_sys_ids_filter_prevents_false_match(self):
+        """sys_ids guard: parts[2] must be a known system; subsystem archi_id skipped."""
+        sys_subdomain = {'invoices': 'billing'}
+        # 'invoices' looks like a system in subdomain 'billing', but is not in sys_ids
+        sys_ids = {'billing', 'other'}
+        result = _system_path_from_c4('products.billing.invoices', sys_subdomain, sys_ids=sys_ids)
+        assert result == 'products.billing'
+
+    def test_sys_domain_filter_prevents_cross_domain_match(self):
+        """sys_domain guard: parts[2] must belong to parts[0] domain."""
+        sys_subdomain = {'payments': 'core'}
+        sys_ids = {'payments'}
+        # payments belongs to 'finance', not 'products'
+        sys_domain = {'payments': 'finance'}
+        result = _system_path_from_c4('products.core.payments', sys_subdomain, sys_ids=sys_ids, sys_domain=sys_domain)
+        assert result == 'products.core'
+
+    def test_single_part_path_returned_unchanged(self):
+        """Single-segment path returned as-is (no dots)."""
+        assert _system_path_from_c4('billing', None) == 'billing'

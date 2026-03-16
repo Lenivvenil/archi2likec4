@@ -3,7 +3,6 @@
 All public symbols are re-exported here for backward compatibility.
 """
 
-from ..utils import flatten_deployment_nodes
 from .data import build_data_access, build_data_entities, build_datastore_entity_links
 from .deployment import (
     build_archi_to_c4_map,
@@ -15,9 +14,6 @@ from .deployment import (
 from .domains import apply_domain_prefix, assign_domains, assign_subdomains
 from .integrations import build_integrations
 from .systems import attach_functions, attach_interfaces, build_systems
-
-# Backward-compat alias (Task 1 moved the real impl to utils)
-_flatten_deployment_nodes = flatten_deployment_nodes
 
 __all__ = [
     'apply_domain_prefix',
@@ -35,5 +31,4 @@ __all__ = [
     'build_systems',
     'build_tech_archi_to_c4_map',
     'enrich_deployment_from_visual_nesting',
-    '_flatten_deployment_nodes',
 ]

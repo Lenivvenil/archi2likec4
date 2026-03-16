@@ -209,7 +209,6 @@ def generate_solution_views(  # noqa: C901
             c4_paths: list[str] = []
             entity_paths: list[str] = []
             unresolved = 0
-            system_c4_ids: set[str] = set()  # track unique systems
 
             if sv.view_type == 'deployment':
                 # Deployment views resolve via tech_archi_to_c4, not archi_to_c4
@@ -235,15 +234,9 @@ def generate_solution_views(  # noqa: C901
                     c4_path = archi_to_c4.get(aid)
                     if c4_path:
                         c4_paths.append(c4_path)
-                        parts = c4_path.split('.')
-                        if len(parts) >= 2:
-                            system_c4_ids.add(parts[1])
                     elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
                         for child_path in promoted_archi_to_c4[aid]:
                             c4_paths.append(child_path)
-                            parts = child_path.split('.')
-                            if len(parts) >= 2:
-                                system_c4_ids.add(parts[1])
                     else:
                         unresolved += 1
             elif sv.view_type == 'integration':
@@ -260,15 +253,9 @@ def generate_solution_views(  # noqa: C901
                     c4_path = archi_to_c4.get(aid)
                     if c4_path:
                         c4_paths.append(c4_path)
-                        parts = c4_path.split('.')
-                        if len(parts) >= 2:
-                            system_c4_ids.add(parts[1])
                     elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
                         for child_path in promoted_archi_to_c4[aid]:
                             c4_paths.append(child_path)
-                            parts = child_path.split('.')
-                            if len(parts) >= 2:
-                                system_c4_ids.add(parts[1])
                     else:
                         unresolved += 1
             else:
@@ -277,15 +264,9 @@ def generate_solution_views(  # noqa: C901
                     c4_path = archi_to_c4.get(aid)
                     if c4_path:
                         c4_paths.append(c4_path)
-                        parts = c4_path.split('.')
-                        if len(parts) >= 2:
-                            system_c4_ids.add(parts[1])
                     elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
                         for child_path in promoted_archi_to_c4[aid]:
                             c4_paths.append(child_path)
-                            parts = child_path.split('.')
-                            if len(parts) >= 2:
-                                system_c4_ids.add(parts[1])
                     else:
                         unresolved += 1
             total_unresolved += unresolved
