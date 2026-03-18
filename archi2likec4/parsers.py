@@ -55,7 +55,7 @@ def _detect_special_folder(xml_path: Path) -> str:
 def _is_in_trash(xml_path: Path, base_dir: Path) -> bool:
     """Return True if *xml_path* is inside a folder named 'trash'."""
     current = xml_path.parent
-    while current != base_dir:
+    while current != base_dir and current != current.parent:
         folder_xml = current / 'folder.xml'
         if folder_xml.exists():
             try:
@@ -78,7 +78,7 @@ def _find_parent_component(xml_path: Path, app_dir: Path) -> str:
     Folders with multiple components are ambiguous and skipped.
     """
     current = xml_path.parent
-    while current != app_dir.parent:
+    while current != app_dir.parent and current != current.parent:
         ac_xmls = list(current.glob('ApplicationComponent_*.xml'))
         if len(ac_xmls) == 1:
             try:
