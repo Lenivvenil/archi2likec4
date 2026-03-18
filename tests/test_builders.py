@@ -1070,6 +1070,27 @@ class TestBuildTechArchiToC4Map:
         assert result['n-1'] == 'srv'
         assert result['sw-1'] == 'srv.pg'
 
+    def test_deployment_path_index_root_no_prefix(self):
+        """Root node gets bare c4_id as path, no leading dot."""
+        root = DeploymentNode(c4_id='dc_main', name='DC Main', archi_id='loc-1',
+                              tech_type='Location', kind='infraLocation')
+        result = build_tech_archi_to_c4_map([root])
+        assert result['loc-1'] == 'dc_main'
+        assert not result['loc-1'].startswith('.')
+
+    def test_deployment_path_index_nested_qualified(self):
+        """Deeply nested node gets fully qualified parent.child.grandchild path."""
+        grandchild = DeploymentNode(c4_id='pg', name='PostgreSQL', archi_id='sw-1',
+                                    tech_type='SystemSoftware', kind='dataStore')
+        child = DeploymentNode(c4_id='worker', name='Worker', archi_id='n-1',
+                               tech_type='Node', kind='infraNode', children=[grandchild])
+        root = DeploymentNode(c4_id='dc', name='DC', archi_id='loc-1',
+                              tech_type='Location', kind='infraLocation', children=[child])
+        result = build_tech_archi_to_c4_map([root])
+        assert result['loc-1'] == 'dc'
+        assert result['n-1'] == 'dc.worker'
+        assert result['sw-1'] == 'dc.worker.pg'
+
 
 # ── dataStore detection ─────────────────────────────────────────────────
 

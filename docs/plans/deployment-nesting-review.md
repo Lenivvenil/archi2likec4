@@ -43,16 +43,16 @@
 ### Task 3: Audit Deployment Mapping Paths and Cross-References
 Проверить корректность qualified c4-путей в `deployment/mapping.c4`. Mapping связывает app-сторону (`domain.subdomain.system.subsystem`) с infra-стороной (`location.cluster.node`). После введения 5-уровневой иерархии (subdomain) пути изменились — убедиться, что subdomain корректно учитывается в обеих сторонах mapping. Также проверить, что все пути в mapping действительно разрешаются в элементы из `topology.c4` и `domains/*.c4`.
 
-- [ ] Прочитать `archi2likec4/builders/deployment.py`, функцию `build_deployment_map()` (строки 195–260) — проверить: (a) app-сторона: `f'{domain}.{subdomain}.{sys.c4_id}'` — а если subdomain пустая строка `''`? Сейчас `if subdomain` предотвращает `domain..system`, проверить тестом; (b) subsystem path строится как `f'{full}.{sub.c4_id}'` — а если subsystem также имеет subdomain? Убедиться что subdomain применяется только на уровне system; (c) infra-сторона: `_build_deployment_path_index()` строит qualified paths через рекурсию с prefix — проверить, что prefix для root нод не содержит лишней точки
-- [ ] Прочитать `_build_deployment_path_index()` (строки 172–185) — проверить условие `f'{prefix}{node.c4_id}' if not prefix else f'{prefix}.{node.c4_id}'` — тут ошибка: когда prefix пустой, используется `f'{prefix}{node.c4_id}'` что правильно (`''` + id = id), но когда prefix НЕ пустой, используется `f'{prefix}.{node.c4_id}'` — тоже правильно. Но: проверить, что при первом вызове передаётся `prefix=''` (по умолчанию), а не `prefix=None`
-- [ ] Добавить валидацию в pipeline (`_validate` или post-generation): пройтись по всем парам в `deployment_map` и проверить, что infra-путь (правая сторона) действительно существует в `tech_archi_to_c4` values. Если путь не разрешается — `logger.warning('Dangling deployment mapping: %s -> %s')`. Это поймает рассинхронизации между topology и mapping
-- [ ] Add/update tests (`tests/test_builders.py`):
+- [x] Прочитать `archi2likec4/builders/deployment.py`, функцию `build_deployment_map()` (строки 195–260) — проверить: (a) app-сторона: `f'{domain}.{subdomain}.{sys.c4_id}'` — а если subdomain пустая строка `''`? Сейчас `if subdomain` предотвращает `domain..system`, проверить тестом; (b) subsystem path строится как `f'{full}.{sub.c4_id}'` — а если subsystem также имеет subdomain? Убедиться что subdomain применяется только на уровне system; (c) infra-сторона: `_build_deployment_path_index()` строит qualified paths через рекурсию с prefix — проверить, что prefix для root нод не содержит лишней точки
+- [x] Прочитать `_build_deployment_path_index()` (строки 172–185) — проверить условие `f'{prefix}{node.c4_id}' if not prefix else f'{prefix}.{node.c4_id}'` — тут ошибка: когда prefix пустой, используется `f'{prefix}{node.c4_id}'` что правильно (`''` + id = id), но когда prefix НЕ пустой, используется `f'{prefix}.{node.c4_id}'` — тоже правильно. Но: проверить, что при первом вызове передаётся `prefix=''` (по умолчанию), а не `prefix=None`
+- [x] Добавить валидацию в pipeline (`_validate` или post-generation): пройтись по всем парам в `deployment_map` и проверить, что infra-путь (правая сторона) действительно существует в `tech_archi_to_c4` values. Если путь не разрешается — `logger.warning('Dangling deployment mapping: %s -> %s')`. Это поймает рассинхронизации между topology и mapping
+- [x] Add/update tests (`tests/test_builders.py`):
   - `test_deployment_map_with_subdomain_path` — system с subdomain → mapping путь `domain.subdomain.system`
   - `test_deployment_map_without_subdomain_no_double_dot` — system без subdomain → `domain.system`, не `domain..system`
   - `test_deployment_path_index_root_no_prefix` — root node → c4_id без точки-prefix
   - `test_deployment_path_index_nested_qualified` — вложенный node → `parent.child` qualified path
   - `test_deployment_map_subsystem_inherits_subdomain` — subsystem mapping включает subdomain system-родителя
-- [ ] Mark completed
+- [x] Mark completed
 
 ---
 

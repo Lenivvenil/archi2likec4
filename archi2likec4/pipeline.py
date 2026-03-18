@@ -281,6 +281,12 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
         systems, deployment_nodes, parsed.relationships, sys_domain, sys_subdomain)
     logger.info('%d app→infrastructure deployment mappings', len(deployment_map))
 
+    # Validate deployment mapping: check all infra paths resolve
+    tech_path_values = set(tech_archi_to_c4.values())
+    for app_path, infra_path in deployment_map:
+        if infra_path not in tech_path_values:
+            logger.warning('Dangling deployment mapping: %s -> %s', app_path, infra_path)
+
     logger.info('Building dataStore→dataEntity links...')
     datastore_entity_links = build_datastore_entity_links(
         deployment_nodes, entities, parsed.relationships)
