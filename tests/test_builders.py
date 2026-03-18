@@ -20,7 +20,6 @@ from archi2likec4.builders import (
     validate_deployment_tree,
 )
 from archi2likec4.builders.deployment import enrich_deployment_from_visual_nesting
-from archi2likec4.parsers import _extract_visual_nesting
 from archi2likec4.models import (
     AppComponent,
     AppFunction,
@@ -37,6 +36,7 @@ from archi2likec4.models import (
     System,
     TechElement,
 )
+from archi2likec4.parsers import _extract_visual_nesting
 
 # ── build_systems ────────────────────────────────────────────────────────
 
@@ -2093,9 +2093,9 @@ class TestValidateDeploymentTree:
         # A node with empty c4_id under a parent would produce 'parent.' path
         child = DeploymentNode(c4_id='', name='Empty', archi_id='e-1',
                                tech_type='Node', kind='infraNode')
-        parent = DeploymentNode(c4_id='dc', name='DC', archi_id='loc-1',
-                                tech_type='Location', kind='infraLocation',
-                                children=[child])
+        DeploymentNode(c4_id='dc', name='DC', archi_id='loc-1',
+                       tech_type='Location', kind='infraLocation',
+                       children=[child])
         # parent path = 'dc', child path = 'dc.' — check if '..' appears
         # Actually '..' requires two adjacent dots: e.g. parent c4_id='a', child c4_id=''
         # path would be 'a.' which has no '..' — need nested empty
@@ -2108,7 +2108,6 @@ class TestValidateDeploymentTree:
                               children=[mid])
         violations = validate_deployment_tree([root])
         # 'top..x' contains '..'
-        has_double_dot = any('Double-dot' in v for v in violations)
         # Either the double-dot is caught or the empty c4_id produces a path without it
         # The key invariant: the function checks and reports if found
         assert isinstance(violations, list)
