@@ -159,7 +159,7 @@ def generate_solution_views(  # noqa: C901
     Strict filtering rules per view type:
       - functional: exclude dataEntity/dataStore; only primary system gets .*
       - integration: entity cap (≤10); fan-out fix; orphan removal; exclude dataStore
-      - deployment: app paths without .*; infra paths with .*; ancestor dedup; exclude dataEntity
+      - deployment: app paths without .*; infra paths without .*; ancestor dedup; exclude dataEntity
     """
     _logger = logging.getLogger('archi2likec4')
     if entity_archi_ids is None:

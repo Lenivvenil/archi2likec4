@@ -394,3 +394,59 @@ class TestQA10DeploymentHierarchy:
         _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
         qa10 = next((i for i in incidents if i.qa_id == 'QA-10'), None)
         assert qa10 is None
+
+    def test_qa10_leaf_with_children(self):
+        """infraSoftware with children should trigger QA-10 (leaf_with_children)."""
+        grandchild = DeploymentNode(c4_id='mod', name='Module', archi_id='sw-2',
+                                     tech_type='SystemSoftware', kind='infraSoftware')
+        sw = DeploymentNode(c4_id='pg', name='PostgreSQL', archi_id='sw-1',
+                            tech_type='SystemSoftware', kind='infraSoftware',
+                            children=[grandchild])
+        node = DeploymentNode(c4_id='srv', name='Server', archi_id='n-1',
+                              tech_type='Node', kind='infraNode', children=[sw])
+        loc = DeploymentNode(c4_id='dc', name='DC', archi_id='loc-1',
+                             tech_type='Location', kind='infraLocation', children=[node])
+        built = MockBuilt(deployment_nodes=[loc])
+        _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
+        qa10 = next((i for i in incidents if i.qa_id == 'QA-10'), None)
+        assert qa10 is not None
+        leaf_issues = [a for a in qa10.affected
+                       if 'Leaf' in a['issue'] or 'leaf' in a['issue'].lower()]
+        assert len(leaf_issues) >= 1
+        assert leaf_issues[0]['name'] == 'PostgreSQL'
+
+    def test_qa10_excessive_depth(self):
+        """Nesting depth >6 should trigger QA-10 (excessive_depth)."""
+        # Build a chain of 7 levels: loc → n1 → n2 → n3 → n4 → n5 → sw
+        sw = DeploymentNode(c4_id='sw', name='DeepSW', archi_id='sw-1',
+                            tech_type='SystemSoftware', kind='infraSoftware')
+        current = sw
+        for i in range(5, 0, -1):
+            current = DeploymentNode(
+                c4_id=f'n{i}', name=f'Node{i}', archi_id=f'n-{i}',
+                tech_type='Node', kind='infraNode', children=[current])
+        loc = DeploymentNode(c4_id='dc', name='DC', archi_id='loc-1',
+                             tech_type='Location', kind='infraLocation',
+                             children=[current])
+        built = MockBuilt(deployment_nodes=[loc])
+        _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
+        qa10 = next((i for i in incidents if i.qa_id == 'QA-10'), None)
+        assert qa10 is not None
+        depth_issues = [a for a in qa10.affected
+                        if 'глубин' in a['issue'].lower() or 'depth' in a['issue'].lower()]
+        assert len(depth_issues) >= 1
+
+    def test_qa10_nested_infranode_under_location_ok(self):
+        """infraNode → infraNode → Location chain should NOT trigger 'root without location'."""
+        inner = DeploymentNode(c4_id='inner', name='InnerNode', archi_id='n-2',
+                               tech_type='Node', kind='infraNode')
+        outer = DeploymentNode(c4_id='outer', name='OuterNode', archi_id='n-1',
+                               tech_type='Node', kind='infraNode', children=[inner])
+        loc = DeploymentNode(c4_id='dc', name='DC', archi_id='loc-1',
+                             tech_type='Location', kind='infraLocation',
+                             children=[outer])
+        built = MockBuilt(deployment_nodes=[loc])
+        _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
+        qa10 = next((i for i in incidents if i.qa_id == 'QA-10'), None)
+        # No issues: inner is transitively under location
+        assert qa10 is None

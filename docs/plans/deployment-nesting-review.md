@@ -59,15 +59,15 @@
 ### Task 4: Audit Deployment Solution Views and QA-10 Coverage
 Проверить генерацию deployment solution views — исторически были проблемы с wildcard expansion (`.* ` убрано), с include-путями и с тем, что deployment views должны показывать infra-элементы из `deployment_map`, а не только прямые element_archi_ids. Проверить и усилить QA-10 (deployment hierarchy issues): сейчас он ловит 3 паттерна — floating software, empty location, root node without location. Добавить недостающие паттерны.
 
-- [ ] Прочитать `archi2likec4/generators/solution_views.py` (или где генерируются solution views) — найти обработку `view_type == 'deployment'`. Проверить: (a) include-элементы — используются ли `tech_archi_to_c4` для разрешения infra-путей? (b) если deployment view содержит только app-элементы, берутся ли их infra-targets из `deployment_map`? Написать тест если не покрыто; (c) не осталось ли `.*` wildcard expansion — поискать `Grep` по `*` в генераторах
-- [ ] Прочитать `archi2likec4/audit_data.py` строки 317–368 (QA-10) — проверить полноту проверок. Добавить: (a) Check 4: infraSoftware/dataStore с children (leaf node, у которого есть дети — нарушение модели); (b) Check 5: глубина вложенности > 6 уровней (вероятно ошибка парсинга/enrichment); (c) Check 6: дублирование archi_id в разных ветках дерева (один элемент появляется и как child location_A, и как child location_B)
-- [ ] Убедиться, что QA-10 check 3 ("root Node/Zone not under Location") корректно работает с учётом того, что `location_child_ids` собирает только ПРЯМЫХ children Location — infraNode может быть вложен через промежуточный infraNode, который сам вложен в Location. Сейчас такой infraNode попадёт в root list как "не под Location", хотя он вложен через цепочку. Проверить и исправить если нужно
-- [ ] Add/update tests:
+- [x] Прочитать `archi2likec4/generators/solution_views.py` (или где генерируются solution views) — найти обработку `view_type == 'deployment'`. Проверить: (a) include-элементы — используются ли `tech_archi_to_c4` для разрешения infra-путей? (b) если deployment view содержит только app-элементы, берутся ли их infra-targets из `deployment_map`? Написать тест если не покрыто; (c) не осталось ли `.*` wildcard expansion — поискать `Grep` по `*` в генераторах
+- [x] Прочитать `archi2likec4/audit_data.py` строки 317–368 (QA-10) — проверить полноту проверок. Добавить: (a) Check 4: infraSoftware/dataStore с children (leaf node, у которого есть дети — нарушение модели); (b) Check 5: глубина вложенности > 6 уровней (вероятно ошибка парсинга/enrichment); (c) Check 6: дублирование archi_id в разных ветках дерева (один элемент появляется и как child location_A, и как child location_B)
+- [x] Убедиться, что QA-10 check 3 ("root Node/Zone not under Location") корректно работает с учётом того, что `location_child_ids` собирает только ПРЯМЫХ children Location — infraNode может быть вложен через промежуточный infraNode, который сам вложен в Location. Сейчас такой infraNode попадёт в root list как "не под Location", хотя он вложен через цепочку. Проверить и исправить если нужно
+- [x] Add/update tests:
   - `tests/test_audit_data.py`: `test_qa10_leaf_with_children` — infraSoftware с children вызывает инцидент
   - `tests/test_audit_data.py`: `test_qa10_excessive_depth` — дерево глубиной 7 вызывает инцидент
   - `tests/test_audit_data.py`: `test_qa10_nested_infranode_under_location_ok` — infraNode → infraNode → Location цепочка НЕ вызывает "root without location"
   - `tests/test_generators.py`: `test_deployment_solution_view_includes_infra_from_map` — deployment solution view включает infra-элементы из deployment_map
-- [ ] Mark completed
+- [x] Mark completed
 
 ---
 

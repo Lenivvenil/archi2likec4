@@ -316,7 +316,10 @@ _MESSAGES: dict[str, dict[str, dict[str, str]]] = {
             'remediation': (
                 '1. SystemSoftware должен быть вложен в Node (AggregationRelationship)\n'
                 '2. Location должен содержать хотя бы один Node\n'
-                '3. Root Node должен быть вложен в Location'
+                '3. Root Node должен быть вложен в Location\n'
+                '4. Leaf-ноды (ПО/хранилище) не должны содержать дочерних элементов\n'
+                '5. Глубина вложенности не должна превышать 6 уровней\n'
+                '6. Один элемент не должен появляться в нескольких ветках дерева'
             ),
         },
         'en': {
@@ -332,7 +335,10 @@ _MESSAGES: dict[str, dict[str, dict[str, str]]] = {
             'remediation': (
                 '1. SystemSoftware must be nested in a Node (AggregationRelationship)\n'
                 '2. Location must contain at least one Node\n'
-                '3. Root Node must be nested in a Location'
+                '3. Root Node must be nested in a Location\n'
+                '4. Leaf nodes (software/dataStore) must not have children\n'
+                '5. Nesting depth must not exceed 6 levels\n'
+                '6. An element must not appear in multiple tree branches'
             ),
         },
     },
@@ -351,6 +357,18 @@ _QA10_ISSUES: dict[str, dict[str, str]] = {
     'root_no_location': {
         'ru': 'Root Node без привязки к Location',
         'en': 'Root Node not under a Location',
+    },
+    'leaf_with_children': {
+        'ru': 'Leaf-нод (ПО/хранилище) содержит дочерние элементы',
+        'en': 'Leaf node (software/dataStore) has children',
+    },
+    'excessive_depth': {
+        'ru': 'Чрезмерная глубина вложенности (>6 уровней)',
+        'en': 'Excessive nesting depth (>6 levels)',
+    },
+    'duplicate_archi_id': {
+        'ru': 'Дублирование archi_id в разных ветках дерева',
+        'en': 'Duplicate archi_id across different tree branches',
     },
 }
 

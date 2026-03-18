@@ -341,17 +341,66 @@ def compute_audit_incidents(
                         'issue': get_qa10_issue('empty_location', lang),
                     })
 
-            # Check 3: Root Node/Zone not under Location
-            location_child_ids: set[str] = set()
+            # Check 3: Root Node/Zone not under Location (transitive)
+            # Collect ALL archi_ids that are transitively nested under any Location
+            under_location: set[str] = set()
+
+            def _collect_descendants(node: object) -> None:
+                for child in node.children:  # type: ignore[attr-defined]
+                    under_location.add(child.archi_id)  # type: ignore[attr-defined]
+                    _collect_descendants(child)
+
             for loc in locations:
-                for child in loc.children:
-                    location_child_ids.add(child.archi_id)
+                _collect_descendants(loc)
             for dn in deployment_nodes:
-                if dn.kind in ('infraNode', 'infraZone') and dn.archi_id not in location_child_ids:
+                if dn.kind in ('infraNode', 'infraZone') and dn.archi_id not in under_location:
                     qa10_affected.append({
                         'name': dn.name, 'kind': dn.kind,
                         'issue': get_qa10_issue('root_no_location', lang),
                     })
+
+        # Check 4: Leaf node (infraSoftware/dataStore) with children
+        for dn in all_dn:
+            if dn.kind in ('infraSoftware', 'dataStore') and dn.children:
+                qa10_affected.append({
+                    'name': dn.name, 'kind': dn.kind,
+                    'issue': get_qa10_issue('leaf_with_children', lang),
+                })
+
+        # Check 5: Excessive nesting depth (> 6 levels)
+        def _max_depth(nodes: list, depth: int = 1) -> int:
+            if not nodes:
+                return depth - 1
+            return max(_max_depth(n.children, depth + 1) for n in nodes)
+
+        def _nodes_at_depth(nodes: list, target: int, current: int = 1) -> list:
+            result = []
+            for n in nodes:
+                if current == target:
+                    result.append(n)
+                result.extend(_nodes_at_depth(n.children, target, current + 1))
+            return result
+
+        max_d = _max_depth(deployment_nodes)
+        if max_d > 6:
+            deep_nodes = _nodes_at_depth(deployment_nodes, max_d)
+            for dn in deep_nodes:
+                qa10_affected.append({
+                    'name': dn.name, 'kind': dn.kind,
+                    'issue': get_qa10_issue('excessive_depth', lang),
+                })
+
+        # Check 6: Duplicate archi_id across different branches
+        seen_ids: dict[str, str] = {}  # archi_id → first parent name
+        for dn in all_dn:
+            for child in dn.children:
+                if child.archi_id in seen_ids:
+                    qa10_affected.append({
+                        'name': child.name, 'kind': child.kind,
+                        'issue': get_qa10_issue('duplicate_archi_id', lang),
+                    })
+                else:
+                    seen_ids[child.archi_id] = dn.name
 
         if qa10_affected:
             incidents.append(AuditIncident(

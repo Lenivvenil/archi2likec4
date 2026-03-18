@@ -894,6 +894,45 @@ class TestSolutionViewDeployment:
         assert unresolved == 0  # resolved via tech_archi_to_c4
         assert total == 2
 
+    def test_deployment_solution_view_includes_infra_from_map(self):
+        """Deployment solution view pulls infra paths from deployment_map when diagram has only app elements."""
+        sv = SolutionView(
+            name='deployment_architecture.PaymentDeploy',
+            view_type='deployment',
+            solution='payment_deploy',
+            element_archi_ids=['ac-1', 'ac-2'],
+        )
+        archi_to_c4 = {'ac-1': 'channels.efs', 'ac-2': 'products.abs'}
+        deploy_map = [
+            ('channels.efs', 'dc.server_1'),
+            ('products.abs', 'dc.server_2'),
+        ]
+        files, unresolved, total = generate_solution_views(
+            [sv], archi_to_c4, {'efs': 'channels', 'abs': 'products'},
+            deployment_map=deploy_map)
+        assert 'payment_deploy' in files
+        content = files['payment_deploy']
+        # App paths included
+        assert 'channels.efs' in content
+        assert 'products.abs' in content
+        # Infra paths pulled from deployment_map
+        assert 'dc.server_1' in content
+        assert 'dc.server_2' in content
+
+    def test_deployment_view_no_wildcard_expansion(self):
+        """Deployment view must NOT contain .* wildcard expansion."""
+        sv = SolutionView(
+            name='deployment_architecture.InfraOnly',
+            view_type='deployment',
+            solution='infra_only',
+            element_archi_ids=['n-1', 'sw-1'],
+        )
+        tech_archi_to_c4 = {'n-1': 'dc.server_1', 'sw-1': 'dc.server_1.pg'}
+        files, _, _ = generate_solution_views(
+            [sv], {}, {}, tech_archi_to_c4=tech_archi_to_c4)
+        content = files['infra_only']
+        assert '.*' not in content
+
 
 # ── generate_solution_views: subdomain-aware paths ───────────────────────
 
