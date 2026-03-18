@@ -10,7 +10,7 @@ from ..models import (
     RawRelationship,
     System,
 )
-from ..utils import flatten_deployment_nodes, make_id
+from ..utils import flatten_deployment_nodes, make_id, make_unique_id
 from .deployment import _build_deployment_path_index
 
 logger = logging.getLogger('archi2likec4')
@@ -20,12 +20,7 @@ def build_data_entities(data_objects: list[DataObject], used_ids: set[str]) -> l
     """Convert DataObject to DataEntity with unique IDs (prefixed de_)."""
     entities: list[DataEntity] = []
     for do in data_objects:
-        c4_id = make_id(do.name, prefix='de')
-        if c4_id in used_ids:
-            suffix = 2
-            while f'{c4_id}_{suffix}' in used_ids:
-                suffix += 1
-            c4_id = f'{c4_id}_{suffix}'
+        c4_id = make_unique_id(make_id(do.name, prefix='de'), used_ids)
         used_ids.add(c4_id)
         entities.append(DataEntity(
             c4_id=c4_id, name=do.name, archi_id=do.archi_id,

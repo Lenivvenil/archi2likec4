@@ -290,17 +290,20 @@ def compute_audit_incidents(
             return f'{s.domain}.{sd}.{s.c4_id}'
         return f'{s.domain}.{s.c4_id}'
 
+    # Collect all system-level paths to avoid confusing subdomain paths
+    # with subsystem paths during one-segment-deeper matching.
+    all_system_paths: set[str] = {_sys_c4_path(s) for s in systems}
+
     def _is_deployed(s: System) -> bool:
         p = _sys_c4_path(s)
+        if p in deployment_paths:
+            return True
+        # Check subsystem-level paths (one segment deeper).
+        # Skip paths that are themselves known system paths (subdomain match).
         prefix = p + '.'
         for dp in deployment_paths:
-            if dp == p:
-                return True
-            # Match subsystem-level paths (exactly one segment deeper),
-            # but not paths through a subdomain that shares a name prefix
-            # (which would have 2+ extra segments: subdomain.system...).
-            if dp.startswith(prefix) and '.' not in dp[len(prefix):]:
-                return True
+            if dp.startswith(prefix) and '.' not in dp[len(prefix):] and dp not in all_system_paths:
+                    return True
         return False
 
     unmapped = [s for s in systems if not _is_deployed(s)

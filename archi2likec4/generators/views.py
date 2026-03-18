@@ -3,13 +3,9 @@
 from __future__ import annotations
 
 import logging
-from typing import TYPE_CHECKING
 
 from ..models import RawRelationship, SolutionView
 from ..utils import escape_str
-
-if TYPE_CHECKING:
-    pass
 
 
 def generate_landscape_view() -> str:
@@ -459,15 +455,25 @@ def generate_solution_views(  # noqa: C901
                     app_paths = [rp for rp in resolved_unique if rp not in tech_c4_values]
                     infra_paths = [rp for rp in resolved_unique if rp in tech_c4_values]
 
-                    # Enrich: if app paths have no corresponding infra paths from
-                    # the diagram, pull mapped targets from deployment_map
-                    if app_paths and not infra_paths and _deploy_targets:
-                        seen_infra: set[str] = set()
+                    # Enrich: pull mapped infra targets from deployment_map
+                    # for app paths that don't already have infra in the diagram.
+                    # Also check prefix matches (system path picks up subsystem mappings).
+                    if app_paths and _deploy_targets:
+                        seen_infra: set[str] = set(infra_paths)
                         for ap in app_paths:
+                            # Exact match
                             for target in _deploy_targets.get(ap, set()):
                                 if target not in seen_infra:
                                     seen_infra.add(target)
                                     infra_paths.append(target)
+                            # Prefix match: system path picks up subsystem mappings
+                            ap_prefix = ap + '.'
+                            for map_key, targets in _deploy_targets.items():
+                                if map_key.startswith(ap_prefix):
+                                    for target in targets:
+                                        if target not in seen_infra:
+                                            seen_infra.add(target)
+                                            infra_paths.append(target)
 
                     # Ancestor dedup for infra: if both 'loc' and 'loc.cluster.node' are present,
                     # remove 'loc' — keep only the most specific paths
