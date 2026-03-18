@@ -67,12 +67,13 @@ graph LR
 ## CLI
 
 ```bash
-archi2likec4 [MODEL_ROOT] [OUTPUT_DIR] [--config PATH] [--strict] [--verbose] [--dry-run]
+archi2likec4 [MODEL_ROOT] [OUTPUT_DIR] [--config PATH] [--strict] [--verbose] [--dry-run] [--sync-target DIR]
 ```
 
 По умолчанию: модель в `architectural_repository/model/`, выход в `output/`.
 С `--strict` предупреждения quality gates становятся ошибками.
 С `--dry-run` — только валидация, файлы не пишутся.
+С `--sync-target DIR` — после генерации скопировать файлы в указанную директорию (переопределяет YAML-настройку `sync_target`).
 
 ---
 
@@ -98,6 +99,9 @@ quality_gates:
 audit_suppress: [LegacySystem]          # исключить из AUDIT.md
 audit_suppress_incidents: [QA-6]        # подавить категорию целиком
 domain_overrides: { AD: platform }      # ручное назначение домена
+subdomain_overrides:                    # ручное назначение субдомена
+  SystemName: subdomain_c4_id
+sync_target: /path/to/companion-repo   # авто-копирование output после генерации
 ```
 
 ---
@@ -173,7 +177,7 @@ archi2likec4/
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest tests/ -v   # 413+ тестов
+python -m pytest tests/ -v   # 586+ тестов
 ```
 
 Python >= 3.10. Базовая конвертация — zero dependencies (stdlib only).
