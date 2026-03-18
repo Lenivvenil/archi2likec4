@@ -24,7 +24,9 @@ _INFRA_SW_TYPES = frozenset({
     'SystemSoftware', 'TechnologyService', 'Artifact',
 })
 
-# Patterns to identify database/storage SystemSoftware → dataStore kind
+# Patterns to identify database/storage SystemSoftware → dataStore kind.
+# Message brokers (RabbitMQ, Kafka) and object storage (MinIO, S3) are intentionally
+# excluded — they stay infraSoftware by project convention.
 _DATASTORE_PATTERNS = re.compile(
     r'(?i)\b(?:postgres|postgresql|oracle|mysql|mariadb|mongo|mongodb|redis'
     r'|elasticsearch|opensearch|cassandra|clickhouse|sqlite|mssql|sql\s*server'
@@ -66,7 +68,14 @@ def build_deployment_topology(
         elif te.tech_type in _INFRA_SW_TYPES and _DATASTORE_PATTERNS.search(te.name):
             kind = 'dataStore'
         else:
+            # Fallback: unknown tech_types (TechnologyFunction, TechnologyProcess,
+            # TechnologyInteraction, etc.) and non-DB _INFRA_SW_TYPES all become
+            # infraSoftware — leaf elements, not containers.  infraNode is reserved
+            # for explicit Node/Device/TechnologyCollaboration (container semantics).
             kind = 'infraSoftware'
+            if te.tech_type not in _INFRA_SW_TYPES:
+                logger.debug('Unknown tech_type %r for %r — defaulting to infraSoftware',
+                             te.tech_type, te.name)
 
         dn = DeploymentNode(
             c4_id=c4_id,

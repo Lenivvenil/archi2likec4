@@ -312,6 +312,12 @@ _TECH_PREFIXES = (
     'TechnologyService_', 'Artifact_', 'CommunicationNetwork_', 'Path_',
 )
 
+_KNOWN_PARSER_TECH_TYPES = frozenset({
+    'Node', 'Device', 'TechnologyCollaboration',
+    'SystemSoftware', 'TechnologyService', 'Artifact',
+    'CommunicationNetwork', 'Path', 'Location',
+})
+
 
 def parse_technology_elements(model_root: Path) -> list[TechElement]:
     """Parse Technology layer elements from technology/ directory."""
@@ -347,6 +353,10 @@ def parse_technology_elements(model_root: Path) -> list[TechElement]:
         # Fallback: extract from filename prefix
         if not tech_type or tech_type == root.tag:
             tech_type = xml_path.name.split('_', 1)[0]
+
+        if tech_type not in _KNOWN_PARSER_TECH_TYPES:
+            logger.debug('Unrecognised tech_type %r for %r (%s) — will use builder fallback',
+                         tech_type, name, xml_path.name)
 
         results.append(TechElement(
             archi_id=archi_id, name=name,

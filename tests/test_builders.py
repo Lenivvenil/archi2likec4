@@ -1115,6 +1115,45 @@ class TestDataStoreDetection:
         roots = build_deployment_topology(elems, [])
         assert roots[0].kind == 'dataStore'
 
+    def test_unknown_tech_type_fallback_kind(self):
+        """Element with unknown tech_type (e.g. TechnologyFunction) gets infraSoftware."""
+        elems = [
+            TechElement(archi_id='tf-1', name='Backup Job', tech_type='TechnologyFunction'),
+            TechElement(archi_id='tp-1', name='ETL Process', tech_type='TechnologyProcess'),
+            TechElement(archi_id='ti-1', name='Sync', tech_type='TechnologyInteraction'),
+        ]
+        roots = build_deployment_topology(elems, [])
+        for node in roots:
+            assert node.kind == 'infraSoftware', f'{node.name} should be infraSoftware'
+
+    def test_node_named_like_db_stays_infranode(self):
+        """Node with DB-like name stays infraNode — Node/Device are always containers."""
+        elems = [
+            TechElement(archi_id='n-1', name='PostgreSQL Cluster', tech_type='Node'),
+            TechElement(archi_id='d-1', name='Oracle Database Server', tech_type='Device'),
+        ]
+        roots = build_deployment_topology(elems, [])
+        for node in roots:
+            assert node.kind == 'infraNode', f'{node.name} should be infraNode'
+
+    def test_datastore_detection_case_variations(self):
+        """Case-insensitive detection: POSTGRESQL, postgreSQL, PostgreSQL all -> dataStore."""
+        for name in ['POSTGRESQL', 'postgreSQL', 'PostgreSQL', 'postgresql']:
+            elems = [TechElement(archi_id='sw-1', name=name, tech_type='SystemSoftware')]
+            roots = build_deployment_topology(elems, [])
+            assert roots[0].kind == 'dataStore', f'{name} should be dataStore'
+
+    def test_datastore_false_negative_check(self):
+        """Known infra software names must NOT match dataStore patterns."""
+        non_db_names = [
+            'Nginx', 'Eureka', 'Consul', 'HAProxy', 'Apache HTTP',
+            'RabbitMQ', 'Kafka', 'MinIO', 'Zookeeper', 'Prometheus',
+        ]
+        for name in non_db_names:
+            elems = [TechElement(archi_id='sw-1', name=name, tech_type='SystemSoftware')]
+            roots = build_deployment_topology(elems, [])
+            assert roots[0].kind == 'infraSoftware', f'{name} should be infraSoftware'
+
 
 # ── build_datastore_entity_links ─────────────────────────────────────────
 

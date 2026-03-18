@@ -28,15 +28,15 @@
 ### Task 2: Audit Kind Assignment and DataStore Detection
 Проверить корректность присвоения kind (`infraLocation`, `infraZone`, `infraNode`, `infraSoftware`, `dataStore`) в `build_deployment_topology()`. Исторически dataStore детекция была добавлена как fix — проверить, что паттерн `_DATASTORE_PATTERNS` покрывает реальные БД в модели и не даёт false positives. Проверить, что TechElement с неизвестным `tech_type` (не из `_INFRA_NODE_TYPES`, `_INFRA_ZONE_TYPES`, `_INFRA_SW_TYPES`, не `Location`) не падает, а получает fallback kind.
 
-- [ ] Прочитать `archi2likec4/builders/deployment.py` строки 56–69 (kind assignment) — проверить: (a) что происходит, если `tech_type` не `Location` и не входит ни в один frozenset? Сейчас fallback — `infraSoftware`. Это корректно? Или лучше `infraNode`? Зафиксировать решение в комментарии; (b) что если `tech_type in _INFRA_NODE_TYPES` И имя содержит DB-паттерн (например, Node с именем "PostgreSQL cluster")? Сейчас Node ВСЕГДА → `infraNode`. Это правильно по договорённости: Node/Device — всегда контейнер, не хранилище
-- [ ] Прочитать `archi2likec4/parsers.py`, функцию `parse_technology_elements()` — убедиться, что все реально встречающиеся `xsi:type` значения покрыты. Проверить, что элементы с типом `TechnologyFunction`, `TechnologyProcess`, `TechnologyInteraction` (если есть в реальной модели) не теряются молча — сейчас они создают TechElement, попадают в builder и получают fallback `infraSoftware`. Добавить `logger.debug` для неизвестных типов
-- [ ] Расширить `_DATASTORE_PATTERNS` при необходимости: запустить конвертер с `--verbose`, проверить реальные имена всех `infraSoftware` в output — если среди них есть БД, пропущенные паттерном (например, `RabbitMQ`, `Kafka`, `MinIO`, `S3`), добавить. Если нет — зафиксировать, что паттерн полон
-- [ ] Add/update tests (`tests/test_builders.py`):
+- [x] Прочитать `archi2likec4/builders/deployment.py` строки 56–69 (kind assignment) — проверить: (a) что происходит, если `tech_type` не `Location` и не входит ни в один frozenset? Сейчас fallback — `infraSoftware`. Это корректно? Или лучше `infraNode`? Зафиксировать решение в комментарии; (b) что если `tech_type in _INFRA_NODE_TYPES` И имя содержит DB-паттерн (например, Node с именем "PostgreSQL cluster")? Сейчас Node ВСЕГДА → `infraNode`. Это правильно по договорённости: Node/Device — всегда контейнер, не хранилище
+- [x] Прочитать `archi2likec4/parsers.py`, функцию `parse_technology_elements()` — убедиться, что все реально встречающиеся `xsi:type` значения покрыты. Проверить, что элементы с типом `TechnologyFunction`, `TechnologyProcess`, `TechnologyInteraction` (если есть в реальной модели) не теряются молча — сейчас они создают TechElement, попадают в builder и получают fallback `infraSoftware`. Добавить `logger.debug` для неизвестных типов
+- [x] Расширить `_DATASTORE_PATTERNS` при необходимости: запустить конвертер с `--verbose`, проверить реальные имена всех `infraSoftware` в output — если среди них есть БД, пропущенные паттерном (например, `RabbitMQ`, `Kafka`, `MinIO`, `S3`), добавить. Если нет — зафиксировать, что паттерн полон
+- [x] Add/update tests (`tests/test_builders.py`):
   - `test_unknown_tech_type_fallback_kind` — элемент с `tech_type='TechnologyFunction'` получает `infraSoftware` (или что решим)
   - `test_node_named_like_db_stays_infranode` — Node с именем "PostgreSQL Cluster" → `infraNode`, не `dataStore`
   - `test_datastore_detection_case_variations` — "POSTGRESQL", "postgreSQL", "PostgreSQL" — все → `dataStore`
   - `test_datastore_false_negative_check` — список реальных имён из модели, которые ДОЛЖНЫ быть `infraSoftware` (Nginx, Eureka, Consul и т.д.)
-- [ ] Mark completed
+- [x] Mark completed
 
 ---
 
