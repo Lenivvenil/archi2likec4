@@ -66,6 +66,9 @@ class ConvertConfig:
     # i18n: language for AUDIT.md and Web UI ('ru' or 'en')
     language: str = 'ru'
 
+    # Auto-sync: copy output_dir to this directory after generation
+    sync_target: Path | None = None
+
     # CLI flags
     strict: bool = False
     verbose: bool = False
@@ -113,7 +116,7 @@ _KNOWN_YAML_KEYS: set[str] = {
     'quality_gates',
     'audit_suppress', 'audit_suppress_incidents',
     'domain_overrides', 'subdomain_overrides', 'reviewed_systems',
-    'language', 'strict',
+    'language', 'strict', 'sync_target',
 }
 
 
@@ -296,6 +299,23 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
         else:
             raise ValueError(
                 f"strict: expected bool or string, got {type(val).__name__}")
+
+    if 'sync_target' in data:
+        val = data['sync_target']
+        if val is None:
+            config.sync_target = None
+        else:
+            if not isinstance(val, str):
+                raise ValueError(
+                    f"sync_target: expected string path, got {type(val).__name__}")
+            target = Path(val).expanduser().resolve()
+            if not target.exists():
+                raise ValueError(
+                    f"sync_target: directory does not exist: {target}")
+            if not target.is_dir():
+                raise ValueError(
+                    f"sync_target: path is not a directory: {target}")
+            config.sync_target = target
 
 
 def save_suppress(

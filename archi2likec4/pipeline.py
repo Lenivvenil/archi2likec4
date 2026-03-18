@@ -541,6 +541,68 @@ def _generate(
     logger.info('Done! Run: cd %s && npx likec4 serve', output_dir)
 
 
+# ── Sync step ────────────────────────────────────────────────────────────
+
+# Top-level names (files or entire dirs) never overwritten in sync target
+_SYNC_PROTECTED_TOP: frozenset[str] = frozenset({
+    '.gitignore',
+    '.gitlab-ci.yml',
+    '.gitlab',
+    '.yamllint.yml',
+    'AGENTS.md',
+    'CLAUDE.md',
+    'README.md',
+    'adr',
+    'dist',
+    'fitness',
+    'portal',
+    'public',
+    'static',
+    'likec4.generated.ts',
+    'gitlab-ci.yml',
+})
+
+# Specific relative sub-paths (POSIX) never overwritten in sync target
+_SYNC_PROTECTED_PATHS: frozenset[str] = frozenset({
+    'scripts/.gitkeep',
+    'scripts/check_staleness.py',
+    'scripts/validate_domains.py',
+})
+
+
+def _sync_output(config: ConvertConfig) -> None:
+    """Copy output_dir to sync_target, skipping protected files."""
+    if config.sync_target is None:
+        return
+
+    src = config.output_dir.resolve()
+    dst = config.sync_target.resolve()
+    copied = 0
+
+    def _copy_tree(source: Path, target: Path) -> None:
+        nonlocal copied
+        for item in source.iterdir():
+            rel = item.relative_to(src).as_posix()
+            top = item.name
+            # Skip protected top-level items
+            if source == src and top in _SYNC_PROTECTED_TOP:
+                continue
+            # Skip specific protected sub-paths
+            if rel in _SYNC_PROTECTED_PATHS:
+                continue
+            dest_item = target / item.name
+            if item.is_dir():
+                dest_item.mkdir(parents=True, exist_ok=True)
+                _copy_tree(item, dest_item)
+            else:
+                shutil.copy2(item, dest_item)
+                copied += 1
+
+    dst.mkdir(parents=True, exist_ok=True)
+    _copy_tree(src, dst)
+    logger.info('Synced %d file(s) to %s', copied, dst)
+
+
 # ── CLI entry point ──────────────────────────────────────────────────────
 
 def main() -> None:
@@ -571,6 +633,8 @@ def main() -> None:
                         help='Verbose output (DEBUG level logging)')
     parser.add_argument('--dry-run', action='store_true',
                         help='Parse and validate only — do not generate files')
+    parser.add_argument('--sync-target', type=Path, default=None, dest='sync_target',
+                        help='Directory to sync output into after generation (overrides YAML)')
     args = parser.parse_args()
 
     # Fallback logging — before config is loaded
@@ -596,6 +660,15 @@ def main() -> None:
         config.verbose = True
     if args.dry_run:
         config.dry_run = True
+    if args.sync_target is not None:
+        target = args.sync_target.expanduser().resolve()
+        if not target.exists():
+            logger.error('--sync-target directory does not exist: %s', target)
+            sys.exit(2)
+        if not target.is_dir():
+            logger.error('--sync-target is not a directory: %s', target)
+            sys.exit(2)
+        config.sync_target = target
 
     # Reconfigure logging if verbose
     if config.verbose:
@@ -622,6 +695,9 @@ def main() -> None:
             sys.exit(0)
 
         _generate(built, config.output_dir, config, sv_files, sv_unresolved, sv_total)
+
+        if config.sync_target is not None:
+            _sync_output(config)
 
     except FileNotFoundError as e:
         logger.error('Input not found: %s', e)

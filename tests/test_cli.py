@@ -24,6 +24,7 @@ class TestCLIArgs:
             cfg.strict = False
             cfg.verbose = False
             cfg.dry_run = False
+            cfg.sync_target = None
             mock_load.return_value = cfg
             mock_validate.return_value = (0, 0, {}, 0, 0)
             main()
@@ -43,6 +44,7 @@ class TestCLIArgs:
             cfg.strict = False
             cfg.verbose = False
             cfg.dry_run = False
+            cfg.sync_target = None
             mock_load.return_value = cfg
             mock_validate.return_value = (0, 0, {}, 0, 0)
             main()
@@ -61,6 +63,7 @@ class TestCLIArgs:
             cfg.strict = False
             cfg.verbose = False
             cfg.dry_run = False
+            cfg.sync_target = None
             mock_load.return_value = cfg
             mock_validate.return_value = (0, 0, {}, 0, 0)
             main()
@@ -79,6 +82,7 @@ class TestCLIArgs:
             cfg.strict = False
             cfg.verbose = False
             cfg.dry_run = False
+            cfg.sync_target = None
             mock_load.return_value = cfg
             mock_validate.return_value = (0, 0, {}, 0, 0)
             with pytest.raises(SystemExit) as exc_info:
@@ -99,6 +103,7 @@ class TestCLIArgs:
             cfg.strict = False
             cfg.verbose = False
             cfg.dry_run = False
+            cfg.sync_target = None
             mock_load.return_value = cfg
             mock_validate.return_value = (0, 0, {}, 0, 0)
             main()
@@ -121,6 +126,7 @@ class TestCLIErrorHandling:
             cfg.strict = False
             cfg.verbose = False
             cfg.dry_run = False
+            cfg.sync_target = None
             mock_load.return_value = cfg
             mock_validate.return_value = (0, 3, {}, 0, 0)  # 3 errors
             with pytest.raises(SystemExit) as exc_info:
@@ -139,6 +145,7 @@ class TestCLIErrorHandling:
             cfg.strict = False
             cfg.verbose = False
             cfg.dry_run = False
+            cfg.sync_target = None
             mock_load.return_value = cfg
             mock_validate.return_value = (5, 0, {}, 0, 0)  # 5 warnings, 0 errors
             with pytest.raises(SystemExit) as exc_info:
@@ -164,6 +171,7 @@ class TestCLIErrorHandling:
             cfg.strict = False
             cfg.verbose = False
             cfg.dry_run = False
+            cfg.sync_target = None
             mock_load.return_value = cfg
             mock_parse.side_effect = FileNotFoundError('model dir not found')
             with pytest.raises(SystemExit) as exc_info:
@@ -180,6 +188,7 @@ class TestCLIErrorHandling:
             cfg.strict = False
             cfg.verbose = False
             cfg.dry_run = False
+            cfg.sync_target = None
             mock_load.return_value = cfg
             mock_parse.side_effect = ValueError('bad data')
             with pytest.raises(SystemExit) as exc_info:
@@ -194,6 +203,7 @@ class TestCLIErrorHandling:
             cfg.strict = False
             cfg.verbose = False
             cfg.dry_run = False
+            cfg.sync_target = None
             mock_load.return_value = cfg
             with pytest.raises(SystemExit) as exc_info:
                 main()
@@ -209,3 +219,65 @@ class TestWebSubcommand:
              patch('archi2likec4.web.run_web_cli') as mock_web:
             main()
             mock_web.assert_called_once()
+
+
+class TestSyncTargetCLI:
+    """--sync-target CLI flag."""
+
+    def test_sync_target_sets_config(self, tmp_path):
+        """--sync-target sets config.sync_target to resolved path."""
+        with patch('archi2likec4.pipeline._parse'), \
+             patch('archi2likec4.pipeline._build'), \
+             patch('archi2likec4.pipeline._validate') as mock_validate, \
+             patch('archi2likec4.pipeline._generate'), \
+             patch('archi2likec4.pipeline._sync_output') as mock_sync, \
+             patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
+             patch('sys.argv', ['archi2likec4', '--sync-target', str(tmp_path)]):
+            cfg = MagicMock()
+            cfg.strict = False
+            cfg.verbose = False
+            cfg.dry_run = False
+            cfg.sync_target = None
+            mock_load.return_value = cfg
+            mock_validate.return_value = (0, 0, {}, 0, 0)
+            main()
+            assert cfg.sync_target == tmp_path.resolve()
+            mock_sync.assert_called_once_with(cfg)
+
+    def test_sync_target_overrides_yaml(self, tmp_path):
+        """--sync-target from CLI overrides sync_target set in YAML/config."""
+        with patch('archi2likec4.pipeline._parse'), \
+             patch('archi2likec4.pipeline._build'), \
+             patch('archi2likec4.pipeline._validate') as mock_validate, \
+             patch('archi2likec4.pipeline._generate'), \
+             patch('archi2likec4.pipeline._sync_output'), \
+             patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
+             patch('sys.argv', ['archi2likec4', '--sync-target', str(tmp_path)]):
+            cfg = MagicMock()
+            cfg.strict = False
+            cfg.verbose = False
+            cfg.dry_run = False
+            cfg.sync_target = Path('/old/target')
+            mock_load.return_value = cfg
+            mock_validate.return_value = (0, 0, {}, 0, 0)
+            main()
+            # CLI value wins over whatever was in config
+            assert cfg.sync_target == tmp_path.resolve()
+
+    def test_sync_target_nonexistent_exits_2(self, tmp_path):
+        """--sync-target pointing to nonexistent dir causes exit 2."""
+        missing = tmp_path / 'no_such_dir'
+        with patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
+             patch('sys.argv', ['archi2likec4', '--sync-target', str(missing)]):
+            cfg = MagicMock()
+            cfg.strict = False
+            cfg.verbose = False
+            cfg.dry_run = False
+            cfg.sync_target = None
+            mock_load.return_value = cfg
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 2

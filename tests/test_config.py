@@ -596,3 +596,109 @@ class TestListItemTypeValidation:
         config = ConvertConfig()
         with pytest.raises(ValueError, match='reviewed_systems.*must be strings'):
             _apply_yaml(config, {'reviewed_systems': [None]})
+
+
+class TestSyncTarget:
+    """sync_target config option."""
+
+    def test_default_none(self):
+        config = ConvertConfig()
+        assert config.sync_target is None
+
+    def test_yaml_valid_directory(self, tmp_path):
+        config = ConvertConfig()
+        _apply_yaml(config, {'sync_target': str(tmp_path)})
+        assert config.sync_target == tmp_path.resolve()
+
+    def test_yaml_none_clears_target(self):
+        config = ConvertConfig()
+        config.sync_target = Path('/tmp')
+        _apply_yaml(config, {'sync_target': None})
+        assert config.sync_target is None
+
+    def test_yaml_nonexistent_raises(self, tmp_path):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='sync_target.*does not exist'):
+            _apply_yaml(config, {'sync_target': str(tmp_path / 'no_such_dir')})
+
+    def test_yaml_file_raises(self, tmp_path):
+        f = tmp_path / 'file.txt'
+        f.write_text('x')
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='sync_target.*not a directory'):
+            _apply_yaml(config, {'sync_target': str(f)})
+
+    def test_yaml_non_string_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ValueError, match='sync_target.*expected string path'):
+            _apply_yaml(config, {'sync_target': 42})
+
+    def test_known_yaml_key(self):
+        from archi2likec4.config import _KNOWN_YAML_KEYS
+        assert 'sync_target' in _KNOWN_YAML_KEYS
+
+
+class TestSyncOutput:
+    """_sync_output() copies files and respects protected list."""
+
+    def _make_output(self, output_dir: Path) -> None:
+        """Create a minimal fake output/ tree."""
+        (output_dir / '.archi2likec4-output').write_text('')
+        (output_dir / 'domains').mkdir()
+        (output_dir / 'domains' / 'products.c4').write_text('domain products {}')
+        (output_dir / 'AUDIT.md').write_text('# Audit')
+        scripts = output_dir / 'scripts'
+        scripts.mkdir()
+        (scripts / 'federate.py').write_text('# federate')
+
+    def test_copies_generated_files(self, tmp_path):
+        from archi2likec4.pipeline import _sync_output
+
+        output_dir = tmp_path / 'output'
+        output_dir.mkdir()
+        self._make_output(output_dir)
+
+        sync_target = tmp_path / 'target'
+        sync_target.mkdir()
+
+        config = ConvertConfig()
+        config.output_dir = output_dir
+        config.sync_target = sync_target
+
+        _sync_output(config)
+
+        assert (sync_target / 'AUDIT.md').exists()
+        assert (sync_target / 'domains' / 'products.c4').exists()
+        assert (sync_target / 'scripts' / 'federate.py').exists()
+
+    def test_skips_protected_files(self, tmp_path):
+        from archi2likec4.pipeline import _sync_output
+
+        output_dir = tmp_path / 'output'
+        output_dir.mkdir()
+        self._make_output(output_dir)
+        # Add a protected file in output that should NOT be copied
+        (output_dir / 'README.md').write_text('generated readme')
+
+        sync_target = tmp_path / 'target'
+        sync_target.mkdir()
+        # Pre-existing protected file in target
+        (sync_target / 'README.md').write_text('original readme')
+
+        config = ConvertConfig()
+        config.output_dir = output_dir
+        config.sync_target = sync_target
+
+        _sync_output(config)
+
+        # Protected file in target must be untouched
+        assert (sync_target / 'README.md').read_text() == 'original readme'
+
+    def test_noop_when_no_sync_target(self, tmp_path):
+        from archi2likec4.pipeline import _sync_output
+
+        config = ConvertConfig()
+        config.output_dir = tmp_path / 'output'
+        config.sync_target = None
+        # Should not raise
+        _sync_output(config)

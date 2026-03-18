@@ -103,3 +103,18 @@ quality_gates:
 # ── Behaviour flags ───────────────────────────────────────────────────
 # Treat quality-gate warnings as errors (exit 1)
 strict: false
+
+# ── Auto-sync target ──────────────────────────────────────────────────
+# After a successful generation, copy output_dir into this directory.
+# Useful to keep a companion repo (e.g. asaka-architecture) in sync
+# without a manual copy step.
+#
+# Only generated files are copied; the following paths are NEVER
+# overwritten in the target (protected list):
+#   .gitignore, .gitlab-ci.yml, .gitlab/, .yamllint.yml,
+#   scripts/.gitkeep, scripts/check_staleness.py, scripts/validate_domains.py,
+#   AGENTS.md, CLAUDE.md, README.md, adr/, dist/, fitness/, portal/,
+#   public/, static/, likec4.generated.ts, gitlab-ci.yml
+#
+# Can also be set per-run with --sync-target on the CLI (overrides YAML).
+# sync_target: /path/to/your/companion-repo
