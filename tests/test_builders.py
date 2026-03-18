@@ -2107,7 +2107,5 @@ class TestValidateDeploymentTree:
                               tech_type='Location', kind='infraLocation',
                               children=[mid])
         violations = validate_deployment_tree([root])
-        # 'top..x' contains '..'
-        # Either the double-dot is caught or the empty c4_id produces a path without it
-        # The key invariant: the function checks and reports if found
-        assert isinstance(violations, list)
+        # 'top..x' contains '..' — must be caught
+        assert any('..' in v for v in violations), f'Expected double-dot violation, got: {violations}'
