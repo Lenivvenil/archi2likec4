@@ -391,16 +391,15 @@ def compute_audit_incidents(
                 })
 
         # Check 6: Duplicate archi_id across different branches
-        seen_ids: dict[str, str] = {}  # archi_id → first parent name
+        seen_ids: dict[str, str] = {}  # archi_id → first node name
         for dn in all_dn:
-            for child in dn.children:
-                if child.archi_id in seen_ids:
-                    qa10_affected.append({
-                        'name': child.name, 'kind': child.kind,
-                        'issue': get_qa10_issue('duplicate_archi_id', lang),
-                    })
-                else:
-                    seen_ids[child.archi_id] = dn.name
+            if dn.archi_id in seen_ids:
+                qa10_affected.append({
+                    'name': dn.name, 'kind': dn.kind,
+                    'issue': get_qa10_issue('duplicate_archi_id', lang),
+                })
+            else:
+                seen_ids[dn.archi_id] = dn.name
 
         if qa10_affected:
             incidents.append(AuditIncident(

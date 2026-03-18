@@ -455,18 +455,6 @@ def generate_solution_views(  # noqa: C901
                 # Deployment view: separate app paths from infra paths
                 resolved_unique = list(dict.fromkeys(c4_paths))
                 if resolved_unique:
-                    app_paths: list[str] = []
-                    infra_paths: list[str] = []
-                    for rp in resolved_unique:
-                        if tech_archi_to_c4 and rp in tech_archi_to_c4.values() or any(
-                            rp == v for v in (tech_archi_to_c4 or {}).values()
-                        ):
-                            infra_paths.append(rp)
-                        else:
-                            # Check if it was resolved from archi_to_c4 (app element)
-                            app_paths.append(rp)
-
-                    # Re-classify: paths from tech_archi_to_c4 are infra, from archi_to_c4 are app
                     tech_c4_values = set((tech_archi_to_c4 or {}).values())
                     app_paths = [rp for rp in resolved_unique if rp not in tech_c4_values]
                     infra_paths = [rp for rp in resolved_unique if rp in tech_c4_values]
