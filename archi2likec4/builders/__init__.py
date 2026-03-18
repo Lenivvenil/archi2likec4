@@ -11,6 +11,7 @@ from .deployment import (
     build_deployment_topology,
     build_tech_archi_to_c4_map,
     enrich_deployment_from_visual_nesting,
+    validate_deployment_tree,
 )
 from .domains import apply_domain_prefix, assign_domains, assign_subdomains
 from .integrations import build_integrations
@@ -33,4 +34,5 @@ __all__ = [
     'build_systems',
     'build_tech_archi_to_c4_map',
     'enrich_deployment_from_visual_nesting',
+    'validate_deployment_tree',
 ]

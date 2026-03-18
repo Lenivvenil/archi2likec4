@@ -74,9 +74,9 @@
 ### Task 5: End-to-End Validation and Regression Protection
 Связать все найденные и исправленные дефекты в сквозную проверку. Добавить post-generation structural validation topology.c4 — пробежать по реальному дереву и поймать нарушения invariants. Убедиться, что все 561+ тестов проходят.
 
-- [ ] Добавить в `archi2likec4/pipeline.py` после генерации `deployment/topology.c4` (строка 506) вызов функции `_validate_deployment_tree(deployment_nodes)` — проверяет invariants на финальном дереве: (a) все leaf-ноды (infraSoftware/dataStore) не имеют children; (b) никакие два узла в дереве не имеют одинаковый archi_id; (c) все c4_id уникальны в пределах каждого уровня вложенности (sibling uniqueness); (d) qualified paths не содержат `..` (double dot от пустого subdomain/prefix)
-- [ ] Функцию `_validate_deployment_tree()` разместить в `archi2likec4/builders/deployment.py` — она принимает `list[DeploymentNode]`, возвращает `list[str]` (список описаний нарушений). В pipeline логировать каждое нарушение как `logger.warning`
-- [ ] Запустить `python -m pytest tests/ -x -q` — убедиться что все тесты проходят после всех изменений из Tasks 1–4
-- [ ] Запустить конвертер на реальных данных (`python3 -m archi2likec4`) — проверить, что: (a) не появились новые WARNING; (b) topology.c4 структурно не изменился (diff минимален или пуст); (c) AUDIT.md не содержит новых QA-10 инцидентов (если содержит — проанализировать, это реальные проблемы или false positives)
-- [ ] Запустить `python -m ruff check archi2likec4/ --select E,F,W` — исправить все предупреждения
-- [ ] Mark completed
+- [x] Добавить в `archi2likec4/pipeline.py` после генерации `deployment/topology.c4` (строка 506) вызов функции `_validate_deployment_tree(deployment_nodes)` — проверяет invariants на финальном дереве: (a) все leaf-ноды (infraSoftware/dataStore) не имеют children; (b) никакие два узла в дереве не имеют одинаковый archi_id; (c) все c4_id уникальны в пределах каждого уровня вложенности (sibling uniqueness); (d) qualified paths не содержат `..` (double dot от пустого subdomain/prefix)
+- [x] Функцию `_validate_deployment_tree()` разместить в `archi2likec4/builders/deployment.py` — она принимает `list[DeploymentNode]`, возвращает `list[str]` (список описаний нарушений). В pipeline логировать каждое нарушение как `logger.warning`
+- [x] Запустить `python -m pytest tests/ -x -q` — убедиться что все тесты проходят после всех изменений из Tasks 1–4
+- [x] Запустить конвертер на реальных данных (`python3 -m archi2likec4`) — проверить, что: (a) не появились новые WARNING; (b) topology.c4 структурно не изменился (diff минимален или пуст); (c) AUDIT.md не содержит новых QA-10 инцидентов (если содержит — проанализировать, это реальные проблемы или false positives)
+- [x] Запустить `python -m ruff check archi2likec4/ --select E,F,W` — исправить все предупреждения
+- [x] Mark completed

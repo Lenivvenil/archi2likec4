@@ -269,6 +269,69 @@ def build_deployment_map(
     return result
 
 
+_LEAF_KINDS = frozenset({'infraSoftware', 'dataStore'})
+
+
+def validate_deployment_tree(
+    deployment_nodes: list[DeploymentNode],
+) -> list[str]:
+    """Validate structural invariants on the final deployment tree.
+
+    Returns a list of violation descriptions (empty if all ok).
+    Checks:
+    (a) leaf nodes (infraSoftware/dataStore) have no children
+    (b) no duplicate archi_id across the tree
+    (c) sibling c4_id uniqueness within each parent
+    (d) qualified paths contain no '..' (double dot)
+    """
+    violations: list[str] = []
+
+    from ..utils import flatten_deployment_nodes
+
+    all_nodes = flatten_deployment_nodes(deployment_nodes)
+
+    # (a) Leaf nodes must not have children
+    for node in all_nodes:
+        if node.kind in _LEAF_KINDS and node.children:
+            child_names = ', '.join(c.name for c in node.children)
+            violations.append(
+                f'Leaf {node.kind} "{node.name}" ({node.archi_id}) has children: {child_names}')
+
+    # (b) No duplicate archi_id
+    seen_archi: dict[str, str] = {}
+    for node in all_nodes:
+        if node.archi_id in seen_archi:
+            violations.append(
+                f'Duplicate archi_id {node.archi_id}: '
+                f'"{node.name}" and "{seen_archi[node.archi_id]}"')
+        else:
+            seen_archi[node.archi_id] = node.name
+
+    # (c) Sibling c4_id uniqueness
+    def _check_sibling_uniqueness(children: list[DeploymentNode], parent_name: str) -> None:
+        seen_c4: dict[str, str] = {}
+        for child in children:
+            if child.c4_id in seen_c4:
+                violations.append(
+                    f'Duplicate sibling c4_id "{child.c4_id}" under "{parent_name}": '
+                    f'"{child.name}" and "{seen_c4[child.c4_id]}"')
+            else:
+                seen_c4[child.c4_id] = child.name
+            _check_sibling_uniqueness(child.children, child.name)
+
+    _check_sibling_uniqueness(deployment_nodes, '<root>')
+
+    # (d) Qualified paths must not contain '..'
+    paths = _build_deployment_path_index(deployment_nodes)
+    for archi_id, path in paths.items():
+        if '..' in path:
+            node_name = seen_archi.get(archi_id, '?')
+            violations.append(
+                f'Double-dot in qualified path for "{node_name}": {path}')
+
+    return violations
+
+
 def build_archi_to_c4_map(
     systems: list[System],
     sys_domain: dict[str, str],

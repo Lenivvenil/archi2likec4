@@ -23,6 +23,7 @@ from .builders import (
     build_systems,
     build_tech_archi_to_c4_map,
     enrich_deployment_from_visual_nesting,
+    validate_deployment_tree,
 )
 from .config import ConvertConfig, load_config
 from .federation import generate_federate_script, generate_federation_registry
@@ -517,6 +518,11 @@ def _generate(
         (deployment_dir / 'topology.c4').write_text(
             generate_deployment_c4(built.deployment_nodes), encoding='utf-8')
         file_count += 1
+
+        # Post-generation structural validation of deployment tree
+        tree_violations = validate_deployment_tree(built.deployment_nodes)
+        for v in tree_violations:
+            logger.warning('Deployment tree violation: %s', v)
         if built.deployment_map:
             (deployment_dir / 'mapping.c4').write_text(
                 generate_deployment_mapping_c4(built.deployment_map), encoding='utf-8')
