@@ -450,3 +450,39 @@ class TestQA10DeploymentHierarchy:
         qa10 = next((i for i in incidents if i.qa_id == 'QA-10'), None)
         # No issues: inner is transitively under location
         assert qa10 is None
+
+    def test_qa10_duplicate_archi_id(self):
+        """Same archi_id under different parents should trigger QA-10 (duplicate_archi_id)."""
+        dup1 = DeploymentNode(c4_id='sw1', name='App1', archi_id='dup-1',
+                               tech_type='SystemSoftware', kind='infraSoftware')
+        dup2 = DeploymentNode(c4_id='sw2', name='App2', archi_id='dup-1',
+                               tech_type='SystemSoftware', kind='infraSoftware')
+        node_a = DeploymentNode(c4_id='na', name='NodeA', archi_id='n-1',
+                                 tech_type='Node', kind='infraNode', children=[dup1])
+        node_b = DeploymentNode(c4_id='nb', name='NodeB', archi_id='n-2',
+                                 tech_type='Node', kind='infraNode', children=[dup2])
+        loc = DeploymentNode(c4_id='dc', name='DC', archi_id='loc-1',
+                             tech_type='Location', kind='infraLocation',
+                             children=[node_a, node_b])
+        built = MockBuilt(deployment_nodes=[loc])
+        _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
+        qa10 = next((i for i in incidents if i.qa_id == 'QA-10'), None)
+        assert qa10 is not None
+        dup_issues = [a for a in qa10.affected
+                      if 'дублир' in a['issue'].lower() or 'duplicate' in a['issue'].lower()]
+        assert len(dup_issues) >= 1
+
+    def test_qa10_no_duplicate_archi_id_when_unique(self):
+        """Unique archi_ids should not trigger duplicate_archi_id check."""
+        sw1 = DeploymentNode(c4_id='sw1', name='App1', archi_id='sw-1',
+                              tech_type='SystemSoftware', kind='infraSoftware')
+        sw2 = DeploymentNode(c4_id='sw2', name='App2', archi_id='sw-2',
+                              tech_type='SystemSoftware', kind='infraSoftware')
+        node = DeploymentNode(c4_id='srv', name='Server', archi_id='n-1',
+                               tech_type='Node', kind='infraNode', children=[sw1, sw2])
+        loc = DeploymentNode(c4_id='dc', name='DC', archi_id='loc-1',
+                             tech_type='Location', kind='infraLocation', children=[node])
+        built = MockBuilt(deployment_nodes=[loc])
+        _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
+        qa10 = next((i for i in incidents if i.qa_id == 'QA-10'), None)
+        assert qa10 is None
