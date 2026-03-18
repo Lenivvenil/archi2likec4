@@ -292,7 +292,16 @@ def compute_audit_incidents(
 
     def _is_deployed(s: System) -> bool:
         p = _sys_c4_path(s)
-        return any(dp == p or dp.startswith(p + '.') for dp in deployment_paths)
+        prefix = p + '.'
+        for dp in deployment_paths:
+            if dp == p:
+                return True
+            # Match subsystem-level paths (exactly one segment deeper),
+            # but not paths through a subdomain that shares a name prefix
+            # (which would have 2+ extra segments: subdomain.system...).
+            if dp.startswith(prefix) and '.' not in dp[len(prefix):]:
+                return True
+        return False
 
     unmapped = [s for s in systems if not _is_deployed(s)
                     and s.domain and s.domain != 'unassigned'

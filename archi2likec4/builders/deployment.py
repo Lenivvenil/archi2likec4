@@ -143,7 +143,7 @@ def enrich_deployment_from_visual_nesting(
             reparent[child_aid] = parent_aid
 
     # Apply reparenting
-    reparented = 0
+    moved_aids: set[str] = set()
     for child_aid, parent_aid in reparent.items():
         child = by_archi[child_aid]
         parent = by_archi[parent_aid]
@@ -154,12 +154,12 @@ def enrich_deployment_from_visual_nesting(
         if any(c.archi_id == child_aid for c in parent.children):
             continue
         parent.children.append(child)
-        reparented += 1
+        moved_aids.add(child_aid)
 
     # Remove reparented nodes from root list
+    reparented = len(moved_aids)
     if reparented:
-        reparented_aids = {aid for aid in reparent if by_archi[aid] in deployment_nodes}
-        deployment_nodes[:] = [dn for dn in deployment_nodes if dn.archi_id not in reparented_aids]
+        deployment_nodes[:] = [dn for dn in deployment_nodes if dn.archi_id not in moved_aids]
         deployment_nodes.sort(key=lambda n: n.name)
 
     if reparented:
