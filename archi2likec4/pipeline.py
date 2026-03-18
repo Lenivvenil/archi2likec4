@@ -266,6 +266,12 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     logger.info('%d top-level deployment nodes, %d total',
                 len(deployment_nodes), len(all_dn))
 
+    # Diagnostic: report orphan nodes (non-Location roots) — candidates for missing visual nesting
+    orphan_roots = [dn for dn in deployment_nodes if dn.kind != 'infraLocation']
+    if orphan_roots:
+        orphan_names = ', '.join(dn.name for dn in orphan_roots)
+        logger.info('Orphan root nodes (no Location parent): %s', orphan_names)
+
     # Build tech archi_id → c4_path map (for deployment solution views)
     tech_archi_to_c4 = build_tech_archi_to_c4_map(deployment_nodes)
     logger.info('%d elements in tech archi→c4 map', len(tech_archi_to_c4))

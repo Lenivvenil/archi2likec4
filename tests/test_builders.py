@@ -1,5 +1,6 @@
 """Tests for archi2likec4.builders — system hierarchy, integrations, domains."""
 
+import xml.etree.ElementTree as ET
 
 from archi2likec4.builders import (
     apply_domain_prefix,
@@ -18,6 +19,7 @@ from archi2likec4.builders import (
     build_tech_archi_to_c4_map,
 )
 from archi2likec4.builders.deployment import enrich_deployment_from_visual_nesting
+from archi2likec4.parsers import _extract_visual_nesting
 from archi2likec4.models import (
     AppComponent,
     AppFunction,
@@ -1722,6 +1724,103 @@ class TestEnrichDeploymentFromVisualNesting:
         count = enrich_deployment_from_visual_nesting(nodes, [('p-1', 'c-1'), ('p-1', 'c-2')])
         assert count == 2
         assert len(nodes) == 1  # only parent remains as root
+
+    def test_first_diagram_wins_on_conflict(self):
+        """When two visual nesting pairs propose different parents for the same child,
+        the first pair wins (first diagram is most authoritative)."""
+        parent_a = DeploymentNode(c4_id='pa', name='ParentA', archi_id='pa-1', tech_type='Node')
+        parent_b = DeploymentNode(c4_id='pb', name='ParentB', archi_id='pb-1', tech_type='Node')
+        child = DeploymentNode(c4_id='ch', name='Child', archi_id='ch-1', tech_type='Node')
+        nodes = [parent_a, parent_b, child]
+        # Two conflicting pairs: pa-1 wants child, pb-1 also wants child
+        count = enrich_deployment_from_visual_nesting(
+            nodes, [('pa-1', 'ch-1'), ('pb-1', 'ch-1')])
+        assert count == 1
+        assert child in parent_a.children
+        assert child not in parent_b.children
+
+    def test_already_nested_by_aggregation_skipped(self):
+        """A node already nested via AggregationRelationship (not a root) is not
+        re-parented by visual nesting, even if visual nesting suggests a different parent."""
+        child = DeploymentNode(c4_id='ch', name='Child', archi_id='ch-1', tech_type='Node')
+        agg_parent = DeploymentNode(c4_id='ap', name='AggParent', archi_id='ap-1',
+                                    tech_type='Node', children=[child])
+        visual_parent = DeploymentNode(c4_id='vp', name='VisParent', archi_id='vp-1',
+                                       tech_type='Node')
+        nodes = [agg_parent, visual_parent]  # child is NOT a root
+        count = enrich_deployment_from_visual_nesting(nodes, [('vp-1', 'ch-1')])
+        assert count == 0
+        assert child in agg_parent.children
+        assert child not in visual_parent.children
+
+    def test_enrichment_counts_match(self):
+        """Returned count must equal the actual number of nodes moved."""
+        parent = DeploymentNode(c4_id='p', name='Parent', archi_id='p-1', tech_type='Node')
+        c1 = DeploymentNode(c4_id='c1', name='C1', archi_id='c-1', tech_type='Node')
+        c2 = DeploymentNode(c4_id='c2', name='C2', archi_id='c-2', tech_type='Node')
+        c3 = DeploymentNode(c4_id='c3', name='C3', archi_id='c-3', tech_type='Node')
+        nodes = [parent, c1, c2, c3]
+        count = enrich_deployment_from_visual_nesting(
+            nodes, [('p-1', 'c-1'), ('p-1', 'c-2'), ('p-1', 'c-3')])
+        assert count == 3
+        assert len(parent.children) == 3
+        assert len(nodes) == 1  # only parent remains
+
+
+# ── _extract_visual_nesting (parser) ─────────────────────────────────────
+
+
+class TestExtractVisualNesting:
+    def test_visual_nesting_through_group_container(self):
+        """A group element without archimateElement (no archi_id) wrapping two Nodes
+        should propagate the grandparent's archi_id to both children."""
+        # Structure: grandparent(archi=gp-1) > group(no archi) > child1(archi=c-1) + child2(archi=c-2)
+        xml_str = '''<root>
+            <children>
+                <archimateElement href="tech.xml#gp-1"/>
+                <children>
+                    <children>
+                        <archimateElement href="tech.xml#c-1"/>
+                    </children>
+                    <children>
+                        <archimateElement href="tech.xml#c-2"/>
+                    </children>
+                </children>
+            </children>
+        </root>'''
+        root = ET.fromstring(xml_str)
+        nesting: list[tuple[str, str]] = []
+        _extract_visual_nesting(root, None, nesting)
+        # Both children should be nested under grandparent (gp-1), not lost
+        assert ('gp-1', 'c-1') in nesting
+        assert ('gp-1', 'c-2') in nesting
+
+    def test_direct_nesting_without_group(self):
+        """Direct parent-child nesting without intermediate groups."""
+        xml_str = '''<root>
+            <children>
+                <archimateElement href="tech.xml#p-1"/>
+                <children>
+                    <archimateElement href="tech.xml#c-1"/>
+                </children>
+            </children>
+        </root>'''
+        root = ET.fromstring(xml_str)
+        nesting: list[tuple[str, str]] = []
+        _extract_visual_nesting(root, None, nesting)
+        assert nesting == [('p-1', 'c-1')]
+
+    def test_root_element_without_parent_not_added(self):
+        """Top-level element with no parent should not produce a nesting pair."""
+        xml_str = '''<root>
+            <children>
+                <archimateElement href="tech.xml#r-1"/>
+            </children>
+        </root>'''
+        root = ET.fromstring(xml_str)
+        nesting: list[tuple[str, str]] = []
+        _extract_visual_nesting(root, None, nesting)
+        assert nesting == []
 
 
 # ── build_integrations edge cases ────────────────────────────────────────
