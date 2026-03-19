@@ -76,12 +76,12 @@
 
 Проблема: `parsers.py` имеет низкое покрытие (75-80%) из-за непокрытых `except ET.ParseError` обработчиков. После Tasks 1-4 могли появиться непокрытые ветки.
 
-- [ ] Запустить `uv run pytest tests/ --cov=archi2likec4 --cov-report=term-missing` и найти непокрытые строки в `parsers.py` и `pipeline.py`
-- [ ] `tests/test_parsers.py`: если `TestParserErrorPaths` не был добавлен в Task 3, добавить его здесь. Приоритет: `_find_parent_component` с malformed XML, `_find_functional_areas_dir` с malformed folder.xml, `parse_domain_mapping` когда `functional_areas` не найдена
-- [ ] `tests/test_cli.py`: покрыть оставшиеся ветки `main()`: `test_config_error_exit_2` (load_config raises FileNotFoundError → exit 2), `test_model_root_not_found_exit_2`, `test_parse_error_exit_2`, `test_unexpected_error_exit_1`
-- [ ] `tests/test_api.py`: убедиться что все ветки `convert()` покрыты — sync_target путь, dry_run путь
-- [ ] Проверить финальный coverage: `uv run pytest tests/ -q --tb=short` — последняя строка должна содержать `Total coverage: ≥85%`
-- [ ] Mark completed
+- [x] Запустить `uv run pytest tests/ --cov=archi2likec4 --cov-report=term-missing` и найти непокрытые строки в `parsers.py` и `pipeline.py`
+- [x] `tests/test_parsers.py`: если `TestParserErrorPaths` не был добавлен в Task 3, добавить его здесь. Приоритет: `_find_parent_component` с malformed XML, `_find_functional_areas_dir` с malformed folder.xml, `parse_domain_mapping` когда `functional_areas` не найдена
+- [x] `tests/test_cli.py`: покрыть оставшиеся ветки `main()`: `test_config_error_exit_2` (load_config raises FileNotFoundError → exit 2), `test_model_root_not_found_exit_2`, `test_parse_error_exit_2`, `test_unexpected_error_exit_1`
+- [x] `tests/test_api.py`: убедиться что все ветки `convert()` покрыты — sync_target путь, dry_run путь
+- [x] Проверить финальный coverage: `uv run pytest tests/ -q --tb=short` — последняя строка должна содержать `Total coverage: ≥85%`
+- [x] Mark completed
 
 ---
 
