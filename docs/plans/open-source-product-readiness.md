@@ -42,10 +42,10 @@
 
 Проблема: `ParseError` и `ValidationError` определены в `archi2likec4/exceptions.py` но нигде не поднимаются. В `parsers.py` 10+ мест с `except ET.ParseError: parse_errors += 1` молча накапливают ошибки без эффекта.
 
-- [ ] `archi2likec4/parsers.py`: добавить `from .exceptions import ParseError`. В каждой `parse_*` функции после основного цикла добавить: `if not results and parse_errors > 0: raise ParseError(f'All {parse_errors} <тип> XML file(s) in {dir} failed to parse')`. Функции: `parse_application_components`, `parse_application_interfaces`, `parse_data_objects`, `parse_application_functions`, `parse_technology_elements`, `parse_relationships`
-- [ ] `archi2likec4/pipeline.py`: в `convert()` после `_validate()` добавить проверки: если `gate_errors > 0` — `raise ValidationError('Quality gates failed: ...')`. Если `config.strict and gate_warnings > 0` — `raise ValidationError('strict mode: ...')`
-- [ ] Add/update tests: `tests/test_parsers.py` — класс `TestParserErrorPaths`: по одному тесту `*_malformed_raises` (все файлы невалидны → `ParseError`) и `*_partial_malformed_ok` (часть невалидна → возвращает валидные) для каждого `parse_*`. Также `test_is_in_trash_malformed_folder_xml` и `test_detect_special_folder_malformed_folder_xml`
-- [ ] Mark completed
+- [x] `archi2likec4/parsers.py`: добавить `from .exceptions import ParseError`. В каждой `parse_*` функции после основного цикла добавить: `if not results and parse_errors > 0: raise ParseError(f'All {parse_errors} <тип> XML file(s) in {dir} failed to parse')`. Функции: `parse_application_components`, `parse_application_interfaces`, `parse_data_objects`, `parse_application_functions`, `parse_technology_elements`, `parse_relationships`
+- [x] `archi2likec4/pipeline.py`: в `convert()` после `_validate()` добавить проверки: если `gate_errors > 0` — `raise ValidationError('Quality gates failed: ...')`. Если `config.strict and gate_warnings > 0` — `raise ValidationError('strict mode: ...')`
+- [x] Add/update tests: `tests/test_parsers.py` — класс `TestParserErrorPaths`: по одному тесту `*_malformed_raises` (все файлы невалидны → `ParseError`) и `*_partial_malformed_ok` (часть невалидна → возвращает валидные) для каждого `parse_*`. Также `test_is_in_trash_malformed_folder_xml` и `test_detect_special_folder_malformed_folder_xml`
+- [x] Mark completed
 
 ---
 
