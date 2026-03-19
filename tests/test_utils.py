@@ -141,6 +141,28 @@ class TestBuildMetadata:
         }
         assert set(meta.keys()) == expected_keys
 
+    def test_custom_prop_map(self):
+        ac = AppComponent(archi_id='id-1', name='TestSys', properties={'MyProp': 'myval'})
+        custom_map = {'MyProp': 'my_key'}
+        meta = build_metadata(ac, prop_map=custom_map, standard_keys=['my_key'])
+        assert meta == {'my_key': 'myval'}
+
+    def test_custom_standard_keys_tbd_for_missing(self):
+        ac = AppComponent(archi_id='id-1', name='TestSys')
+        meta = build_metadata(ac, prop_map={}, standard_keys=['status', 'owner'])
+        assert meta == {'status': 'TBD', 'owner': 'TBD'}
+
+    def test_custom_standard_keys_full_name_defaults_to_name(self):
+        ac = AppComponent(archi_id='id-1', name='MySys')
+        meta = build_metadata(ac, prop_map={}, standard_keys=['full_name'])
+        assert meta == {'full_name': 'MySys'}
+
+    def test_none_params_use_defaults(self):
+        ac = AppComponent(archi_id='id-1', name='TestSys')
+        meta_default = build_metadata(ac)
+        meta_none = build_metadata(ac, prop_map=None, standard_keys=None)
+        assert meta_default == meta_none
+
 
 # ── flatten_deployment_nodes ─────────────────────────────────────────────
 

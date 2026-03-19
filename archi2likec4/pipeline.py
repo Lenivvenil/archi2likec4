@@ -3,6 +3,7 @@
 import logging
 import shutil
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
@@ -26,6 +27,7 @@ from .builders import (
     validate_deployment_tree,
 )
 from .config import ConvertConfig, load_config
+from .exceptions import ConfigError, ParseError, ValidationError
 from .federation import generate_federate_script, generate_federation_registry
 from .generators import (
     generate_audit_md,
@@ -44,7 +46,17 @@ from .generators import (
     generate_spec,
     generate_system_detail_c4,
 )
-from .models import DomainInfo
+from .models import (
+    AppComponent,
+    AppFunction,
+    AppInterface,
+    DataObject,
+    DomainInfo,
+    ParsedSubdomain,
+    RawRelationship,
+    SolutionView,
+    TechElement,
+)
 from .parsers import (
     parse_application_components,
     parse_application_functions,
@@ -58,21 +70,32 @@ from .parsers import (
     parse_technology_elements,
 )
 
-logger = logging.getLogger('archi2likec4')
+logger = logging.getLogger(__name__)
 
 
 # ── Phase result containers ──────────────────────────────────────────────
 
 class ParseResult(NamedTuple):
-    components: list
-    functions: list
-    interfaces: list
-    data_objects: list
-    relationships: list
-    domains_info: list
-    solution_views: list
-    tech_elements: list
-    parsed_subdomains: list
+    components: list[AppComponent]
+    functions: list[AppFunction]
+    interfaces: list[AppInterface]
+    data_objects: list[DataObject]
+    relationships: list[RawRelationship]
+    domains_info: list[DomainInfo]
+    solution_views: list[SolutionView]
+    tech_elements: list[TechElement]
+    parsed_subdomains: list[ParsedSubdomain]
+
+
+
+@dataclass
+class ConvertResult:
+    """Result returned by the public :func:`convert` API."""
+    systems_count: int
+    integrations_count: int
+    files_written: int
+    warnings: int
+    output_dir: Path
 
 
 
@@ -147,6 +170,8 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
         promote_children=config.promote_children,
         promote_warn_threshold=config.promote_warn_threshold,
         reviewed_systems=config.reviewed_systems,
+        prop_map=config.property_map,
+        standard_keys=config.standard_keys,
     )
     total_subsystems = sum(len(s.subsystems) for s in systems)
     logger.info('%d systems, %d subsystems', len(systems), total_subsystems)
@@ -393,7 +418,7 @@ def _generate(
     solution_view_files: dict[str, str],
     sv_unresolved: int = 0,
     sv_total: int = 0,
-) -> None:
+) -> int:
     """Phase 4: generate .c4 files."""
     logger.info('Generating files...')
 
@@ -558,36 +583,10 @@ def _generate(
     logger.info('  views/ (%d view files)', view_count)
     logger.info('  scripts/ (federate.py + federation-registry.yaml)')
     logger.info('Done! Run: cd %s && npx likec4 serve', output_dir)
+    return file_count
 
 
 # ── Sync step ────────────────────────────────────────────────────────────
-
-# Top-level names (files or entire dirs) never overwritten in sync target
-_SYNC_PROTECTED_TOP: frozenset[str] = frozenset({
-    '.gitignore',
-    '.gitlab-ci.yml',
-    '.gitlab',
-    '.yamllint.yml',
-    'AGENTS.md',
-    'CLAUDE.md',
-    'README.md',
-    'adr',
-    'dist',
-    'fitness',
-    'portal',
-    'public',
-    'static',
-    'likec4.generated.ts',
-    'gitlab-ci.yml',
-})
-
-# Specific relative sub-paths (POSIX) never overwritten in sync target
-_SYNC_PROTECTED_PATHS: frozenset[str] = frozenset({
-    'scripts/.gitkeep',
-    'scripts/check_staleness.py',
-    'scripts/validate_domains.py',
-})
-
 
 def _sync_output(config: ConvertConfig) -> bool:
     """Copy output_dir to sync_target, skipping protected files.
@@ -612,6 +611,8 @@ def _sync_output(config: ConvertConfig) -> bool:
         logger.error('sync_target equals output_dir %s — skipping sync', src)
         return False
 
+    protected_top = config.sync_protected_top
+    protected_paths = config.sync_protected_paths
     copied = 0
 
     def _copy_tree(source: Path, target: Path) -> None:
@@ -620,10 +621,10 @@ def _sync_output(config: ConvertConfig) -> bool:
             rel = item.relative_to(src).as_posix()
             top = item.name
             # Skip protected top-level items
-            if source == src and top in _SYNC_PROTECTED_TOP:
+            if source == src and top in protected_top:
                 continue
             # Skip specific protected sub-paths
-            if rel in _SYNC_PROTECTED_PATHS:
+            if rel in protected_paths:
                 continue
             dest_item = target / item.name
             if item.is_dir():
@@ -639,24 +640,108 @@ def _sync_output(config: ConvertConfig) -> bool:
     return True
 
 
+# ── Public API ───────────────────────────────────────────────────────────
+
+def convert(
+    model_root: str | Path,
+    output_dir: str | Path = 'output',
+    *,
+    config: ConvertConfig | None = None,
+    config_path: str | Path | None = None,
+    dry_run: bool = False,
+) -> ConvertResult:
+    """Convert a coArchi XML repository to LikeC4 .c4 files.
+
+    Parameters
+    ----------
+    model_root:
+        Path to the coArchi model directory.
+    output_dir:
+        Destination directory for generated .c4 files.
+    config:
+        Pre-built :class:`ConvertConfig` instance. When provided, *config_path*
+        is ignored. ``model_root``, ``output_dir``, and ``dry_run`` always
+        override the corresponding fields in *config*.
+    config_path:
+        Path to a YAML config file. Loaded only when *config* is ``None``.
+    dry_run:
+        When ``True``, parse and validate but do not write any files.
+
+    Returns
+    -------
+    ConvertResult
+
+    Raises
+    ------
+    FileNotFoundError
+        If *model_root* does not exist or is not a directory.
+    ConfigError
+        If the configuration file is invalid or cannot be read.
+    ParseError
+        If all XML files in a required directory fail to parse.
+    ValidationError
+        If quality gates fail, or if strict mode is active and warnings > 0.
+    """
+    model_root_path = Path(model_root).resolve()
+    output_dir_path = Path(output_dir)
+
+    if not model_root_path.is_dir():
+        raise FileNotFoundError(f'Model root directory does not exist: {model_root_path}')
+
+    if config is None:
+        config = load_config(Path(config_path) if config_path else None)
+
+    config.model_root = model_root_path
+    config.output_dir = output_dir_path
+    if dry_run:
+        config.dry_run = True
+
+    parsed = _parse(model_root_path, config)
+    built = _build(parsed, config)
+    gate_warnings, gate_errors, sv_files, sv_unresolved, sv_total = _validate(built, config)
+
+    if gate_errors > 0:
+        raise ValidationError(f'Quality gates failed with {gate_errors} error(s)')
+    if config.strict and gate_warnings > 0:
+        raise ValidationError(
+            f'{gate_warnings} quality-gate warning(s) treated as errors in strict mode')
+
+    files_written = 0
+    if not config.dry_run:
+        files_written = _generate(built, output_dir_path, config, sv_files, sv_unresolved, sv_total)
+        if config.sync_target is not None:
+            _sync_output(config)
+
+    return ConvertResult(
+        systems_count=len(built.systems),
+        integrations_count=len(built.integrations),
+        files_written=files_written,
+        warnings=gate_warnings,
+        output_dir=output_dir_path,
+    )
+
+
 # ── CLI entry point ──────────────────────────────────────────────────────
 
 def main() -> None:
-    import sys as _sys
+    import argparse
 
-    # Subcommand dispatch (before argparse — backward compatible)
-    if len(_sys.argv) > 1 and _sys.argv[1] == 'web':
-        _sys.argv.pop(1)
+    from . import __version__
+
+    # Subcommand dispatch for 'web' (before argparse — backward compatible)
+    if len(sys.argv) > 1 and sys.argv[1] == 'web':
+        sys.argv.pop(1)
         from .web import run_web_cli
         run_web_cli()
         return
 
-    import argparse
-
     parser = argparse.ArgumentParser(
         prog='archi2likec4',
         description='Convert coArchi XML repository to LikeC4 .c4 files',
+        epilog='Subcommands:\n  web    Launch the Flask audit web dashboard',
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
+    parser.add_argument('--version', action='version', version=f'%(prog)s {__version__}')
     parser.add_argument('model_root', nargs='?', default='architectural_repository/model',
                         help='Path to coArchi model directory (default: architectural_repository/model)')
     parser.add_argument('output_dir', nargs='?', default='output',
@@ -681,7 +766,7 @@ def main() -> None:
 
     try:
         config = load_config(args.config_file)
-    except (FileNotFoundError, ValueError, OSError, RuntimeError) as e:
+    except (FileNotFoundError, ConfigError, OSError) as e:
         logger.error('Configuration error: %s', e)
         sys.exit(2)
 
@@ -708,35 +793,32 @@ def main() -> None:
 
     # Reconfigure logging if verbose
     if config.verbose:
-        logging.getLogger().setLevel(logging.DEBUG)
+        logging.getLogger('archi2likec4').setLevel(logging.DEBUG)
 
-    from . import __version__
     logger.info('archi2likec4 v%s', __version__)
     logger.info('Input:  %s', config.model_root)
     logger.info('Output: %s', config.output_dir)
 
     try:
-        parsed = _parse(config.model_root, config)
-        built = _build(parsed, config)
-        gate_warnings, gate_errors, sv_files, sv_unresolved, sv_total = _validate(built, config)
-
-        if gate_errors > 0:
-            logger.error('Quality gates failed with %d error(s)', gate_errors)
-            sys.exit(1)
-        if config.strict and gate_warnings > 0:
-            logger.error('%d quality-gate warning(s) in strict mode — aborting', gate_warnings)
-            sys.exit(1)
+        result = convert(
+            config.model_root,
+            config.output_dir,
+            config=config,
+        )
         if config.dry_run:
             logger.info('Dry run complete — no files generated')
-            sys.exit(0)
+        else:
+            logger.info('Conversion complete: %d systems, %d integrations, %d files',
+                        result.systems_count, result.integrations_count, result.files_written)
 
-        _generate(built, config.output_dir, config, sv_files, sv_unresolved, sv_total)
-
-        if config.sync_target is not None and not _sync_output(config):
-            sys.exit(1)
-
+    except ValidationError as e:
+        logger.error('%s', e)
+        sys.exit(1)
     except FileNotFoundError as e:
         logger.error('Input not found: %s', e)
+        sys.exit(2)
+    except ParseError as e:
+        logger.error('Parse error: %s', e)
         sys.exit(2)
     except SystemExit:
         raise

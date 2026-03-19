@@ -15,7 +15,7 @@ from ..models import (
 )
 from ..utils import build_metadata, make_id, make_unique_id
 
-logger = logging.getLogger('archi2likec4')
+logger = logging.getLogger(__name__)
 
 
 def _extract_url(documentation: str) -> str | None:
@@ -42,6 +42,8 @@ def _attach_subsystems(
     subsystem_acs: list[AppComponent],
     parent_name_fn: Callable[[AppComponent], str],
     sub_name_fn: Callable[[AppComponent], str],
+    prop_map: dict[str, str] | None = None,
+    standard_keys: list[str] | None = None,
 ) -> None:
     """Attach a list of subsystem AppComponents to their parent Systems.
 
@@ -62,7 +64,8 @@ def _attach_subsystems(
 
         parent.subsystems.append(Subsystem(
             c4_id=sub_c4_id, name=ac.name, archi_id=ac.archi_id,
-            documentation=ac.documentation, metadata=build_metadata(ac),
+            documentation=ac.documentation,
+            metadata=build_metadata(ac, prop_map=prop_map, standard_keys=standard_keys),
             tags=_assign_tags(ac.source_folder),
         ))
 
@@ -86,6 +89,8 @@ def build_systems(  # noqa: C901
     promote_children: dict[str, str] | None = None,
     promote_warn_threshold: int | None = None,
     reviewed_systems: list[str] | None = None,
+    prop_map: dict[str, str] | None = None,
+    standard_keys: list[str] | None = None,
 ) -> tuple[list[System], dict[str, list[str]]]:
     """Build System objects from parsed AppComponents.
 
@@ -187,7 +192,9 @@ def build_systems(  # noqa: C901
 
         systems[name] = System(
             c4_id=c4_id, name=name, archi_id=ac.archi_id,
-            documentation=ac.documentation, metadata=build_metadata(ac), tags=tags,
+            documentation=ac.documentation,
+            metadata=build_metadata(ac, prop_map=prop_map, standard_keys=standard_keys),
+            tags=tags,
             extra_archi_ids=sys_extra_ids,
         )
 
@@ -196,6 +203,7 @@ def build_systems(  # noqa: C901
         systems, subsystem_acs,
         parent_name_fn=lambda ac: ac.name.split('.', 1)[0],
         sub_name_fn=lambda ac: ac.name.split('.', 1)[1] if '.' in ac.name else ac.name,
+        prop_map=prop_map, standard_keys=standard_keys,
     )
 
     # ── Attach promoted subsystems (3-segment names) ─────────────────────
@@ -216,6 +224,7 @@ def build_systems(  # noqa: C901
         systems, promoted_subsystem_acs,
         parent_name_fn=lambda ac: '.'.join(ac.name.split('.', 2)[:2]),
         sub_name_fn=lambda ac: ac.name.split('.', 2)[2],
+        prop_map=prop_map, standard_keys=standard_keys,
     )
 
     # ── Build promoted_parents map: parent_archi_id → [child c4_ids] ──

@@ -54,21 +54,21 @@
 Проблема: Захардкоженные данные (`_PROP_MAP`, `_STANDARD_KEYS`, `_SYNC_PROTECTED_TOP`, `_SYNC_PROTECTED_PATHS`, `DOMAIN_RENAMES`, `EXTRA_DOMAIN_PATTERNS`, `PROMOTE_CHILDREN`) мешают использовать конвертер в других организациях.
 
 **4a. Удалить мёртвый код:**
-- [ ] `archi2likec4/models.py`: удалить константы `DOMAIN_RENAMES`, `EXTRA_DOMAIN_PATTERNS`, `PROMOTE_CHILDREN` — они не используются (config.py имеет свои `_DEFAULT_*`)
-- [ ] `archi2likec4/parsers.py`: убрать `DOMAIN_RENAMES` из импорта; заменить `domain_renames if domain_renames is not None else DOMAIN_RENAMES` → `domain_renames or {}`
+- [x] `archi2likec4/models.py`: удалить константы `DOMAIN_RENAMES`, `EXTRA_DOMAIN_PATTERNS`, `PROMOTE_CHILDREN` — они не используются (config.py имеет свои `_DEFAULT_*`)
+- [x] `archi2likec4/parsers.py`: убрать `DOMAIN_RENAMES` из импорта; заменить `domain_renames if domain_renames is not None else DOMAIN_RENAMES` → `domain_renames or {}`
 
 **4b. Сделать metadata mapping конфигурируемым:**
-- [ ] `archi2likec4/models.py`: переименовать `_PROP_MAP` → `DEFAULT_PROP_MAP`, `_STANDARD_KEYS` → `DEFAULT_STANDARD_KEYS` (публичные константы)
-- [ ] `archi2likec4/config.py`: импортировать `DEFAULT_PROP_MAP`, `DEFAULT_STANDARD_KEYS` из `models`; добавить в `ConvertConfig` поля `property_map: dict[str, str]` и `standard_keys: list[str]` с дефолтами через `field(default_factory=lambda: dict(DEFAULT_PROP_MAP))` / `field(default_factory=lambda: list(DEFAULT_STANDARD_KEYS))`; добавить парсинг из YAML
-- [ ] `archi2likec4/utils.py`: обновить импорты на `DEFAULT_PROP_MAP`/`DEFAULT_STANDARD_KEYS`; добавить опциональные параметры `prop_map=None, standard_keys=None` в `build_metadata()`, использовать их вместо глобальных констант
-- [ ] `archi2likec4/builders/systems.py` и другие вызывающие `build_metadata()`: передавать `config.property_map` и `config.standard_keys`
+- [x] `archi2likec4/models.py`: переименовать `_PROP_MAP` → `DEFAULT_PROP_MAP`, `_STANDARD_KEYS` → `DEFAULT_STANDARD_KEYS` (публичные константы)
+- [x] `archi2likec4/config.py`: импортировать `DEFAULT_PROP_MAP`, `DEFAULT_STANDARD_KEYS` из `models`; добавить в `ConvertConfig` поля `property_map: dict[str, str]` и `standard_keys: list[str]` с дефолтами через `field(default_factory=lambda: dict(DEFAULT_PROP_MAP))` / `field(default_factory=lambda: list(DEFAULT_STANDARD_KEYS))`; добавить парсинг из YAML
+- [x] `archi2likec4/utils.py`: обновить импорты на `DEFAULT_PROP_MAP`/`DEFAULT_STANDARD_KEYS`; добавить опциональные параметры `prop_map=None, standard_keys=None` в `build_metadata()`, использовать их вместо глобальных констант
+- [x] `archi2likec4/builders/systems.py` и другие вызывающие `build_metadata()`: передавать `config.property_map` и `config.standard_keys`
 
 **4c. Вынести sync protected paths:**
-- [ ] `archi2likec4/config.py`: добавить в `ConvertConfig` поля `sync_protected_top: frozenset[str]` и `sync_protected_paths: frozenset[str]` с `field(default_factory=frozenset)`; добавить парсинг из YAML
-- [ ] `archi2likec4/pipeline.py`: удалить константы `_SYNC_PROTECTED_TOP` и `_SYNC_PROTECTED_PATHS`; в `_sync_output()` заменить обращения к этим константам на `config.sync_protected_top` и `config.sync_protected_paths`
+- [x] `archi2likec4/config.py`: добавить в `ConvertConfig` поля `sync_protected_top: frozenset[str]` и `sync_protected_paths: frozenset[str]` с `field(default_factory=frozenset)`; добавить парсинг из YAML
+- [x] `archi2likec4/pipeline.py`: удалить константы `_SYNC_PROTECTED_TOP` и `_SYNC_PROTECTED_PATHS`; в `_sync_output()` заменить обращения к этим константам на `config.sync_protected_top` и `config.sync_protected_paths`
 
-- [ ] Add/update tests: `tests/test_config.py` — парсинг `property_map`, `standard_keys`, `sync_protected_top`, `sync_protected_paths` из YAML. `tests/test_utils.py` — тест `build_metadata` с кастомными `prop_map`/`standard_keys`
-- [ ] Mark completed
+- [x] Add/update tests: `tests/test_config.py` — парсинг `property_map`, `standard_keys`, `sync_protected_top`, `sync_protected_paths` из YAML. `tests/test_utils.py` — тест `build_metadata` с кастомными `prop_map`/`standard_keys`
+- [x] Mark completed
 
 ---
 
