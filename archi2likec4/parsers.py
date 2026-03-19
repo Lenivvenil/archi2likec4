@@ -27,7 +27,6 @@ logger = logging.getLogger('archi2likec4')
 
 def _detect_special_folder(xml_path: Path) -> str:
     """Walk up from *xml_path* looking for a folder whose name starts with '!'."""
-    current = xml_path.parent
     model_root = None
     for parent in xml_path.parents:
         if (parent / 'folder.xml').exists() and parent.name == 'application':
@@ -310,6 +309,7 @@ def parse_application_functions(model_root: Path) -> list[AppFunction]:
 _TECH_PREFIXES = (
     'Node_', 'SystemSoftware_', 'Device_', 'TechnologyCollaboration_',
     'TechnologyService_', 'Artifact_', 'CommunicationNetwork_', 'Path_',
+    'TechnologyFunction_', 'TechnologyProcess_', 'TechnologyInteraction_',
 )
 
 _KNOWN_PARSER_TECH_TYPES = frozenset({
@@ -389,6 +389,8 @@ def parse_relationships(model_root: Path) -> list[RawRelationship]:
         'archimate:Node', 'archimate:SystemSoftware', 'archimate:Device',
         'archimate:TechnologyCollaboration', 'archimate:TechnologyService',
         'archimate:Artifact', 'archimate:CommunicationNetwork', 'archimate:Path',
+        'archimate:TechnologyFunction', 'archimate:TechnologyProcess',
+        'archimate:TechnologyInteraction',
         # Other
         'archimate:Location',
     }
@@ -486,6 +488,9 @@ def parse_domain_mapping(
             continue
         if not domain_name:
             continue
+        # Skip trash domain folders
+        if domain_name.strip().lower() == 'trash':
+            continue
 
         domain_c4_id = make_id(domain_name)
 
@@ -550,6 +555,9 @@ def parse_subdomains(
             continue
         if not domain_name:
             continue
+        # Skip trash domain folders
+        if domain_name.strip().lower() == 'trash':
+            continue
 
         domain_c4_id = make_id(domain_name)
         if domain_c4_id in renames:
@@ -570,9 +578,14 @@ def parse_subdomains(
                 continue
             if not subdomain_name:
                 continue
+            # Skip trash subdomain folders
+            if subdomain_name.strip().lower() == 'trash':
+                continue
 
             component_ids: set[str] = set()
             for view_xml in sorted(subdomain_dir.rglob('ArchimateDiagramModel_*.xml')):
+                if _is_in_trash(view_xml, subdomain_dir):
+                    continue
                 try:
                     view_tree = ET.parse(view_xml)
                 except ET.ParseError:
@@ -696,6 +709,11 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
             new_rels = [r for r in relationship_ids if r not in existing_rel_set]
             existing.element_archi_ids.extend(new_elems)
             existing.relationship_archi_ids.extend(new_rels)
+            # Merge visual nesting from duplicate diagram
+            if visual_nesting:
+                existing_nesting_set = set(existing.visual_nesting)
+                new_nesting = [vn for vn in visual_nesting if vn not in existing_nesting_set]
+                existing.visual_nesting.extend(new_nesting)
             logger.warning('Duplicate %s diagram "%s" — merged %d new elements, %d new relationships',
                            view_type, diagram_name, len(new_elems), len(new_rels))
             continue
