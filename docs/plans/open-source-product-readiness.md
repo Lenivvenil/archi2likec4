@@ -89,9 +89,9 @@
 
 Финальная сборка: документация, changelog, README.
 
-- [ ] `CHANGELOG.md`: добавить секцию `[X.Y.Z] — <дата>` с подсекциями Added / Changed / Removed, отражающими Tasks 1-5
-- [ ] `README.md`: добавить или обновить секцию "Library Usage" с примером `from archi2likec4 import convert, ConvertConfig, ConvertResult` и кодом вызова; перечислить бросаемые исключения
-- [ ] `CLAUDE.md`: обновить строку `pipeline.py` в таблице Key Files — добавить `convert()`, `ConvertResult` в описание
-- [ ] Финальный прогон всех validation commands: `ruff check archi2likec4/ tests/`, `uv run pytest tests/ -v --tb=short`, `uv run mypy archi2likec4/ --ignore-missing-imports`
-- [ ] Финальная smoke-проверка: `uv run python -c "from archi2likec4 import convert, ConvertResult, __version__; print(__version__)"` — печатает целевую версию
-- [ ] Mark completed
+- [x] `CHANGELOG.md`: добавить секцию `[X.Y.Z] — <дата>` с подсекциями Added / Changed / Removed, отражающими Tasks 1-5
+- [x] `README.md`: добавить или обновить секцию "Library Usage" с примером `from archi2likec4 import convert, ConvertConfig, ConvertResult` и кодом вызова; перечислить бросаемые исключения
+- [x] `CLAUDE.md`: обновить строку `pipeline.py` в таблице Key Files — добавить `convert()`, `ConvertResult` в описание
+- [x] Финальный прогон всех validation commands: `ruff check archi2likec4/ tests/`, `uv run pytest tests/ -v --tb=short`, `uv run mypy archi2likec4/ --ignore-missing-imports`
+- [x] Финальная smoke-проверка: `uv run python -c "from archi2likec4 import convert, ConvertResult, __version__; print(__version__)"` — печатает целевую версию
+- [x] Mark completed
