@@ -5,8 +5,8 @@ import re
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
+from .exceptions import ParseError
 from .models import (
-    DOMAIN_RENAMES,
     NS,
     AppComponent,
     AppFunction,
@@ -20,7 +20,7 @@ from .models import (
 )
 from .utils import make_id
 
-logger = logging.getLogger('archi2likec4')
+logger = logging.getLogger(__name__)
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────
@@ -36,7 +36,7 @@ def _detect_special_folder(xml_path: Path) -> str:
             model_root = parent / 'application'
             break
     current = xml_path.parent
-    while current != model_root and current.name != 'application':
+    while current != model_root and current.name != 'application' and current != current.parent:
         folder_xml = current / 'folder.xml'
         if folder_xml.exists():
             try:
@@ -192,6 +192,7 @@ def parse_application_components(model_root: Path) -> list[AppComponent]:
         raise FileNotFoundError(f'No application/ directory in {model_root}')
 
     results: list[AppComponent] = []
+    parse_errors = 0
     for xml_path in sorted(app_dir.rglob('ApplicationComponent_*.xml')):
         if _is_in_trash(xml_path, app_dir):
             continue
@@ -199,6 +200,7 @@ def parse_application_components(model_root: Path) -> list[AppComponent]:
             tree = ET.parse(xml_path)
         except ET.ParseError as e:
             logger.warning('Cannot parse %s: %s', xml_path, e)
+            parse_errors += 1
             continue
         root = tree.getroot()
         name = root.get('name', '').strip()
@@ -217,6 +219,9 @@ def parse_application_components(model_root: Path) -> list[AppComponent]:
             archi_id=archi_id, name=name, documentation=documentation,
             properties=props, source_folder=source_folder,
         ))
+    if not results and parse_errors > 0:
+        raise ParseError(
+            f'All {parse_errors} ApplicationComponent XML file(s) in {app_dir} failed to parse')
     return results
 
 
@@ -243,6 +248,9 @@ def parse_application_interfaces(model_root: Path) -> list[AppInterface]:
         results.append(AppInterface(archi_id=archi_id, name=name, documentation=documentation))
     if parse_errors:
         logger.warning('%d ApplicationInterface XML file(s) could not be parsed', parse_errors)
+    if not results and parse_errors > 0:
+        raise ParseError(
+            f'All {parse_errors} ApplicationInterface XML file(s) in {app_dir} failed to parse')
     return results
 
 
@@ -270,6 +278,9 @@ def parse_data_objects(model_root: Path) -> list[DataObject]:
         results.append(DataObject(archi_id=archi_id, name=name, documentation=documentation))
     if parse_errors:
         logger.warning('%d DataObject XML file(s) could not be parsed', parse_errors)
+    if not results and parse_errors > 0:
+        raise ParseError(
+            f'All {parse_errors} DataObject XML file(s) in {app_dir} failed to parse')
     return results
 
 
@@ -303,6 +314,9 @@ def parse_application_functions(model_root: Path) -> list[AppFunction]:
         ))
     if parse_errors:
         logger.warning('%d ApplicationFunction XML file(s) could not be parsed', parse_errors)
+    if not results and parse_errors > 0:
+        raise ParseError(
+            f'All {parse_errors} ApplicationFunction XML file(s) in {app_dir} failed to parse')
     return results
 
 
@@ -364,6 +378,9 @@ def parse_technology_elements(model_root: Path) -> list[TechElement]:
         ))
     if parse_errors:
         logger.warning('%d technology XML file(s) could not be parsed', parse_errors)
+    if not results and parse_errors > 0:
+        raise ParseError(
+            f'All {parse_errors} technology XML file(s) in {tech_dir} failed to parse')
     return results
 
 
@@ -433,6 +450,9 @@ def parse_relationships(model_root: Path) -> list[RawRelationship]:
         ))
     if parse_errors:
         logger.warning('%d relationship XML file(s) could not be parsed', parse_errors)
+    if not results and parse_errors > 0:
+        raise ParseError(
+            f'All {parse_errors} relationship XML file(s) in {rel_dir} failed to parse')
     return results
 
 
@@ -505,7 +525,7 @@ def parse_domain_mapping(
             _extract_app_component_refs(tree.getroot(), archi_ids)
 
         # Apply domain renames
-        renames = domain_renames if domain_renames is not None else DOMAIN_RENAMES
+        renames = domain_renames or {}
         if domain_c4_id in renames:
             new_id, new_name = renames[domain_c4_id]
             domain_c4_id = new_id
@@ -538,7 +558,7 @@ def parse_subdomains(
     if not func_areas_dir:
         return []
 
-    renames = domain_renames if domain_renames is not None else DOMAIN_RENAMES
+    renames = domain_renames or {}
     results: list[ParsedSubdomain] = []
 
     for domain_dir in sorted(func_areas_dir.iterdir()):
@@ -742,5 +762,8 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
 
     if parse_errors:
         logger.warning('%d solution diagram XML file(s) could not be parsed', parse_errors)
+    if not results and parse_errors > 0:
+        raise ParseError(
+            f'All {parse_errors} solution diagram XML file(s) in {diagrams_dir} failed to parse')
 
     return results

@@ -7,9 +7,12 @@ import html
 import logging
 from pathlib import Path
 from typing import TYPE_CHECKING
+from urllib.parse import urlparse
 
 if TYPE_CHECKING:
     from flask import Flask
+
+from .exceptions import ConfigError
 
 logger = logging.getLogger('archi2likec4.web')
 
@@ -94,13 +97,18 @@ def create_app(
         """Reject cross-origin POST requests (Origin/Referer check)."""
         if request.method != 'POST':
             return None
+        host_parsed = urlparse(request.host_url)
+        host_netloc = host_parsed.netloc
         origin = request.headers.get('Origin') or ''
         referer = request.headers.get('Referer') or ''
         if origin:
-            if not origin.startswith(request.host_url.rstrip('/')):
+            origin_parsed = urlparse(origin)
+            if origin_parsed.netloc != host_netloc:
                 return 'Forbidden: cross-origin POST', 403
-        elif referer and not referer.startswith(request.host_url):
-            return 'Forbidden: cross-origin POST', 403
+        elif referer:
+            referer_parsed = urlparse(referer)
+            if referer_parsed.netloc != host_netloc:
+                return 'Forbidden: cross-origin POST', 403
         return None
 
     _cache: dict[str, object] = {}
@@ -116,8 +124,8 @@ def create_app(
         from .pipeline import _build, _parse, _validate
         try:
             config = load_config(config_path)
-        except (FileNotFoundError, ValueError, OSError) as e:
-            raise RuntimeError(f'Configuration error: {e}') from e
+        except (FileNotFoundError, ConfigError, OSError) as e:
+            raise ConfigError(str(e)) from e
         config.model_root = model_root
         config.output_dir = output_dir
         parsed = _parse(model_root, config)
@@ -144,7 +152,7 @@ def create_app(
             _invalidate_cache()
         return response
 
-    @app.errorhandler(RuntimeError)
+    @app.errorhandler(ConfigError)
     def _handle_runtime_error(error):
         return f'<h1>Configuration Error</h1><pre>{html.escape(str(error))}</pre>', 500
 
@@ -196,8 +204,8 @@ def create_app(
         """Load config with error handling for web routes."""
         try:
             return load_config(config_path)
-        except (FileNotFoundError, ValueError, OSError) as e:
-            raise RuntimeError(f'Configuration error: {e}') from e
+        except (FileNotFoundError, ConfigError, OSError) as e:
+            raise ConfigError(str(e)) from e
 
     @app.route('/remediations')
     def remediations():
