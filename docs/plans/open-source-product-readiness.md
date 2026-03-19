@@ -28,13 +28,13 @@
 
 Проблема: `main()` / `run_pipeline()` вызывает `sys.exit()` при ошибках — нельзя использовать как библиотеку. Нет типизированного возвращаемого значения.
 
-- [ ] `archi2likec4/pipeline.py`: добавить `@dataclass ConvertResult` с полями `systems_count: int`, `integrations_count: int`, `files_written: int`, `warnings: int`, `output_dir: Path`
-- [ ] `archi2likec4/pipeline.py`: добавить публичную функцию `convert(model_root, output_dir='output', *, config=None, config_path=None, dry_run=False) -> ConvertResult`. Функция НЕ вызывает `sys.exit()`. При ошибках бросает `FileNotFoundError`, `ConfigError`, `ParseError`, `ValidationError`. Вызывает `_parse`, `_build`, `_validate`, при `dry_run=False` — `_generate` и `_sync_output`
-- [ ] `archi2likec4/pipeline.py`: убедиться, что `_generate()` возвращает `int` (количество записанных файлов), а не `None`
-- [ ] `archi2likec4/pipeline.py`: рефакторировать `main()` в тонкую обёртку вокруг `convert()`: `main()` только парсит аргументы, вызывает `convert()`, перехватывает исключения и вызывает `sys.exit()` с нужным кодом (ValidationError/unexpected → 1, FileNotFoundError/ParseError/ConfigError → 2)
-- [ ] `archi2likec4/__init__.py`: экспортировать `convert` и `ConvertResult`; оставить `run_pipeline` как backward-compat alias для `main`
-- [ ] Add/update tests: `tests/test_api.py` — новый файл: `TestConvertReturnsResult` (success, dry-run, без config), `TestConvertRaisesOnBadInput` (missing root, ValidationError, strict warnings, ConfigError, ParseError)
-- [ ] Mark completed
+- [x] `archi2likec4/pipeline.py`: добавить `@dataclass ConvertResult` с полями `systems_count: int`, `integrations_count: int`, `files_written: int`, `warnings: int`, `output_dir: Path`
+- [x] `archi2likec4/pipeline.py`: добавить публичную функцию `convert(model_root, output_dir='output', *, config=None, config_path=None, dry_run=False) -> ConvertResult`. Функция НЕ вызывает `sys.exit()`. При ошибках бросает `FileNotFoundError`, `ConfigError`, `ParseError`, `ValidationError`. Вызывает `_parse`, `_build`, `_validate`, при `dry_run=False` — `_generate` и `_sync_output`
+- [x] `archi2likec4/pipeline.py`: убедиться, что `_generate()` возвращает `int` (количество записанных файлов), а не `None`
+- [x] `archi2likec4/pipeline.py`: рефакторировать `main()` в тонкую обёртку вокруг `convert()`: `main()` только парсит аргументы, вызывает `convert()`, перехватывает исключения и вызывает `sys.exit()` с нужным кодом (ValidationError/unexpected → 1, FileNotFoundError/ParseError/ConfigError → 2)
+- [x] `archi2likec4/__init__.py`: экспортировать `convert` и `ConvertResult`; оставить `run_pipeline` как backward-compat alias для `main`
+- [x] Add/update tests: `tests/test_api.py` — новый файл: `TestConvertReturnsResult` (success, dry-run, без config), `TestConvertRaisesOnBadInput` (missing root, ValidationError, strict warnings, ConfigError, ParseError)
+- [x] Mark completed
 
 ---
 
