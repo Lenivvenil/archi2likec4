@@ -218,6 +218,9 @@ def generate_solution_views(  # noqa: C901
                         c4_paths.append(tech_archi_to_c4[aid])
                     elif aid in archi_to_c4:
                         c4_paths.append(archi_to_c4[aid])
+                    elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
+                        for child_path in promoted_archi_to_c4[aid]:
+                            c4_paths.append(child_path)
                     else:
                         unresolved += 1
             elif sv.view_type == 'functional':

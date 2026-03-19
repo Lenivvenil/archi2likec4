@@ -201,21 +201,12 @@ def build_tech_archi_to_c4_map(
     return _build_deployment_path_index(deployment_nodes)
 
 
-def build_deployment_map(
+def _build_app_path_index(
     systems: list[System],
-    deployment_nodes: list[DeploymentNode],
-    relationships: list[RawRelationship],
     sys_domain: dict[str, str],
-    sys_subdomain: dict[str, str] | None = None,
-) -> list[tuple[str, str]]:
-    """Build (app_c4_path, node_c4_id) pairs from cross-layer RealizationRelationship.
-
-    Resolves ApplicationComponent ↔ Node/SystemSoftware/Device via RealizationRelationship.
-    """
-    if not deployment_nodes or not systems:
-        return []
-
-    # Build app index: archi_id → full c4 path (domain.system or domain.subdomain.system)
+    sys_subdomain: dict[str, str] | None,
+) -> dict[str, str]:
+    """Build archi_id → full c4 path index for systems and subsystems."""
     app_path: dict[str, str] = {}
     for sys in systems:
         domain = sys_domain.get(sys.c4_id, 'unassigned')
@@ -228,6 +219,26 @@ def build_deployment_map(
         for sub in sys.subsystems:
             if sub.archi_id:
                 app_path[sub.archi_id] = f'{full}.{sub.c4_id}'
+    return app_path
+
+
+def build_deployment_map(
+    systems: list[System],
+    deployment_nodes: list[DeploymentNode],
+    relationships: list[RawRelationship],
+    sys_domain: dict[str, str],
+    sys_subdomain: dict[str, str] | None = None,
+    promoted_archi_to_c4: dict[str, list[str]] | None = None,
+) -> list[tuple[str, str]]:
+    """Build (app_c4_path, node_c4_id) pairs from cross-layer RealizationRelationship.
+
+    Resolves ApplicationComponent ↔ Node/SystemSoftware/Device via RealizationRelationship.
+    When a promoted parent archi_id is encountered, fans out to all child system paths.
+    """
+    if not deployment_nodes or not systems:
+        return []
+
+    app_path = _build_app_path_index(systems, sys_domain, sys_subdomain)
 
     # Build tech index: archi_id → qualified c4 path (parent.child for nested)
     tech_path = _build_deployment_path_index(deployment_nodes)
@@ -235,7 +246,8 @@ def build_deployment_map(
     # Only ApplicationComponent is resolvable via app_path (systems/subsystems).
     _app_types = {'ApplicationComponent'}
     _tech_types = {'Node', 'SystemSoftware', 'Device', 'TechnologyCollaboration',
-                   'TechnologyService', 'Artifact', 'CommunicationNetwork', 'Path'}
+                   'TechnologyService', 'Artifact', 'CommunicationNetwork', 'Path',
+                   'TechnologyFunction', 'TechnologyProcess', 'TechnologyInteraction'}
 
     seen: set[tuple[str, str]] = set()
     result: list[tuple[str, str]] = []
@@ -254,16 +266,23 @@ def build_deployment_map(
         else:
             continue
 
+        app_paths_resolved: list[str] = []
         a = app_path.get(app_id)
+        if a:
+            app_paths_resolved.append(a)
+        elif promoted_archi_to_c4 and app_id in promoted_archi_to_c4:
+            app_paths_resolved.extend(promoted_archi_to_c4[app_id])
+
         t = tech_path.get(tech_id)
-        if not a or not t:
+        if not app_paths_resolved or not t:
             continue
 
-        pair = (a, t)
-        if pair in seen:
-            continue
-        seen.add(pair)
-        result.append(pair)
+        for a in app_paths_resolved:
+            pair = (a, t)
+            if pair in seen:
+                continue
+            seen.add(pair)
+            result.append(pair)
 
     result.sort()
     return result

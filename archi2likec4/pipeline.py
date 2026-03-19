@@ -279,7 +279,8 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
 
     logger.info('Building deployment mapping...')
     deployment_map = build_deployment_map(
-        systems, deployment_nodes, parsed.relationships, sys_domain, sys_subdomain)
+        systems, deployment_nodes, parsed.relationships, sys_domain, sys_subdomain,
+        promoted_archi_to_c4=promoted_archi_to_c4)
     logger.info('%d app→infrastructure deployment mappings', len(deployment_map))
 
     # Validate deployment mapping: check all infra paths resolve
@@ -588,13 +589,29 @@ _SYNC_PROTECTED_PATHS: frozenset[str] = frozenset({
 })
 
 
-def _sync_output(config: ConvertConfig) -> None:
-    """Copy output_dir to sync_target, skipping protected files."""
+def _sync_output(config: ConvertConfig) -> bool:
+    """Copy output_dir to sync_target, skipping protected files.
+
+    Returns ``True`` on success, ``False`` when sync was skipped due to
+    invalid configuration (target nested inside or equal to output_dir).
+    """
     if config.sync_target is None:
-        return
+        return True
 
     src = config.output_dir.resolve()
     dst = config.sync_target.resolve()
+
+    # Guard: prevent infinite recursion if target is same as or nested under source
+    try:
+        dst.relative_to(src)
+        logger.error('sync_target %s is inside output_dir %s — skipping sync', dst, src)
+        return False
+    except ValueError:
+        pass  # dst is not under src — safe to proceed
+    if dst == src:
+        logger.error('sync_target equals output_dir %s — skipping sync', src)
+        return False
+
     copied = 0
 
     def _copy_tree(source: Path, target: Path) -> None:
@@ -619,6 +636,7 @@ def _sync_output(config: ConvertConfig) -> None:
     dst.mkdir(parents=True, exist_ok=True)
     _copy_tree(src, dst)
     logger.info('Synced %d file(s) to %s', copied, dst)
+    return True
 
 
 # ── CLI entry point ──────────────────────────────────────────────────────
@@ -714,8 +732,8 @@ def main() -> None:
 
         _generate(built, config.output_dir, config, sv_files, sv_unresolved, sv_total)
 
-        if config.sync_target is not None:
-            _sync_output(config)
+        if config.sync_target is not None and not _sync_output(config):
+            sys.exit(1)
 
     except FileNotFoundError as e:
         logger.error('Input not found: %s', e)
