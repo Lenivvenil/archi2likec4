@@ -4,6 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- **Homebrew tap**: `brew tap Lenivvenil/archi2likec4 && brew install archi2likec4` — Formula at [homebrew-archi2likec4](https://github.com/Lenivvenil/homebrew-archi2likec4)
+- **TestPyPI dry-run workflow** (`.github/workflows/test-publish.yml`): manual `workflow_dispatch` trigger publishes to TestPyPI for pre-release validation
+- **Automated Homebrew Formula bump** (`.github/workflows/publish.yml`): `update-homebrew` job runs after PyPI publish, computes SHA256 of new sdist and pushes updated Formula to tap repo
+- **PyPI publish hardening** (`.github/workflows/publish.yml`): `twine check dist/*` metadata validation, `archi2likec4 --version` smoke-test, tag-vs-`pyproject.toml` version consistency check
+
 ## [1.3.0] — 2026-03-20
 
 ### Added

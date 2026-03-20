@@ -69,9 +69,9 @@
 
 Обновить документацию проекта: инструкции по установке через pip и brew, `RELEASING.md` с пошаговым чеклистом выпуска новой версии.
 
-- [ ] Прочитать `README.md` — найти текущую секцию установки
-- [ ] `README.md`: обновить секцию "Installation" — три способа: `pip install archi2likec4` (PyPI), `brew install Lenivvenil/archi2likec4/archi2likec4` (Homebrew), `pip install archi2likec4[web]` (с Flask UI); добавить badges: PyPI version, Homebrew tap, Python versions, License
-- [ ] Создать `RELEASING.md` в корне проекта — пошаговый чеклист:
+- [x] Прочитать `README.md` — найти текущую секцию установки
+- [x] `README.md`: обновить секцию "Installation" — три способа: `pip install archi2likec4` (PyPI), `brew install Lenivvenil/archi2likec4/archi2likec4` (Homebrew), `pip install archi2likec4[web]` (с Flask UI); добавить badges: PyPI version, Homebrew tap, Python versions, License
+- [x] Создать `RELEASING.md` в корне проекта — пошаговый чеклист:
   1. Обновить `[Unreleased]` → `[X.Y.Z] — YYYY-MM-DD` в `CHANGELOG.md`
   2. Bump version в `pyproject.toml` и fallback в `__init__.py`
   3. Commit: `git commit -am "release: vX.Y.Z"`
@@ -80,6 +80,6 @@
   6. Создать GitHub Release (tag → Release notes из CHANGELOG)
   7. CI автоматически: build → twine check → smoke test → PyPI publish → Homebrew tap update
   8. Проверить: `pip install archi2likec4==X.Y.Z` и `brew upgrade archi2likec4`
-- [ ] `CHANGELOG.md`: добавить запись в `[Unreleased]` про Homebrew tap, TestPyPI workflow, publish hardening
-- [ ] Add/update tests: `tests/test_cli.py` — убедиться что `test_version_flag` и `test_help_shows_web` проходят (существующие тесты); добавить `test_version_matches_pyproject` если не добавлен в Task 1
-- [ ] Mark completed
+- [x] `CHANGELOG.md`: добавить запись в `[Unreleased]` про Homebrew tap, TestPyPI workflow, publish hardening
+- [x] Add/update tests: `tests/test_cli.py` — убедиться что `test_version_flag` и `test_help_shows_web` проходят (существующие тесты); добавить `test_version_matches_pyproject` если не добавлен в Task 1
+- [x] Mark completed

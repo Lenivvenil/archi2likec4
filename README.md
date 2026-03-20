@@ -1,6 +1,25 @@
 # archi2likec4
 
+[![PyPI version](https://img.shields.io/pypi/v/archi2likec4)](https://pypi.org/project/archi2likec4/)
+[![Python versions](https://img.shields.io/pypi/pyversions/archi2likec4)](https://pypi.org/project/archi2likec4/)
+[![Homebrew tap](https://img.shields.io/badge/homebrew-tap-orange)](https://github.com/Lenivvenil/homebrew-archi2likec4)
+[![License: MIT](https://img.shields.io/github/license/Lenivvenil/archi2likec4)](LICENSE)
+
 Конвертер из [coArchi](https://github.com/archimatetool/archi-modelrepository-plugin) XML в [LikeC4](https://likec4.dev/) architecture-as-code.
+
+## Installation
+
+```bash
+# PyPI (базовая установка — zero runtime dependencies)
+pip install archi2likec4
+
+# Homebrew (macOS/Linux)
+brew tap Lenivvenil/archi2likec4
+brew install archi2likec4
+
+# PyPI с Web UI (Flask dashboard)
+pip install "archi2likec4[web]"
+```
 
 ## Зачем
 
