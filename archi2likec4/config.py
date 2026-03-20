@@ -9,8 +9,10 @@ import logging
 import re
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
-from .models import PROMOTE_WARN_THRESHOLD
+from .exceptions import ConfigError
+from .models import DEFAULT_PROP_MAP, DEFAULT_STANDARD_KEYS, PROMOTE_WARN_THRESHOLD
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,7 @@ _VALID_C4_ID = re.compile(r'^[a-z][a-z0-9_-]*$')
 
 _DEFAULT_DOMAIN_RENAMES: dict[str, tuple[str, str]] = {}
 
-_DEFAULT_EXTRA_DOMAIN_PATTERNS: list[dict] = []
+_DEFAULT_EXTRA_DOMAIN_PATTERNS: list[dict[str, Any]] = []
 
 _DEFAULT_PROMOTE_CHILDREN: dict[str, str] = {}
 
@@ -42,7 +44,7 @@ class ConvertConfig:
     # Domain configuration
     domain_renames: dict[str, tuple[str, str]] = field(
         default_factory=lambda: dict(_DEFAULT_DOMAIN_RENAMES))
-    extra_domain_patterns: list[dict] = field(
+    extra_domain_patterns: list[dict[str, Any]] = field(
         default_factory=lambda: [dict(d, patterns=list(d['patterns']))
                                  for d in _DEFAULT_EXTRA_DOMAIN_PATTERNS])
 
@@ -68,6 +70,14 @@ class ConvertConfig:
 
     # Auto-sync: copy output_dir to this directory after generation
     sync_target: Path | None = None
+
+    # Configurable metadata mapping (override DEFAULT_PROP_MAP/DEFAULT_STANDARD_KEYS)
+    property_map: dict[str, str] = field(default_factory=lambda: dict(DEFAULT_PROP_MAP))
+    standard_keys: list[str] = field(default_factory=lambda: list(DEFAULT_STANDARD_KEYS))
+
+    # Sync protected paths (top-level names and specific sub-paths to preserve in sync target)
+    sync_protected_top: frozenset[str] = field(default_factory=frozenset)
+    sync_protected_paths: frozenset[str] = field(default_factory=frozenset)
 
     # CLI flags
     strict: bool = False
@@ -98,12 +108,16 @@ def load_config(config_path: Path | None) -> ConvertConfig:
         try:
             import yaml  # type: ignore[import-untyped]
         except ImportError as err:
-            raise RuntimeError(
+            raise ConfigError(
                 f'Config file {config_path} requires PyYAML: pip install pyyaml') from err
         with open(config_path, encoding='utf-8') as fh:
-            data = yaml.safe_load(fh) or {}
+            try:
+                data = yaml.safe_load(fh) or {}
+            except yaml.YAMLError as err:
+                raise ConfigError(
+                    f'Config file {config_path}: YAML parse error: {err}') from err
         if not isinstance(data, dict):
-            raise ValueError(
+            raise ConfigError(
                 f'Config file {config_path}: expected YAML mapping at root, '
                 f'got {type(data).__name__}')
         _apply_yaml(config, data)
@@ -117,6 +131,8 @@ _KNOWN_YAML_KEYS: set[str] = {
     'audit_suppress', 'audit_suppress_incidents',
     'domain_overrides', 'subdomain_overrides', 'reviewed_systems',
     'language', 'strict', 'sync_target',
+    'property_map', 'standard_keys',
+    'sync_protected_top', 'sync_protected_paths',
 }
 
 
@@ -127,74 +143,79 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
         logger.warning('Unknown config keys (ignored): %s', ', '.join(sorted(unknown)))
     if 'promote_children' in data:
         if not isinstance(data['promote_children'], dict):
-            raise ValueError(
+            raise ConfigError(
                 f"promote_children: expected mapping, got {type(data['promote_children']).__name__}")
         for k, v in data['promote_children'].items():
             if not isinstance(k, str) or not isinstance(v, str):
-                raise ValueError(
+                raise ConfigError(
                     f"promote_children['{k}']: key and value must be strings, "
                     f"got key={type(k).__name__}, value={type(v).__name__}")
             if not _VALID_C4_ID.match(v):
-                raise ValueError(
+                raise ConfigError(
                     f"promote_children['{k}']: invalid C4 identifier "
                     f"'{v}' (must match {_VALID_C4_ID.pattern})")
         config.promote_children = data['promote_children']
     if 'promote_warn_threshold' in data:
-        val = int(data['promote_warn_threshold'])
+        try:
+            val = int(data['promote_warn_threshold'])
+        except (ValueError, TypeError) as exc:
+            raise ConfigError(
+                f"promote_warn_threshold: expected integer, got {data['promote_warn_threshold']!r}"
+            ) from exc
         if val < 0:
-            raise ValueError(f"promote_warn_threshold: must be non-negative, got {val}")
+            raise ConfigError(f"promote_warn_threshold: must be non-negative, got {val}")
         config.promote_warn_threshold = val
     if 'domain_renames' in data:
         if not isinstance(data['domain_renames'], dict):
-            raise ValueError(
+            raise ConfigError(
                 f"domain_renames: expected mapping, got {type(data['domain_renames']).__name__}")
         renames: dict[str, tuple[str, str]] = {}
         for k, v in data['domain_renames'].items():
             if not isinstance(v, (list, tuple)) or len(v) != 2:
-                raise ValueError(
+                raise ConfigError(
                     f"domain_renames['{k}']: expected [new_id, 'Display Name'], "
                     f"got {v!r}")
             if not isinstance(v[0], str) or not isinstance(v[1], str):
-                raise ValueError(
+                raise ConfigError(
                     f"domain_renames['{k}']: values must be strings, got {v!r}")
             if not _VALID_C4_ID.match(v[0]):
-                raise ValueError(
+                raise ConfigError(
                     f"domain_renames['{k}']: invalid C4 identifier "
                     f"'{v[0]}' (must match {_VALID_C4_ID.pattern})")
             renames[k] = tuple(v)
         config.domain_renames = renames
     if 'extra_domain_patterns' in data:
         if not isinstance(data['extra_domain_patterns'], list):
-            raise ValueError(
+            raise ConfigError(
                 f"extra_domain_patterns: expected list, got {type(data['extra_domain_patterns']).__name__}")
-        validated: list[dict] = []
+        validated: list[dict[str, Any]] = []
         for i, entry in enumerate(data['extra_domain_patterns']):
             if not isinstance(entry, dict):
-                raise ValueError(
+                raise ConfigError(
                     f"extra_domain_patterns[{i}]: expected mapping, got {type(entry).__name__}")
             for key in ('c4_id', 'name', 'patterns'):
                 if key not in entry:
-                    raise ValueError(
+                    raise ConfigError(
                         f"extra_domain_patterns[{i}]: missing required key '{key}'")
             if not isinstance(entry['c4_id'], str):
-                raise ValueError(
+                raise ConfigError(
                     f"extra_domain_patterns[{i}]['c4_id']: expected string, "
                     f"got {type(entry['c4_id']).__name__}")
             if not _VALID_C4_ID.match(entry['c4_id']):
-                raise ValueError(
+                raise ConfigError(
                     f"extra_domain_patterns[{i}]['c4_id']: invalid C4 identifier "
                     f"'{entry['c4_id']}' (must match {_VALID_C4_ID.pattern})")
             if not isinstance(entry['name'], str):
-                raise ValueError(
+                raise ConfigError(
                     f"extra_domain_patterns[{i}]['name']: expected string, "
                     f"got {type(entry['name']).__name__}")
             if not isinstance(entry['patterns'], list):
-                raise ValueError(
+                raise ConfigError(
                     f"extra_domain_patterns[{i}]['patterns']: expected list, "
                     f"got {type(entry['patterns']).__name__}")
             for j, pat in enumerate(entry['patterns']):
                 if not isinstance(pat, str):
-                    raise ValueError(
+                    raise ConfigError(
                         f"extra_domain_patterns[{i}]['patterns'][{j}]: expected string, "
                         f"got {type(pat).__name__}")
             validated.append(entry)
@@ -204,83 +225,98 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
     gates = data.get('quality_gates')
     if isinstance(gates, dict):
         if 'max_unresolved_ratio' in gates:
-            ratio = float(gates['max_unresolved_ratio'])
+            try:
+                ratio = float(gates['max_unresolved_ratio'])
+            except (ValueError, TypeError) as err:
+                raise ConfigError(
+                    f"quality_gates.max_unresolved_ratio: expected float, "
+                    f"got {gates['max_unresolved_ratio']!r}") from err
             if not 0 <= ratio <= 1:
-                raise ValueError(
+                raise ConfigError(
                     f"quality_gates.max_unresolved_ratio: must be between 0 and 1, got {ratio}")
             config.max_unresolved_ratio = ratio
         if 'max_orphan_functions_warn' in gates:
-            val = int(gates['max_orphan_functions_warn'])
+            try:
+                val = int(gates['max_orphan_functions_warn'])
+            except (ValueError, TypeError) as err:
+                raise ConfigError(
+                    f"quality_gates.max_orphan_functions_warn: expected integer, "
+                    f"got {gates['max_orphan_functions_warn']!r}") from err
             if val < 0:
-                raise ValueError(f"quality_gates.max_orphan_functions_warn: must be non-negative, got {val}")
+                raise ConfigError(f"quality_gates.max_orphan_functions_warn: must be non-negative, got {val}")
             config.max_orphan_functions_warn = val
         if 'max_unassigned_systems_warn' in gates:
-            val = int(gates['max_unassigned_systems_warn'])
+            try:
+                val = int(gates['max_unassigned_systems_warn'])
+            except (ValueError, TypeError) as err:
+                raise ConfigError(
+                    f"quality_gates.max_unassigned_systems_warn: expected integer, "
+                    f"got {gates['max_unassigned_systems_warn']!r}") from err
             if val < 0:
-                raise ValueError(f"quality_gates.max_unassigned_systems_warn: must be non-negative, got {val}")
+                raise ConfigError(f"quality_gates.max_unassigned_systems_warn: must be non-negative, got {val}")
             config.max_unassigned_systems_warn = val
 
     if 'audit_suppress' in data:
         if not isinstance(data['audit_suppress'], list):
-            raise ValueError(
+            raise ConfigError(
                 f"audit_suppress: expected list, got {type(data['audit_suppress']).__name__}")
         for item in data['audit_suppress']:
             if not isinstance(item, str):
-                raise ValueError(
+                raise ConfigError(
                     f"audit_suppress: all items must be strings, got {type(item).__name__}: {item!r}")
         config.audit_suppress = list(data['audit_suppress'])
     if 'audit_suppress_incidents' in data:
         if not isinstance(data['audit_suppress_incidents'], list):
-            raise ValueError(
+            raise ConfigError(
                 f"audit_suppress_incidents: expected list, "
                 f"got {type(data['audit_suppress_incidents']).__name__}")
         for item in data['audit_suppress_incidents']:
             if not isinstance(item, str):
-                raise ValueError(
+                raise ConfigError(
                     f"audit_suppress_incidents: all items must be strings, "
                     f"got {type(item).__name__}: {item!r}")
         config.audit_suppress_incidents = list(data['audit_suppress_incidents'])
 
     if 'domain_overrides' in data:
         if not isinstance(data['domain_overrides'], dict):
-            raise ValueError(
+            raise ConfigError(
                 f"domain_overrides: expected mapping, got {type(data['domain_overrides']).__name__}")
         overrides: dict[str, str] = {}
         for k, v in data['domain_overrides'].items():
             id_val = str(v)
             if not _VALID_C4_ID.match(id_val):
-                raise ValueError(
+                raise ConfigError(
                     f"domain_overrides['{k}']: invalid C4 identifier "
                     f"'{id_val}' (must match {_VALID_C4_ID.pattern})")
             overrides[str(k)] = id_val
         config.domain_overrides = overrides
     if 'subdomain_overrides' in data:
         if not isinstance(data['subdomain_overrides'], dict):
-            raise ValueError(
+            raise ConfigError(
                 f"subdomain_overrides: expected mapping, got {type(data['subdomain_overrides']).__name__}")
         sd_overrides: dict[str, str] = {}
         for k, v in data['subdomain_overrides'].items():
             id_val = str(v)
             if not _VALID_C4_ID.match(id_val):
-                raise ValueError(
+                raise ConfigError(
                     f"subdomain_overrides['{k}']: invalid C4 identifier "
                     f"'{id_val}' (must match {_VALID_C4_ID.pattern})")
             sd_overrides[str(k)] = id_val
         config.subdomain_overrides = sd_overrides
     if 'reviewed_systems' in data:
         if not isinstance(data['reviewed_systems'], list):
-            raise ValueError(
+            raise ConfigError(
                 f"reviewed_systems: expected list, got {type(data['reviewed_systems']).__name__}")
         for item in data['reviewed_systems']:
             if not isinstance(item, str):
-                raise ValueError(
+                raise ConfigError(
                     f"reviewed_systems: all items must be strings, got {type(item).__name__}: {item!r}")
         config.reviewed_systems = list(data['reviewed_systems'])
 
     if 'language' in data:
         lang = str(data['language']).lower()
         if lang not in ('ru', 'en'):
-            raise ValueError(
+            raise ConfigError(
                 f"language: expected 'ru' or 'en', got '{data['language']}'")
         config.language = lang
 
@@ -294,10 +330,10 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             elif val.lower() in ('false', '0', 'no'):
                 config.strict = False
             else:
-                raise ValueError(
+                raise ConfigError(
                     f"strict: expected bool or 'true'/'false', got '{val}'")
         else:
-            raise ValueError(
+            raise ConfigError(
                 f"strict: expected bool or string, got {type(val).__name__}")
 
     if 'sync_target' in data:
@@ -306,16 +342,61 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             config.sync_target = None
         else:
             if not isinstance(val, str):
-                raise ValueError(
+                raise ConfigError(
                     f"sync_target: expected string path, got {type(val).__name__}")
             target = Path(val).expanduser().resolve()
             if not target.exists():
-                raise ValueError(
+                raise ConfigError(
                     f"sync_target: directory does not exist: {target}")
             if not target.is_dir():
-                raise ValueError(
+                raise ConfigError(
                     f"sync_target: path is not a directory: {target}")
             config.sync_target = target
+
+    if 'property_map' in data:
+        val = data['property_map']
+        if not isinstance(val, dict):
+            raise ConfigError(
+                f"property_map: expected mapping, got {type(val).__name__}")
+        for k, v in val.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                raise ConfigError(
+                    f"property_map: keys and values must be strings, got {k!r}: {v!r}")
+        config.property_map = dict(val)
+
+    if 'standard_keys' in data:
+        val = data['standard_keys']
+        if not isinstance(val, list):
+            raise ConfigError(
+                f"standard_keys: expected list, got {type(val).__name__}")
+        for item in val:
+            if not isinstance(item, str):
+                raise ConfigError(
+                    f"standard_keys: all items must be strings, got {type(item).__name__}: {item!r}")
+        config.standard_keys = list(val)
+
+    if 'sync_protected_top' in data:
+        val = data['sync_protected_top']
+        if not isinstance(val, list):
+            raise ConfigError(
+                f"sync_protected_top: expected list, got {type(val).__name__}")
+        for item in val:
+            if not isinstance(item, str):
+                raise ConfigError(
+                    f"sync_protected_top: all items must be strings, got {type(item).__name__}: {item!r}")
+        config.sync_protected_top = frozenset(val)
+
+    if 'sync_protected_paths' in data:
+        val = data['sync_protected_paths']
+        if not isinstance(val, list):
+            raise ConfigError(
+                f"sync_protected_paths: expected list, got {type(val).__name__}")
+        for item in val:
+            if not isinstance(item, str):
+                raise ConfigError(
+                    f"sync_protected_paths: all items must be strings, "
+                    f"got {type(item).__name__}: {item!r}")
+        config.sync_protected_paths = frozenset(val)
 
 
 def save_suppress(

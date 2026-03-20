@@ -104,17 +104,34 @@ quality_gates:
 # Treat quality-gate warnings as errors (exit 1)
 strict: false
 
+# ── Metadata mapping ──────────────────────────────────────────────────
+# Map ArchiMate property names to LikeC4 metadata keys.
+# Entries here ADD to (or override) the built-in defaults.
+# property_map:
+#   "My Custom Property": my_custom_key
+#   "Owner": owner
+
+# Keys that count as "filled" when checking QA-2 (empty card) incidents.
+# standard_keys:
+#   - ci
+#   - full_name
+#   - criticality
+
 # ── Auto-sync target ──────────────────────────────────────────────────
 # After a successful generation, copy output_dir into this directory.
 # Useful to keep a companion repo (e.g. asaka-architecture) in sync
 # without a manual copy step.
 #
-# Only generated files are copied; the following paths are NEVER
-# overwritten in the target (protected list):
-#   .gitignore, .gitlab-ci.yml, .gitlab/, .yamllint.yml,
-#   scripts/.gitkeep, scripts/check_staleness.py, scripts/validate_domains.py,
-#   AGENTS.md, CLAUDE.md, README.md, adr/, dist/, fitness/, portal/,
-#   public/, static/, likec4.generated.ts, gitlab-ci.yml
-#
 # Can also be set per-run with --sync-target on the CLI (overrides YAML).
 # sync_target: /path/to/your/companion-repo
+
+# Paths at the top level of the sync target that are NEVER overwritten.
+# Extends the built-in protected list (.gitignore, README.md, etc.).
+# sync_protected_top:
+#   - AGENTS.md
+#   - adr/
+
+# Nested paths inside the sync target that are NEVER overwritten.
+# sync_protected_paths:
+#   - scripts/.gitkeep
+#   - scripts/validate_domains.py
