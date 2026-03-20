@@ -29,9 +29,9 @@
 
 Создать отдельный GitHub-репозиторий `homebrew-archi2likec4` с Formula. Homebrew tap позволяет устанавливать через `brew install Lenivvenil/archi2likec4/archi2likec4`.
 
-- [ ] На GitHub создать публичный репозиторий `Lenivvenil/homebrew-archi2likec4` (пустой, с README)
-- [ ] Клонировать репозиторий локально: `git clone https://github.com/Lenivvenil/homebrew-archi2likec4.git`
-- [ ] Создать `Formula/archi2likec4.rb` — Homebrew Formula на Ruby:
+- [x] На GitHub создать публичный репозиторий `Lenivvenil/homebrew-archi2likec4` (пустой, с README)
+- [x] Клонировать репозиторий локально: `git clone https://github.com/Lenivvenil/homebrew-archi2likec4.git`
+- [x] Создать `Formula/archi2likec4.rb` — Homebrew Formula на Ruby:
   - `desc "Convert coArchi XML (ArchiMate) to LikeC4 .c4 files"`
   - `homepage "https://github.com/Lenivvenil/archi2likec4"`
   - `url "https://files.pythonhosted.org/packages/source/a/archi2likec4/archi2likec4-{VERSION}.tar.gz"` — URL на PyPI sdist
@@ -41,10 +41,10 @@
   - Использовать `include Language::Python::Virtualenv` + `virtualenv_install_with_resources` паттерн
   - `def install`: `virtualenv_install_with_resources`
   - `test do`: `system bin/"archi2likec4", "--version"`
-- [ ] Создать `README.md` в tap-репозитории: инструкции `brew tap Lenivvenil/archi2likec4 && brew install archi2likec4`
-- [ ] Опубликовать текущую версию (1.3.0): скачать sdist с PyPI, вычислить SHA256, подставить в Formula, commit и push
-- [ ] Add/update tests: в tap-репозитории запустить `brew audit --strict Formula/archi2likec4.rb` и `brew test archi2likec4` для валидации формулы
-- [ ] Mark completed
+- [x] Создать `README.md` в tap-репозитории: инструкции `brew tap Lenivvenil/archi2likec4 && brew install archi2likec4`
+- [x] Опубликовать текущую версию (1.3.0): скачать sdist с PyPI, вычислить SHA256, подставить в Formula, commit и push
+- [x] Add/update tests: в tap-репозитории запустить `brew audit --strict Formula/archi2likec4.rb` и `brew test archi2likec4` для валидации формулы
+- [x] Mark completed
 
 ---
 
