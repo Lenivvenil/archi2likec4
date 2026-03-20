@@ -1,30 +1,20 @@
-name: Publish to PyPI
+name: Publish to TestPyPI
 
 on:
-  release:
-    types: [published]
+  workflow_dispatch:
 
 permissions:
   id-token: write
 
 jobs:
-  publish:
+  test-publish:
     runs-on: ubuntu-latest
-    environment: pypi
+    environment: testpypi
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
       - uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065  # v5
         with:
           python-version: "3.12"
-      - name: Version consistency check
-        run: |
-          python -c "
-          import tomllib
-          v = tomllib.load(open('pyproject.toml', 'rb'))['project']['version']
-          tag = '${{ github.event.release.tag_name }}'
-          assert f'v{v}' == tag, f'Tag mismatch: v{v} != {tag}'
-          print(f'Version check passed: v{v} == {tag}')
-          "
       - run: pip install build
       - run: python -m build
       - name: Verify package
@@ -32,3 +22,5 @@ jobs:
       - name: Install and smoke-test
         run: pip install dist/*.whl && archi2likec4 --version
       - uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
+        with:
+          repository-url: https://test.pypi.org/legacy/

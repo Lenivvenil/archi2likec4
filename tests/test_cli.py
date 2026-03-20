@@ -281,6 +281,23 @@ class TestSyncTargetCLI:
             assert exc_info.value.code == 2
 
 
+class TestVersionConsistency:
+    """Version string matches pyproject.toml."""
+
+    def test_version_matches_pyproject(self):
+        """archi2likec4.__version__ matches version in pyproject.toml."""
+        from pathlib import Path
+
+        import tomllib
+
+        import archi2likec4
+
+        pyproject_path = Path(__file__).parent.parent / "pyproject.toml"
+        with open(pyproject_path, "rb") as f:
+            pyproject_version = tomllib.load(f)["project"]["version"]
+        assert archi2likec4.__version__ == pyproject_version
+
+
 class TestCLIVersion:
     """--version flag and help output."""
 
