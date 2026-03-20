@@ -13,7 +13,7 @@ from ..models import (
 from ..utils import flatten_deployment_nodes, make_id, make_unique_id
 from .deployment import _build_deployment_path_index
 
-logger = logging.getLogger('archi2likec4')
+logger = logging.getLogger(__name__)
 
 
 def build_data_entities(data_objects: list[DataObject], used_ids: set[str]) -> list[DataEntity]:

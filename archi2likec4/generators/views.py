@@ -157,7 +157,7 @@ def generate_solution_views(  # noqa: C901
       - integration: entity cap (≤10); fan-out fix; orphan removal; exclude dataStore
       - deployment: app paths without .*; infra paths without .*; ancestor dedup; exclude dataEntity
     """
-    _logger = logging.getLogger('archi2likec4')
+    _logger = logging.getLogger(__name__)
     if entity_archi_ids is None:
         entity_archi_ids = set()
 

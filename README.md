@@ -168,8 +168,34 @@ archi2likec4/
   audit_data.py     compute_audit_incidents() — структурированные QA-данные
   i18n.py           каталог сообщений ru/en
   web.py            Flask UI (dashboard, ремедиации, иерархия)
-  pipeline.py       main() — оркестрация
+  pipeline.py       convert() API, main() CLI, оркестрация
 ```
+
+---
+
+## Library Usage
+
+```python
+from archi2likec4 import convert, ConvertConfig
+
+# Простейший вызов — использует .archi2likec4.yaml из текущей директории
+result = convert('architectural_repository/model', 'output')
+print(f'Сконвертировано {result.systems_count} систем, записано {result.files_written} файлов')
+
+# Передача конфига явно
+cfg = ConvertConfig(strict=True, language='en')
+result = convert('model', 'out', config=cfg)
+
+# Dry-run — валидация без записи файлов
+result = convert('model', 'out', dry_run=True)
+assert result.files_written == 0
+```
+
+Исключения при ошибках:
+- `FileNotFoundError` — директория модели не найдена
+- `ConfigError` — ошибка в `.archi2likec4.yaml`
+- `ParseError` — все XML-файлы в директории не распарсились
+- `ValidationError` — нарушены quality gates
 
 ---
 

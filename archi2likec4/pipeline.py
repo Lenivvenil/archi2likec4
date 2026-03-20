@@ -631,9 +631,14 @@ def _sync_output(config: ConvertConfig) -> bool:
             if item.is_symlink():
                 continue  # Skip symlinks to prevent following them into unintended paths
             if item.is_dir():
+                if dest_item.is_symlink():
+                    dest_item.unlink()
                 dest_item.mkdir(parents=True, exist_ok=True)
                 _copy_tree(item, dest_item)
             else:
+                # Unlink any pre-existing symlink in target to prevent following it
+                if dest_item.is_symlink():
+                    dest_item.unlink()
                 shutil.copy2(item, dest_item)
                 copied += 1
 
@@ -817,6 +822,9 @@ def main() -> None:
     except ValidationError as e:
         logger.error('%s', e)
         sys.exit(1)
+    except ConfigError as e:
+        logger.error('Configuration error: %s', e)
+        sys.exit(2)
     except FileNotFoundError as e:
         logger.error('Input not found: %s', e)
         sys.exit(2)

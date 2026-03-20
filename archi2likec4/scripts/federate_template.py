@@ -18,7 +18,7 @@ import subprocess
 import sys
 
 try:
-    import yaml
+    import yaml  # type: ignore[import-untyped]
 except ImportError:
     print("PyYAML required: pip install pyyaml")
     sys.exit(1)

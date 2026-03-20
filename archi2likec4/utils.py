@@ -4,15 +4,16 @@ import re
 
 from .models import (
     _CYRILLIC_MAP,
-    _PROP_MAP,
     _RESERVED,
-    _STANDARD_KEYS,
+    DEFAULT_PROP_MAP,
+    DEFAULT_STANDARD_KEYS,
     AppComponent,
     DeploymentNode,
 )
 
 
 def transliterate(text: str) -> str:
+    """Transliterate a Cyrillic string to Latin characters."""
     result = []
     for ch in text:
         lower = ch.lower()
@@ -43,6 +44,7 @@ def make_id(name: str, prefix: str = '') -> str:
 
 
 def escape_str(text: str) -> str:
+    """Escape a string for safe inclusion in LikeC4 output."""
     text = text.replace('&#xD;', '').replace('&#xA;', '')
     text = text.replace('\\', '\\\\')
     text = text.replace("'", "\\'")
@@ -69,14 +71,21 @@ def flatten_deployment_nodes(nodes: list[DeploymentNode]) -> list[DeploymentNode
     return result
 
 
-def build_metadata(ac: AppComponent) -> dict[str, str]:
+def build_metadata(
+    ac: AppComponent,
+    prop_map: dict[str, str] | None = None,
+    standard_keys: list[str] | None = None,
+) -> dict[str, str]:
+    """Build metadata dict from ArchiMate properties."""
+    _pm = prop_map if prop_map is not None else DEFAULT_PROP_MAP
+    _sk = standard_keys if standard_keys is not None else DEFAULT_STANDARD_KEYS
     raw: dict[str, str] = {}
     for archi_key, value in ac.properties.items():
-        c4_key = _PROP_MAP.get(archi_key)
+        c4_key = _pm.get(archi_key)
         if c4_key:
             raw[c4_key] = value
     result: dict[str, str] = {}
-    for key in _STANDARD_KEYS:
+    for key in _sk:
         if key == 'full_name':
             result[key] = raw.get(key, ac.name)
         else:

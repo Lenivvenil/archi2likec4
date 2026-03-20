@@ -696,6 +696,34 @@ class TestSyncOutput:
         # Protected file in target must be untouched
         assert (sync_target / 'README.md').read_text() == 'original readme'
 
+    def test_skips_protected_directory_with_trailing_slash(self, tmp_path):
+        """Directories specified with trailing slash in config must still be protected."""
+        from archi2likec4.pipeline import _sync_output
+
+        output_dir = tmp_path / 'output'
+        output_dir.mkdir()
+        self._make_output(output_dir)
+        # Add an adr directory in output that should NOT overwrite target
+        (output_dir / 'adr').mkdir()
+        (output_dir / 'adr' / 'generated.md').write_text('generated adr')
+
+        sync_target = tmp_path / 'target'
+        sync_target.mkdir()
+        (sync_target / 'adr').mkdir()
+        (sync_target / 'adr' / 'original.md').write_text('original adr')
+
+        config = ConvertConfig()
+        config.output_dir = output_dir
+        config.sync_target = sync_target
+        # User writes 'adr/' with trailing slash, as documented in the example YAML
+        config.sync_protected_top = frozenset({'adr'})
+
+        _sync_output(config)
+
+        # Protected directory contents must be untouched
+        assert (sync_target / 'adr' / 'original.md').read_text() == 'original adr'
+        assert not (sync_target / 'adr' / 'generated.md').exists()
+
     def test_noop_when_no_sync_target(self, tmp_path):
         from archi2likec4.pipeline import _sync_output
 
@@ -721,9 +749,16 @@ class TestPropertyMapConfig:
         assert config.standard_keys == DEFAULT_STANDARD_KEYS
 
     def test_property_map_yaml_override(self):
+        from archi2likec4.models import DEFAULT_PROP_MAP
         config = ConvertConfig()
-        _apply_yaml(config, {'property_map': {'MyProp': 'my_key', 'Other': 'other_key'}})
-        assert config.property_map == {'MyProp': 'my_key', 'Other': 'other_key'}
+        _apply_yaml(config, {'property_map': {'MyProp': 'my_key', 'CI': 'ci_override'}})
+        # YAML entries are merged on top of defaults, not replacing them
+        assert config.property_map['MyProp'] == 'my_key'
+        assert config.property_map['CI'] == 'ci_override'
+        # Default keys not overridden by YAML are still present
+        for key in DEFAULT_PROP_MAP:
+            if key != 'CI':
+                assert key in config.property_map
 
     def test_standard_keys_yaml_override(self):
         config = ConvertConfig()
@@ -773,7 +808,17 @@ class TestSyncProtectedConfig:
     def test_sync_protected_paths_yaml_override(self):
         config = ConvertConfig()
         _apply_yaml(config, {'sync_protected_paths': ['scripts/check.py', 'adr/']})
-        assert config.sync_protected_paths == frozenset({'scripts/check.py', 'adr/'})
+        assert config.sync_protected_paths == frozenset({'scripts/check.py', 'adr'})
+
+    def test_sync_protected_top_trailing_slash_normalized(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'sync_protected_top': ['adr/', 'dist/']})
+        assert config.sync_protected_top == frozenset({'adr', 'dist'})
+
+    def test_sync_protected_paths_trailing_slash_normalized(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'sync_protected_paths': ['scripts/', 'docs/api/']})
+        assert config.sync_protected_paths == frozenset({'scripts', 'docs/api'})
 
     def test_sync_protected_top_not_list_raises(self):
         config = ConvertConfig()

@@ -3,7 +3,7 @@
 from dataclasses import dataclass, field
 
 from .i18n import get_msg, get_qa10_issue
-from .models import _STANDARD_KEYS, Subsystem, System
+from .models import DEFAULT_STANDARD_KEYS, Subsystem, System
 
 # Maximum number of affected items shown in an incident's detail table.
 _MAX_AFFECTED_ITEMS = 30
@@ -84,7 +84,8 @@ def compute_audit_incidents(
     unassigned_count = len(unassigned)
     assigned_count = total_sys - unassigned_count
 
-    meta_check_keys = [k for k in _STANDARD_KEYS if k != 'full_name']
+    standard_keys = getattr(config, 'standard_keys', DEFAULT_STANDARD_KEYS)
+    meta_check_keys = [k for k in standard_keys if k != 'full_name']
     meta_possible = len(all_sys) * len(meta_check_keys)
     meta_filled = sum(
         1 for s in all_sys for key in meta_check_keys

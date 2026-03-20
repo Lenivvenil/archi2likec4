@@ -11,7 +11,7 @@ from ..models import (
 )
 from ..utils import flatten_deployment_nodes, make_id, make_unique_id
 
-logger = logging.getLogger('archi2likec4')
+logger = logging.getLogger(__name__)
 
 
 _INFRA_NODE_TYPES = frozenset({

@@ -362,7 +362,7 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             if not isinstance(k, str) or not isinstance(v, str):
                 raise ConfigError(
                     f"property_map: keys and values must be strings, got {k!r}: {v!r}")
-        config.property_map = dict(val)
+        config.property_map = {**config.property_map, **val}
 
     if 'standard_keys' in data:
         val = data['standard_keys']
@@ -384,7 +384,7 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             if not isinstance(item, str):
                 raise ConfigError(
                     f"sync_protected_top: all items must be strings, got {type(item).__name__}: {item!r}")
-        config.sync_protected_top = frozenset(val)
+        config.sync_protected_top = frozenset(s.rstrip('/') for s in val)
 
     if 'sync_protected_paths' in data:
         val = data['sync_protected_paths']
@@ -396,7 +396,7 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                 raise ConfigError(
                     f"sync_protected_paths: all items must be strings, "
                     f"got {type(item).__name__}: {item!r}")
-        config.sync_protected_paths = frozenset(val)
+        config.sync_protected_paths = frozenset(s.rstrip('/') for s in val)
 
 
 def save_suppress(

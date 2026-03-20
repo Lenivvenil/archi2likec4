@@ -4,6 +4,49 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [1.3.0] — 2026-03-20
+
+### Added
+- **Public `convert()` API** (`pipeline.py`): library-safe function returning `ConvertResult` dataclass — never calls `sys.exit()`. Raises `ConfigError`, `ParseError`, `ValidationError`, `FileNotFoundError` on failure
+- **`ConvertResult`** dataclass: `systems_count`, `integrations_count`, `files_written`, `warnings`, `output_dir` fields; exported from `archi2likec4`
+- **`--version` CLI flag**: `archi2likec4 --version` prints the installed package version
+- **`web` subcommand visible in `--help`**: shown via argparse epilog with `RawDescriptionHelpFormatter`
+- **`ParseError` activation** (`parsers.py`): all `parse_*` functions raise `ParseError` when all XML files in a directory fail to parse
+- **`ValidationError` activation** (`pipeline.py`): `convert()` raises `ValidationError` when quality gates fail (`gate_errors > 0`) or in strict mode with warnings
+- **Configurable `property_map` and `standard_keys`** (`ConvertConfig`): defaults from `DEFAULT_PROP_MAP` / `DEFAULT_STANDARD_KEYS` (renamed from private `_PROP_MAP` / `_STANDARD_KEYS`)
+- **Configurable `sync_protected_top` and `sync_protected_paths`** (`ConvertConfig`): move sync protection out of hardcoded module constants into config fields (default: empty)
+- **Dynamic version** (`__init__.py`): reads from `importlib.metadata` with fallback `'1.3.0'`
+- **`tests/test_api.py`**: tests for public `convert()` API — success, dry-run, missing root, validation errors, config/parse errors
+- **`TestParserErrorPaths`** (`tests/test_parsers.py`): malformed XML and `ParseError` tests for all `parse_*` functions, `_is_in_trash`, and `_detect_special_folder`
+
+### Changed
+- **`main()` refactored** as thin wrapper around `convert()`, handling exceptions → `sys.exit()` codes
+- **`DEFAULT_PROP_MAP` / `DEFAULT_STANDARD_KEYS`** made public (previously `_PROP_MAP` / `_STANDARD_KEYS`) for reuse and config defaults
+- **`build_metadata()`** (`utils.py`): accepts optional `prop_map` and `standard_keys` parameters
+- **Version bump**: `1.2.0` → `1.3.0`
+
+### Removed
+- `DOMAIN_RENAMES`, `EXTRA_DOMAIN_PATTERNS`, `PROMOTE_CHILDREN` dead constants from `models.py` (superseded by `config.py` defaults)
+- `_SYNC_PROTECTED_TOP` / `_SYNC_PROTECTED_PATHS` hardcoded module constants in `pipeline.py`
+
+## [1.2.0] — 2026-03-20
+
+### Added
+- **Custom exception hierarchy** (`exceptions.py`): `Archi2LikeC4Error`, `ConfigError`, `ParseError`, `ValidationError` — replaces bare `ValueError`/`RuntimeError` raises across config and web
+- **CLAUDE.md**: developer guide covering architecture, key files, coding standards, and validation commands
+- **PyPI publish workflow** (`.github/workflows/publish.yml`): OIDC trusted publishing on GitHub release
+
+### Changed
+- **Standardized logging**: all modules now use `logging.getLogger(__name__)` instead of hardcoded `'archi2likec4'`
+- **Typed `BuildResult`** (`builders/_result.py`): all 22 fields fully typed
+- **Typed `ParseResult`** (`pipeline.py`): all 9 fields fully typed
+- **Stricter mypy**: removed `disallow_untyped_defs = false` overrides for `archi2likec4.config` and `archi2likec4.builders`; fixed `list[dict]` → `list[dict[str, Any]]`
+- **Version bump**: `1.1.0` → `1.2.0`
+
+### Fixed
+- `config.py`: all validation errors now raise `ConfigError` (subclass of `Archi2LikeC4Error`) instead of `ValueError`
+- `web.py`: error handler now catches `ConfigError` instead of `RuntimeError`
+
 ## [1.1.0] — 2026-03-16
 
 ### Added

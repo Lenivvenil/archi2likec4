@@ -2,27 +2,41 @@
 
 from typing import NamedTuple
 
+from ..models import (
+    DataAccess,
+    DataEntity,
+    DeploymentNode,
+    DomainInfo,
+    Integration,
+    RawRelationship,
+    SolutionView,
+    Subdomain,
+    System,
+)
+
 
 class BuildResult(NamedTuple):
-    systems: list
-    integrations: list
-    data_access: list
-    entities: list
-    domain_systems: dict
-    sys_domain: dict
-    archi_to_c4: dict
-    promoted_archi_to_c4: dict
-    promoted_parents: dict
-    iface_c4_path: dict
+    """Complete output of the build phase — passed to generators."""
+
+    systems: list[System]
+    integrations: list[Integration]
+    data_access: list[DataAccess]
+    entities: list[DataEntity]
+    domain_systems: dict[str, list[System]]
+    sys_domain: dict[str, str]
+    archi_to_c4: dict[str, str]
+    promoted_archi_to_c4: dict[str, list[str]]
+    promoted_parents: dict[str, list[str]]
+    iface_c4_path: dict[str, str]
     orphan_fns: int
-    solution_views: list
-    relationships: list
-    domains_info: list  # original parsed DomainInfo list
-    deployment_nodes: list
-    deployment_map: list
-    tech_archi_to_c4: dict
-    datastore_entity_links: list
+    solution_views: list[SolutionView]
+    relationships: list[RawRelationship]
+    domains_info: list[DomainInfo]
+    deployment_nodes: list[DeploymentNode]
+    deployment_map: list[tuple[str, str]]
+    tech_archi_to_c4: dict[str, str]
+    datastore_entity_links: list[tuple[str, str]]
     intg_skipped: int
     intg_total_eligible: int
-    subdomains: list  # list[Subdomain]
-    subdomain_systems: dict  # (domain_folder, subdomain_c4_id) → list[system c4_id]
+    subdomains: list[Subdomain]
+    subdomain_systems: dict[tuple[str, str], list[str]]

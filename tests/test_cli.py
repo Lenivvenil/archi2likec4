@@ -69,8 +69,8 @@ class TestCLIArgs:
             main()
             assert cfg.verbose is True
 
-    def test_dry_run_exits_zero(self):
-        """--dry-run exits with code 0 after validation."""
+    def test_dry_run_skips_generate(self):
+        """--dry-run completes without calling _generate."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build'), \
              patch('archi2likec4.pipeline._validate') as mock_validate, \
@@ -85,9 +85,7 @@ class TestCLIArgs:
             cfg.sync_target = None
             mock_load.return_value = cfg
             mock_validate.return_value = (0, 0, {}, 0, 0)
-            with pytest.raises(SystemExit) as exc_info:
-                main()
-            assert exc_info.value.code == 0
+            main()
             mock_gen.assert_not_called()
 
     def test_custom_paths(self):
@@ -278,6 +276,46 @@ class TestSyncTargetCLI:
             cfg.dry_run = False
             cfg.sync_target = None
             mock_load.return_value = cfg
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 2
+
+
+class TestCLIVersion:
+    """--version flag and help output."""
+
+    def test_version_flag(self):
+        """--version prints version string and exits 0."""
+        with patch('sys.argv', ['archi2likec4', '--version']):
+            with pytest.raises(SystemExit) as exc_info:
+                main()
+            assert exc_info.value.code == 0
+
+    def test_help_shows_web(self, capsys):
+        """--help output mentions the 'web' subcommand."""
+        with patch('sys.argv', ['archi2likec4', '--help']), pytest.raises(SystemExit):
+            main()
+        captured = capsys.readouterr()
+        assert 'web' in captured.out
+
+
+class TestCLIParseError:
+    """ParseError from parsers causes exit 2."""
+
+    def test_parse_error_exit_2(self):
+        """ParseError during _parse causes exit 2."""
+        from archi2likec4.exceptions import ParseError as PE
+        with patch('archi2likec4.pipeline._parse') as mock_parse, \
+             patch('archi2likec4.pipeline.load_config') as mock_load, \
+             patch('pathlib.Path.is_dir', return_value=True), \
+             patch('sys.argv', ['archi2likec4']):
+            cfg = MagicMock()
+            cfg.strict = False
+            cfg.verbose = False
+            cfg.dry_run = False
+            cfg.sync_target = None
+            mock_load.return_value = cfg
+            mock_parse.side_effect = PE('all XML files failed')
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 2

@@ -785,3 +785,128 @@ class TestParseSubdomains:
             tmp_path, domain_renames={'channels': ('digital_channels', 'Digital Channels')})
         assert len(result) == 1
         assert result[0].domain_folder == 'digital_channels'
+
+
+# ── TestParserErrorPaths: malformed XML coverage ─────────────────────────
+
+class TestParserErrorPaths:
+    """Cover ET.ParseError branches and raise ParseError when all files fail."""
+
+    def test_application_components_malformed_raises(self, tmp_path):
+        """All ApplicationComponent XMLs malformed → ParseError."""
+        from archi2likec4.exceptions import ParseError as PE
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        (app_dir / 'ApplicationComponent_bad.xml').write_text('<broken<xml', encoding='utf-8')
+        with pytest.raises(PE, match='ApplicationComponent'):
+            parse_application_components(tmp_path)
+
+    def test_application_components_partial_malformed_ok(self, tmp_path):
+        """Some malformed + some valid → returns valid, no exception."""
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        (app_dir / 'ApplicationComponent_bad.xml').write_text('<broken', encoding='utf-8')
+        _write_component(app_dir / 'ApplicationComponent_ok.xml', archi_id='ok-1', name='GoodSys')
+        result = parse_application_components(tmp_path)
+        assert len(result) == 1
+        assert result[0].archi_id == 'ok-1'
+
+    def test_application_interfaces_malformed_raises(self, tmp_path):
+        """All ApplicationInterface XMLs malformed → ParseError."""
+        from archi2likec4.exceptions import ParseError as PE
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        (app_dir / 'ApplicationInterface_bad.xml').write_text('<broken<xml', encoding='utf-8')
+        with pytest.raises(PE, match='ApplicationInterface'):
+            parse_application_interfaces(tmp_path)
+
+    def test_data_objects_malformed_raises(self, tmp_path):
+        """All DataObject XMLs malformed → ParseError."""
+        from archi2likec4.exceptions import ParseError as PE
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        (app_dir / 'DataObject_bad.xml').write_text('<broken<xml', encoding='utf-8')
+        with pytest.raises(PE, match='DataObject'):
+            parse_data_objects(tmp_path)
+
+    def test_data_objects_partial_malformed_ok(self, tmp_path):
+        """Some malformed DataObject + some valid → returns valid."""
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        (app_dir / 'DataObject_bad.xml').write_text('<broken', encoding='utf-8')
+        _write_component(app_dir / 'DataObject_ok.xml', archi_id='do-1', name='GoodData')
+        result = parse_data_objects(tmp_path)
+        assert len(result) == 1
+        assert result[0].archi_id == 'do-1'
+
+    def test_application_functions_malformed_raises(self, tmp_path):
+        """All ApplicationFunction XMLs malformed → ParseError."""
+        from archi2likec4.exceptions import ParseError as PE
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        (app_dir / 'ApplicationFunction_bad.xml').write_text('<broken<xml', encoding='utf-8')
+        with pytest.raises(PE, match='ApplicationFunction'):
+            parse_application_functions(tmp_path)
+
+    def test_technology_elements_malformed_raises(self, tmp_path):
+        """All technology XMLs malformed → ParseError."""
+        from archi2likec4.exceptions import ParseError as PE
+        tech_dir = tmp_path / 'technology'
+        tech_dir.mkdir()
+        (tech_dir / 'Node_bad.xml').write_text('<broken<xml', encoding='utf-8')
+        with pytest.raises(PE, match='technology'):
+            parse_technology_elements(tmp_path)
+
+    def test_technology_elements_partial_malformed_ok(self, tmp_path):
+        """Some malformed + some valid tech elements → returns valid."""
+        tech_dir = tmp_path / 'technology'
+        tech_dir.mkdir()
+        (tech_dir / 'Node_bad.xml').write_text('<broken', encoding='utf-8')
+        _write_tech_element(tech_dir / 'Node_ok.xml', 'Node', 'n-1', 'GoodNode')
+        result = parse_technology_elements(tmp_path)
+        assert len(result) == 1
+        assert result[0].archi_id == 'n-1'
+
+    def test_relationships_malformed_raises(self, tmp_path):
+        """All relationship XMLs malformed → ParseError."""
+        from archi2likec4.exceptions import ParseError as PE
+        rel_dir = tmp_path / 'relations'
+        rel_dir.mkdir()
+        (rel_dir / 'FlowRelationship_bad.xml').write_text('<broken<xml', encoding='utf-8')
+        with pytest.raises(PE, match='relationship'):
+            parse_relationships(tmp_path)
+
+    def test_relationships_partial_malformed_ok(self, tmp_path):
+        """Some malformed + some valid relationships → returns valid."""
+        rel_dir = tmp_path / 'relations'
+        rel_dir.mkdir()
+        (rel_dir / 'FlowRelationship_bad.xml').write_text('<broken', encoding='utf-8')
+        _write_relationship(
+            rel_dir / 'FlowRelationship_ok.xml',
+            rel_type='FlowRelationship', rel_id='r-1', name='flow',
+            source_id='src-1', source_type='archimate:ApplicationComponent',
+            target_id='tgt-1', target_type='archimate:ApplicationComponent',
+        )
+        result = parse_relationships(tmp_path)
+        assert len(result) == 1
+        assert result[0].rel_id == 'r-1'
+
+    def test_is_in_trash_malformed_folder_xml(self, tmp_path):
+        """Malformed folder.xml is ignored (no exception) — file not in trash."""
+        base = tmp_path / 'application'
+        sub = base / 'subfolder'
+        sub.mkdir(parents=True)
+        (sub / 'folder.xml').write_text('<broken<xml', encoding='utf-8')
+        xml = sub / 'SomeFile.xml'
+        xml.touch()
+        assert _is_in_trash(xml, base) is False
+
+    def test_detect_special_folder_malformed_folder_xml(self, tmp_path):
+        """Malformed folder.xml in _detect_special_folder is skipped gracefully."""
+        app_dir = tmp_path / 'application'
+        sub = app_dir / 'review'
+        sub.mkdir(parents=True)
+        (sub / 'folder.xml').write_text('<broken<xml', encoding='utf-8')
+        xml = sub / 'ApplicationComponent_x.xml'
+        xml.touch()
+        assert _detect_special_folder(xml) == ''

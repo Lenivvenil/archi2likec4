@@ -8,7 +8,7 @@ from ..models import (
     System,
 )
 
-logger = logging.getLogger('archi2likec4')
+logger = logging.getLogger(__name__)
 
 
 def _build_comp_c4_path(systems: list[System]) -> tuple[dict[str, str], dict[str, str]]:

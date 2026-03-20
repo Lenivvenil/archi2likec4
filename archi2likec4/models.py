@@ -29,26 +29,14 @@ _RESERVED = frozenset({
 NS = {'archimate': 'http://www.archimatetool.com/archimate'}
 
 
-# ── Domain rebranding ──────────────────────────────────────────────────
-# Empty defaults — organization-specific values are in config.py
-
-DOMAIN_RENAMES: dict[str, tuple[str, str]] = {}
-
-EXTRA_DOMAIN_PATTERNS: list[dict] = []
-
-
 # ── Subsystem promotion ──────────────────────────────────────────────────
-# Parents whose dot-children should become standalone systems.
-# Format: {parent_name: fallback_domain}
-PROMOTE_CHILDREN: dict[str, str] = {}
-
-# Warn about parents with ≥ this many subsystems not listed in PROMOTE_CHILDREN
+# Warn about parents with ≥ this many subsystems not listed in promote_children
 PROMOTE_WARN_THRESHOLD: int = 10
 
 
 # ── Metadata mapping ────────────────────────────────────────────────────
 
-_PROP_MAP = {
+DEFAULT_PROP_MAP: dict[str, str] = {
     'CI': 'ci', 'Full name': 'full_name', 'LC stage': 'lc_stage',
     'Criticality': 'criticality', 'Target': 'target_state',
     'Business owner dep': 'business_owner_dep', 'Dev team': 'dev_team',
@@ -56,7 +44,7 @@ _PROP_MAP = {
     'External/Internal': 'placement', 'placement': 'placement',
 }
 
-_STANDARD_KEYS: list[str] = [
+DEFAULT_STANDARD_KEYS: list[str] = [
     'ci', 'full_name', 'lc_stage', 'criticality', 'target_state',
     'business_owner_dep', 'dev_team', 'architect', 'is_officer', 'placement',
 ]
@@ -66,6 +54,8 @@ _STANDARD_KEYS: list[str] = [
 
 @dataclass
 class AppComponent:
+    """Parsed ArchiMate ApplicationComponent."""
+
     archi_id: str
     name: str
     documentation: str = ''
@@ -75,6 +65,8 @@ class AppComponent:
 
 @dataclass
 class AppInterface:
+    """Parsed ArchiMate ApplicationInterface (API endpoint)."""
+
     archi_id: str
     name: str
     documentation: str = ''
@@ -90,6 +82,8 @@ class DataObject:
 
 @dataclass
 class RawRelationship:
+    """A raw ArchiMate relationship between two elements."""
+
     rel_id: str
     rel_type: str
     name: str
@@ -175,6 +169,8 @@ class DataEntity:
 
 @dataclass
 class Integration:
+    """A resolved integration (relationship) between two C4 paths."""
+
     source_path: str
     target_path: str
     name: str

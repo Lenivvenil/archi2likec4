@@ -1,6 +1,7 @@
 """Builders: domain and subdomain assignment."""
 
 import logging
+from typing import Any
 
 from ..models import (
     DataAccess,
@@ -11,14 +12,14 @@ from ..models import (
     System,
 )
 
-logger = logging.getLogger('archi2likec4')
+logger = logging.getLogger(__name__)
 
 
 def assign_domains(  # noqa: C901
     systems: list[System],
     domains: list[DomainInfo],
     promote_children: dict[str, str] | None = None,
-    extra_domain_patterns: list[dict] | None = None,
+    extra_domain_patterns: list[dict[str, Any]] | None = None,
     domain_overrides: dict[str, str] | None = None,
 ) -> dict[str, list[System]]:
     """Assign each system to a primary domain based on view membership."""
