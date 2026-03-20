@@ -28,6 +28,34 @@ _DEFAULT_EXTRA_DOMAIN_PATTERNS: list[dict[str, Any]] = []
 
 _DEFAULT_PROMOTE_CHILDREN: dict[str, str] = {}
 
+# Top-level names (files or entire dirs) never overwritten in sync target by default.
+# These protect common companion-repo artefacts that must survive a re-sync.
+# Can be overridden via sync_protected_top in .archi2likec4.yaml.
+_DEFAULT_SYNC_PROTECTED_TOP: frozenset[str] = frozenset({
+    '.gitignore',
+    '.gitlab-ci.yml',
+    '.gitlab',
+    '.yamllint.yml',
+    'AGENTS.md',
+    'CLAUDE.md',
+    'README.md',
+    'adr',
+    'dist',
+    'fitness',
+    'portal',
+    'public',
+    'static',
+    'likec4.generated.ts',
+    'gitlab-ci.yml',
+})
+
+# Specific relative sub-paths (POSIX) never overwritten in sync target by default.
+_DEFAULT_SYNC_PROTECTED_PATHS: frozenset[str] = frozenset({
+    'scripts/.gitkeep',
+    'scripts/check_staleness.py',
+    'scripts/validate_domains.py',
+})
+
 
 @dataclass
 class ConvertConfig:
@@ -76,8 +104,10 @@ class ConvertConfig:
     standard_keys: list[str] = field(default_factory=lambda: list(DEFAULT_STANDARD_KEYS))
 
     # Sync protected paths (top-level names and specific sub-paths to preserve in sync target)
-    sync_protected_top: frozenset[str] = field(default_factory=frozenset)
-    sync_protected_paths: frozenset[str] = field(default_factory=frozenset)
+    sync_protected_top: frozenset[str] = field(
+        default_factory=lambda: frozenset(_DEFAULT_SYNC_PROTECTED_TOP))
+    sync_protected_paths: frozenset[str] = field(
+        default_factory=lambda: frozenset(_DEFAULT_SYNC_PROTECTED_PATHS))
 
     # CLI flags
     strict: bool = False

@@ -7,6 +7,8 @@ import pytest
 from archi2likec4.config import (
     _DEFAULT_DOMAIN_RENAMES,
     _DEFAULT_PROMOTE_CHILDREN,
+    _DEFAULT_SYNC_PROTECTED_PATHS,
+    _DEFAULT_SYNC_PROTECTED_TOP,
     ConvertConfig,
     _apply_yaml,
     load_config,
@@ -795,10 +797,15 @@ class TestPropertyMapConfig:
 class TestSyncProtectedConfig:
     """sync_protected_top and sync_protected_paths config options."""
 
-    def test_defaults_empty_frozensets(self):
+    def test_defaults_use_builtin_protected_sets(self):
         config = ConvertConfig()
-        assert config.sync_protected_top == frozenset()
-        assert config.sync_protected_paths == frozenset()
+        assert config.sync_protected_top == _DEFAULT_SYNC_PROTECTED_TOP
+        assert config.sync_protected_paths == _DEFAULT_SYNC_PROTECTED_PATHS
+        # Verify well-known artefacts are protected by default
+        assert 'README.md' in config.sync_protected_top
+        assert '.gitignore' in config.sync_protected_top
+        assert 'adr' in config.sync_protected_top
+        assert 'scripts/check_staleness.py' in config.sync_protected_paths
 
     def test_sync_protected_top_yaml_override(self):
         config = ConvertConfig()
