@@ -96,6 +96,7 @@ class ConvertResult:
     files_written: int
     warnings: int
     output_dir: Path
+    sync_ok: bool = True
 
 
 
@@ -427,12 +428,12 @@ def _generate(
     if output_dir.exists():
         resolved = output_dir.resolve()
         if resolved == Path.cwd().resolve() or resolved == Path.home().resolve():
-            raise SystemExit(f'FATAL: refusing to rmtree dangerous path: {resolved}')
+            raise ConfigError(f'FATAL: refusing to rmtree dangerous path: {resolved}')
         if len(resolved.parts) <= 2:  # root or one level (e.g. /tmp, C:\Users)
-            raise SystemExit(f'FATAL: refusing to rmtree root-level path: {resolved}')
+            raise ConfigError(f'FATAL: refusing to rmtree root-level path: {resolved}')
         has_marker = (resolved / _OUTPUT_MARKER).exists()
         if not has_marker and any(resolved.iterdir()):
-            raise SystemExit(
+            raise ConfigError(
                 f'FATAL: {resolved} does not look like a converter output dir '
                 f'(missing {_OUTPUT_MARKER}). Refusing to delete.')
         shutil.rmtree(resolved)
@@ -627,6 +628,8 @@ def _sync_output(config: ConvertConfig) -> bool:
             if rel in protected_paths:
                 continue
             dest_item = target / item.name
+            if item.is_symlink():
+                continue  # Skip symlinks to prevent following them into unintended paths
             if item.is_dir():
                 dest_item.mkdir(parents=True, exist_ok=True)
                 _copy_tree(item, dest_item)
@@ -693,8 +696,7 @@ def convert(
 
     config.model_root = model_root_path
     config.output_dir = output_dir_path
-    if dry_run:
-        config.dry_run = True
+    config.dry_run = dry_run
 
     parsed = _parse(model_root_path, config)
     built = _build(parsed, config)
@@ -707,10 +709,11 @@ def convert(
             f'{gate_warnings} quality-gate warning(s) treated as errors in strict mode')
 
     files_written = 0
+    sync_ok = True
     if not config.dry_run:
         files_written = _generate(built, output_dir_path, config, sv_files, sv_unresolved, sv_total)
         if config.sync_target is not None:
-            _sync_output(config)
+            sync_ok = _sync_output(config)
 
     return ConvertResult(
         systems_count=len(built.systems),
@@ -718,6 +721,7 @@ def convert(
         files_written=files_written,
         warnings=gate_warnings,
         output_dir=output_dir_path,
+        sync_ok=sync_ok,
     )
 
 
@@ -779,8 +783,6 @@ def main() -> None:
         config.strict = True
     if args.verbose:
         config.verbose = True
-    if args.dry_run:
-        config.dry_run = True
     if args.sync_target is not None:
         target = args.sync_target.expanduser().resolve()
         if not target.exists():
@@ -804,8 +806,9 @@ def main() -> None:
             config.model_root,
             config.output_dir,
             config=config,
+            dry_run=args.dry_run,
         )
-        if config.dry_run:
+        if result.files_written == 0 and args.dry_run:
             logger.info('Dry run complete — no files generated')
         else:
             logger.info('Conversion complete: %d systems, %d integrations, %d files',
