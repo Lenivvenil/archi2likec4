@@ -52,16 +52,16 @@
 
 Автоматизировать обновление Homebrew Formula при каждом PyPI-релизе. При создании GitHub Release в основном репозитории — GitHub Action обновляет version и SHA256 в tap-репозитории.
 
-- [ ] Прочитать `.github/workflows/publish.yml` — найти место для добавления шага после успешной PyPI публикации
-- [ ] `.github/workflows/publish.yml`: добавить job `update-homebrew` (needs: `publish`) с шагами:
+- [x] Прочитать `.github/workflows/publish.yml` — найти место для добавления шага после успешной PyPI публикации
+- [x] `.github/workflows/publish.yml`: добавить job `update-homebrew` (needs: `publish`) с шагами:
   - Checkout tap repo: `actions/checkout@v4` с `repository: Lenivvenil/homebrew-archi2likec4`, `token: ${{ secrets.HOMEBREW_TAP_TOKEN }}`
   - Вычислить SHA256 sdist: `curl -sL "https://files.pythonhosted.org/packages/source/a/archi2likec4/archi2likec4-${VERSION}.tar.gz" | shasum -a 256`
   - Обновить `Formula/archi2likec4.rb`: заменить `url` и `sha256` через `sed` (или Python-скрипт)
   - Commit и push: `git commit -am "archi2likec4 ${VERSION}" && git push`
-- [ ] Документировать необходимость создания GitHub PAT `HOMEBREW_TAP_TOKEN` с правом `repo` для `homebrew-archi2likec4` — добавить инструкцию в `RELEASING.md`
-- [ ] Альтернативно: создать `.github/workflows/bump-formula.yml` в tap-репозитории с trigger `repository_dispatch` — основной репозиторий отправляет event через `peter-evans/repository-dispatch` action после публикации
-- [ ] Add/update tests: после push в tap-repo, GitHub Actions в tap-репозитории запускают `brew audit --strict Formula/archi2likec4.rb` (создать `.github/workflows/audit.yml` в tap-репозитории)
-- [ ] Mark completed
+- [x] Документировать необходимость создания GitHub PAT `HOMEBREW_TAP_TOKEN` с правом `repo` для `homebrew-archi2likec4` — добавить инструкцию в `RELEASING.md`
+- [x] Альтернативно: создать `.github/workflows/bump-formula.yml` в tap-репозитории с trigger `repository_dispatch` — основной репозиторий отправляет event через `peter-evans/repository-dispatch` action после публикации
+- [x] Add/update tests: после push в tap-repo, GitHub Actions в tap-репозитории запускают `brew audit --strict Formula/archi2likec4.rb` (создать `.github/workflows/audit.yml` в tap-репозитории)
+- [x] Mark completed
 
 ---
 

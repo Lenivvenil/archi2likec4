@@ -32,3 +32,44 @@ jobs:
       - name: Install and smoke-test
         run: pip install dist/*.whl && archi2likec4 --version
       - uses: pypa/gh-action-pypi-publish@ed0c53931b1dc9bd32cbe73a98c7f6766f8a527e  # release/v1
+
+  update-homebrew:
+    runs-on: ubuntu-latest
+    needs: publish
+    steps:
+      - name: Checkout tap repository
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4
+        with:
+          repository: Lenivvenil/homebrew-archi2likec4
+          token: ${{ secrets.HOMEBREW_TAP_TOKEN }}
+
+      - name: Compute version and SHA256 of sdist
+        id: meta
+        run: |
+          VERSION="${{ github.event.release.tag_name }}"
+          VERSION="${VERSION#v}"
+          URL="https://files.pythonhosted.org/packages/source/a/archi2likec4/archi2likec4-${VERSION}.tar.gz"
+          # Retry up to 5 times — PyPI propagation may lag a few seconds
+          for i in 1 2 3 4 5; do
+            SHA256=$(curl -sL "$URL" | shasum -a 256 | cut -d' ' -f1)
+            [ -n "$SHA256" ] && break
+            sleep 10
+          done
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
+          echo "url=${URL}" >> "$GITHUB_OUTPUT"
+
+      - name: Update Formula
+        run: |
+          VERSION="${{ steps.meta.outputs.version }}"
+          SHA256="${{ steps.meta.outputs.sha256 }}"
+          URL="${{ steps.meta.outputs.url }}"
+          sed -i "s|url \".*\"|url \"${URL}\"|" Formula/archi2likec4.rb
+          sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/archi2likec4.rb
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -am "archi2likec4 ${{ steps.meta.outputs.version }}"
+          git push
