@@ -687,7 +687,7 @@ class TestDeploymentTopology:
         assert roots[0].kind == 'infraNode'
         assert len(roots[0].children) == 1
         assert roots[0].children[0].name == 'PostgreSQL'
-        assert roots[0].children[0].kind == 'dataStore'
+        assert roots[0].children[0].kind == 'infraSoftware'
 
     def test_cluster_node_software_chain(self):
         """TechnologyCollaboration→Node→SystemSoftware: 2-level tree."""
@@ -1082,7 +1082,7 @@ class TestBuildTechArchiToC4Map:
     def test_deployment_path_index_nested_qualified(self):
         """Deeply nested node gets fully qualified parent.child.grandchild path."""
         grandchild = DeploymentNode(c4_id='pg', name='PostgreSQL', archi_id='sw-1',
-                                    tech_type='SystemSoftware', kind='dataStore')
+                                    tech_type='SystemSoftware', kind='infraSoftware')
         child = DeploymentNode(c4_id='worker', name='Worker', archi_id='n-1',
                                tech_type='Node', kind='infraNode', children=[grandchild])
         root = DeploymentNode(c4_id='dc', name='DC', archi_id='loc-1',
@@ -1096,25 +1096,25 @@ class TestBuildTechArchiToC4Map:
 # ── dataStore detection ─────────────────────────────────────────────────
 
 class TestDataStoreDetection:
-    def test_postgresql_becomes_datastore(self):
+    def test_postgresql_becomes_infrasoftware(self):
         elems = [TechElement(archi_id='sw-1', name='PostgreSQL 15', tech_type='SystemSoftware')]
         roots = build_deployment_topology(elems, [])
-        assert roots[0].kind == 'dataStore'
+        assert roots[0].kind == 'infraSoftware'
 
-    def test_oracle_becomes_datastore(self):
+    def test_oracle_becomes_infrasoftware(self):
         elems = [TechElement(archi_id='sw-1', name='Oracle DB', tech_type='SystemSoftware')]
         roots = build_deployment_topology(elems, [])
-        assert roots[0].kind == 'dataStore'
+        assert roots[0].kind == 'infraSoftware'
 
-    def test_redis_becomes_datastore(self):
+    def test_redis_becomes_infrasoftware(self):
         elems = [TechElement(archi_id='sw-1', name='Redis Cluster', tech_type='SystemSoftware')]
         roots = build_deployment_topology(elems, [])
-        assert roots[0].kind == 'dataStore'
+        assert roots[0].kind == 'infraSoftware'
 
-    def test_mongo_becomes_datastore(self):
+    def test_mongo_becomes_infrasoftware(self):
         elems = [TechElement(archi_id='sw-1', name='Mongo DB', tech_type='SystemSoftware')]
         roots = build_deployment_topology(elems, [])
-        assert roots[0].kind == 'dataStore'
+        assert roots[0].kind == 'infraSoftware'
 
     def test_nginx_stays_infrasoftware(self):
         elems = [TechElement(archi_id='sw-1', name='Nginx', tech_type='SystemSoftware')]
@@ -1132,10 +1132,10 @@ class TestDataStoreDetection:
         roots = build_deployment_topology(elems, [])
         assert roots[0].kind == 'infraNode'
 
-    def test_stage_db_becomes_datastore(self):
+    def test_stage_db_becomes_infrasoftware(self):
         elems = [TechElement(archi_id='sw-1', name='Stage DB', tech_type='SystemSoftware')]
         roots = build_deployment_topology(elems, [])
-        assert roots[0].kind == 'dataStore'
+        assert roots[0].kind == 'infraSoftware'
 
     def test_unknown_tech_type_fallback_kind(self):
         """Element with unknown tech_type (e.g. TechnologyFunction) gets infraSoftware."""
@@ -1158,20 +1158,20 @@ class TestDataStoreDetection:
         for node in roots:
             assert node.kind == 'infraNode', f'{node.name} should be infraNode'
 
-    def test_datastore_detection_case_variations(self):
-        """Case-insensitive detection: POSTGRESQL, postgreSQL, PostgreSQL all -> dataStore."""
+    def test_db_named_systemsoftware_becomes_infrasoftware(self):
+        """DB-named SystemSoftware elements become infraSoftware regardless of name."""
         for name in ['POSTGRESQL', 'postgreSQL', 'PostgreSQL', 'postgresql']:
             elems = [TechElement(archi_id='sw-1', name=name, tech_type='SystemSoftware')]
             roots = build_deployment_topology(elems, [])
-            assert roots[0].kind == 'dataStore', f'{name} should be dataStore'
+            assert roots[0].kind == 'infraSoftware', f'{name} should be infraSoftware'
 
-    def test_datastore_false_negative_check(self):
-        """Known infra software names must NOT match dataStore patterns."""
-        non_db_names = [
+    def test_all_systemsoftware_names_become_infrasoftware(self):
+        """All SystemSoftware elements become infraSoftware regardless of name."""
+        names = [
             'Nginx', 'Eureka', 'Consul', 'HAProxy', 'Apache HTTP',
             'RabbitMQ', 'Kafka', 'MinIO', 'Zookeeper', 'Prometheus',
         ]
-        for name in non_db_names:
+        for name in names:
             elems = [TechElement(archi_id='sw-1', name=name, tech_type='SystemSoftware')]
             roots = build_deployment_topology(elems, [])
             assert roots[0].kind == 'infraSoftware', f'{name} should be infraSoftware'
@@ -1184,7 +1184,7 @@ class TestBuildDatastoreEntityLinks:
     def test_access_relationship_creates_link(self):
         """AccessRelationship SystemSoftware→DataObject creates dataStore→entity link."""
         child = DeploymentNode(c4_id='pg', name='PostgreSQL', archi_id='sw-1',
-                               tech_type='SystemSoftware', kind='dataStore')
+                               tech_type='SystemSoftware', kind='infraSoftware')
         parent = DeploymentNode(c4_id='srv', name='Server', archi_id='n-1',
                                 tech_type='Node', children=[child])
         entities = [DataEntity(c4_id='de_users', name='Users', archi_id='do-1')]
@@ -1201,7 +1201,7 @@ class TestBuildDatastoreEntityLinks:
 
     def test_no_access_relationships(self):
         child = DeploymentNode(c4_id='pg', name='PostgreSQL', archi_id='sw-1',
-                               tech_type='SystemSoftware', kind='dataStore')
+                               tech_type='SystemSoftware', kind='infraSoftware')
         entities = [DataEntity(c4_id='de_users', name='Users', archi_id='do-1')]
         result = build_datastore_entity_links([child], entities, [])
         assert result == []
@@ -1212,7 +1212,7 @@ class TestBuildDatastoreEntityLinks:
     def test_reverse_direction(self):
         """DataObject→SystemSoftware direction also works."""
         node = DeploymentNode(c4_id='redis', name='Redis', archi_id='sw-1',
-                              tech_type='SystemSoftware', kind='dataStore')
+                              tech_type='SystemSoftware', kind='infraSoftware')
         entities = [DataEntity(c4_id='de_cache', name='Cache', archi_id='do-1')]
         rels = [
             RawRelationship(
@@ -2062,7 +2062,7 @@ class TestValidateDeploymentTree:
         child = DeploymentNode(c4_id='tbl', name='Table', archi_id='sw-2',
                                tech_type='SystemSoftware', kind='infraSoftware')
         ds = DeploymentNode(c4_id='oracle', name='Oracle', archi_id='ds-1',
-                            tech_type='SystemSoftware', kind='dataStore',
+                            tech_type='SystemSoftware', kind='infraSoftware',
                             children=[child])
         violations = validate_deployment_tree([ds])
         assert any('Leaf' in v and 'Oracle' in v for v in violations)

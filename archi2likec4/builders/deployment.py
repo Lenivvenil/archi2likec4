@@ -1,7 +1,6 @@
 """Builders: deployment topology and archi→c4 mapping."""
 
 import logging
-import re
 
 from ..models import (
     DeploymentNode,
@@ -23,16 +22,6 @@ _INFRA_ZONE_TYPES = frozenset({
 _INFRA_SW_TYPES = frozenset({
     'SystemSoftware', 'TechnologyService', 'Artifact',
 })
-
-# Patterns to identify database/storage SystemSoftware → dataStore kind.
-# Message brokers (RabbitMQ, Kafka) and object storage (MinIO, S3) are intentionally
-# excluded — they stay infraSoftware by project convention.
-_DATASTORE_PATTERNS = re.compile(
-    r'(?i)\b(?:postgres|postgresql|oracle|mysql|mariadb|mongo|mongodb|redis'
-    r'|elasticsearch|opensearch|cassandra|clickhouse|sqlite|mssql|sql\s*server'
-    r'|db2|couchdb|dynamodb|memcached|neo4j|influxdb|timescaledb'
-    r'|stage\s*db|database|хранилище)\b'
-)
 
 
 def build_deployment_topology(
@@ -65,13 +54,10 @@ def build_deployment_topology(
             kind = 'infraZone'
         elif te.tech_type in _INFRA_NODE_TYPES:
             kind = 'infraNode'
-        elif te.tech_type in _INFRA_SW_TYPES and _DATASTORE_PATTERNS.search(te.name):
-            kind = 'dataStore'
         else:
-            # Fallback: unknown tech_types (TechnologyFunction, TechnologyProcess,
-            # TechnologyInteraction, etc.) and non-DB _INFRA_SW_TYPES all become
-            # infraSoftware — leaf elements, not containers.  infraNode is reserved
-            # for explicit Node/Device/TechnologyCollaboration (container semantics).
+            # All remaining types (_INFRA_SW_TYPES: SystemSoftware, TechnologyService, Artifact,
+            # and unknown types: TechnologyFunction, TechnologyProcess, etc.) become infraSoftware.
+            # infraNode is reserved for explicit Node/Device/TechnologyCollaboration (containers).
             kind = 'infraSoftware'
             if te.tech_type not in _INFRA_SW_TYPES:
                 logger.debug('Unknown tech_type %r for %r — defaulting to infraSoftware',
@@ -288,7 +274,7 @@ def build_deployment_map(
     return result
 
 
-_LEAF_KINDS = frozenset({'infraSoftware', 'dataStore'})
+_LEAF_KINDS = frozenset({'infraSoftware'})
 
 
 def validate_deployment_tree(
@@ -298,7 +284,7 @@ def validate_deployment_tree(
 
     Returns a list of violation descriptions (empty if all ok).
     Checks:
-    (a) leaf nodes (infraSoftware/dataStore) have no children
+    (a) leaf nodes (infraSoftware) have no children
     (b) no duplicate archi_id across the tree
     (c) sibling c4_id uniqueness within each parent
     (d) qualified paths contain no '..' (double dot)

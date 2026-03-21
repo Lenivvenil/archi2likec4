@@ -63,6 +63,9 @@ All notable changes to this project will be documented in this file.
 - **i18n keys**: `subdomain`, `subdomain_plural`, `l2_subdomain_label` in ru/en catalogs
 - **Web UI hierarchy**: `/hierarchy` page shows subdomain level between domain and system
 - **`tools/` directory**: diagnostic scripts (stats.py, diag_targets.py, diag_dupes.py, diag_views.py, diag_orphan_subsystems.py) moved out of root for cleaner project layout
+- **Native LikeC4 deployment model**: `generators/deployment.py` rewrote to emit `deployment { environment prod { ... } }` blocks with `instanceOf <app_path>` for app-to-infra mapping; replaced deprecated `element infraNode/infraSoftware` spec with `deploymentNode` kind
+- **Native deployment views**: `generators/views.py` deployment branch now emits `deployment view` syntax with `prod.<path>.**` wildcard patterns instead of custom solution views
+- **Deployment tree validation**: post-generation structural validation of depth, path uniqueness, and naming rules for deployment `.c4` output
 
 ### Changed
 - **`builders/` package**: `builders.py` split into `builders/` package (`systems.py`, `domains.py`, `integrations.py`, `deployment.py`, `data.py`)

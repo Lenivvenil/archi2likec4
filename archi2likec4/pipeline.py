@@ -33,8 +33,7 @@ from .generators import (
     generate_audit_md,
     generate_datastore_mapping_c4,
     generate_deployment_c4,
-    generate_deployment_mapping_c4,
-    generate_deployment_view,
+    generate_deployment_overview_view,
     generate_domain_c4,
     generate_domain_functional_view,
     generate_domain_integration_view,
@@ -545,27 +544,24 @@ def _generate(
         deployment_dir = output_dir / 'deployment'
         deployment_dir.mkdir(exist_ok=True)
         (deployment_dir / 'topology.c4').write_text(
-            generate_deployment_c4(built.deployment_nodes), encoding='utf-8')
+            generate_deployment_c4(built.deployment_nodes, built.deployment_map),
+            encoding='utf-8')
         file_count += 1
 
         # Post-generation structural validation of deployment tree
         tree_violations = validate_deployment_tree(built.deployment_nodes)
         for v in tree_violations:
             logger.warning('Deployment tree violation: %s', v)
-        if built.deployment_map:
-            (deployment_dir / 'mapping.c4').write_text(
-                generate_deployment_mapping_c4(built.deployment_map), encoding='utf-8')
-            file_count += 1
         if built.datastore_entity_links:
             (deployment_dir / 'datastore-mapping.c4').write_text(
                 generate_datastore_mapping_c4(built.datastore_entity_links),
                 encoding='utf-8')
             file_count += 1
         (views_dir / 'deployment-architecture.c4').write_text(
-            generate_deployment_view(), encoding='utf-8')
+            generate_deployment_overview_view(), encoding='utf-8')
         file_count += 1
         view_count += 1
-        logger.info('  deployment/ (topology + mapping + view)')
+        logger.info('  deployment/ (topology + view)')
 
     # Scripts
     (scripts_dir / 'federate.py').write_text(generate_federate_script(), encoding='utf-8')
@@ -802,7 +798,7 @@ def main() -> None:
 
     # Reconfigure logging if verbose
     if config.verbose:
-        logging.getLogger('archi2likec4').setLevel(logging.DEBUG)
+        logging.getLogger(__name__.split('.')[0]).setLevel(logging.DEBUG)
 
     logger.info('archi2likec4 v%s', __version__)
     logger.info('Input:  %s', config.model_root)
