@@ -36,16 +36,16 @@
 `deployment { environment prod { ... } }`, а каждый infra-узел, на который задеплоено приложение,
 должен содержать `instanceOf <app_c4_path>`.
 
-- [ ] Переписать `_render_deployment_node(node, lines, indent, current_path, instances)`:
+- [x] Переписать `_render_deployment_node(node, lines, indent, current_path, instances)`:
   - передавать `current_path` (строка вида `hq.vmware.srv`) через рекурсию
   - для дочернего узла: `child_path = f'{current_path}.{child.c4_id}'`
   - после рендера metadata блока добавить: `for app_path in instances.get(current_path, []): lines.append(f'  instanceOf {app_path}')`
-- [ ] Переписать `generate_deployment_c4(nodes, deployment_map=None)`:
+- [x] Переписать `generate_deployment_c4(nodes, deployment_map=None)`:
   - построить обратный индекс `instances: dict[str, list[str]]` из `deployment_map` (`infra_path → [app_paths]`)
   - обернуть в `deployment {\n  environment prod {\n  ...\n  }\n}`
   - корневые ноды: `current_path = node.c4_id`
-- [ ] Удалить функцию `generate_deployment_mapping_c4()` (файл `deployment/mapping.c4` больше не генерируется)
-- [ ] Добавить функцию `generate_deployment_overview_view(env='prod') -> str`:
+- [x] Удалить функцию `generate_deployment_mapping_c4()` (файл `deployment/mapping.c4` больше не генерируется)
+- [x] Добавить функцию `generate_deployment_overview_view(env='prod') -> str`:
   ```
   views {
     deployment view deployment_architecture {
@@ -54,10 +54,10 @@
     }
   }
   ```
-- [ ] Обновить `archi2likec4/generators/__init__.py`: убрать `generate_deployment_mapping_c4` и `generate_deployment_view` из импортов и `__all__`; добавить `generate_deployment_overview_view`
-- [ ] Обновить тесты: в `tests/test_generators.py` класс `TestGenerateDeploymentC4` — ассерты `'model {'` → `'deployment {'` и `'environment prod {'`; добавить тесты `test_instance_of_inserted` и `test_instance_of_nested_path`; удалить класс `TestGenerateDeploymentMapping`; класс `TestGenerateDeploymentView` → `TestGenerateDeploymentOverviewView` с проверкой `'deployment view deployment_architecture'` и `'prod.**'`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Обновить `archi2likec4/generators/__init__.py`: убрать `generate_deployment_mapping_c4` и `generate_deployment_view` из импортов и `__all__`; добавить `generate_deployment_overview_view`
+- [x] Обновить тесты: в `tests/test_generators.py` класс `TestGenerateDeploymentC4` — ассерты `'model {'` → `'deployment {'` и `'environment prod {'`; добавить тесты `test_instance_of_inserted` и `test_instance_of_nested_path`; удалить класс `TestGenerateDeploymentMapping`; класс `TestGenerateDeploymentView` → `TestGenerateDeploymentOverviewView` с проверкой `'deployment view deployment_architecture'` и `'prod.**'`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 
