@@ -337,7 +337,7 @@ def compute_audit_incidents(
 
         # Check 1: SystemSoftware as root node ("floating software")
         for dn in deployment_nodes:
-            if dn.kind in ('infraSoftware', 'dataStore'):
+            if dn.kind == 'infraSoftware':
                 qa10_affected.append({
                     'name': dn.name, 'kind': dn.kind,
                     'issue': get_qa10_issue('floating_sw', lang),
@@ -372,9 +372,9 @@ def compute_audit_incidents(
                         'issue': get_qa10_issue('root_no_location', lang),
                     })
 
-        # Check 4: Leaf node (infraSoftware/dataStore) with children
+        # Check 4: Leaf node (infraSoftware) with children
         for dn in all_dn:
-            if dn.kind in ('infraSoftware', 'dataStore') and dn.children:
+            if dn.kind == 'infraSoftware' and dn.children:
                 qa10_affected.append({
                     'name': dn.name, 'kind': dn.kind,
                     'issue': get_qa10_issue('leaf_with_children', lang),
