@@ -28,6 +28,16 @@ Before your first release, configure the following once:
    - Environment name: `pypi`
 3. GitHub environment `pypi` must already exist in repo Settings → Environments
 
+### Homebrew tap repository
+
+The `update-homebrew` job expects `Lenivvenil/homebrew-archi2likec4` to exist
+and contain a `Formula/archi2likec4.rb` file with `url "..."` and `sha256 "..."`
+lines using double quotes. The workflow uses `sed` to update these lines in-place.
+
+If you have not yet created the tap repository:
+1. Create a public repository named `homebrew-archi2likec4` under `Lenivvenil`
+2. Add `Formula/archi2likec4.rb` with a valid initial formula (url + sha256 fields)
+
 ### HOMEBREW_TAP_TOKEN (GitHub PAT)
 
 The `update-homebrew` job in `publish.yml` pushes to the tap repo
