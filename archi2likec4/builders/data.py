@@ -10,8 +10,9 @@ from ..models import (
     RawRelationship,
     System,
 )
-from ..utils import flatten_deployment_nodes, make_id, make_unique_id
+from ..utils import make_id, make_unique_id
 from .deployment import _build_deployment_path_index
+from .integrations import _build_comp_c4_path
 
 logger = logging.getLogger(__name__)
 
@@ -40,15 +41,7 @@ def build_data_access(  # noqa: C901
     When a relationship references a promoted parent, fan out to ALL children
     so each child gets a separate data access link.
     """
-    comp_c4_path: dict[str, str] = {}
-    for sys in systems:
-        if sys.archi_id:
-            comp_c4_path[sys.archi_id] = sys.c4_id
-        for eid in sys.extra_archi_ids:
-            comp_c4_path[eid] = sys.c4_id
-        for sub in sys.subsystems:
-            if sub.archi_id:
-                comp_c4_path[sub.archi_id] = f'{sys.c4_id}.{sub.c4_id}'
+    comp_c4_path = _build_comp_c4_path(systems)
 
     entity_by_archi: dict[str, DataEntity] = {e.archi_id: e for e in entities}
 
@@ -113,18 +106,13 @@ def build_datastore_entity_links(
     entities: list[DataEntity],
     relationships: list[RawRelationship],
 ) -> list[tuple[str, str]]:
-    """Build (dataStore_c4_path, dataEntity_c4_id) pairs.
+    """Build (infra_c4_path, dataEntity_c4_id) pairs.
 
-    Links dataStore deployment nodes to DataEntity via relationships where
-    both sides reference the same logical data concept (AccessRelationship
-    between SystemSoftware and DataObject).
+    Links infrastructure software nodes (infraSoftware) to DataEntity via
+    AccessRelationship between SystemSoftware and DataObject.  The resulting
+    pairs are written to datastore-mapping.c4 as ``persists`` relationships.
     """
     if not deployment_nodes or not entities:
-        return []
-
-    all_dn = flatten_deployment_nodes(deployment_nodes)
-    datastore_nodes = [dn for dn in all_dn if dn.kind == 'dataStore']
-    if not datastore_nodes:
         return []
 
     tech_path = _build_deployment_path_index(deployment_nodes)

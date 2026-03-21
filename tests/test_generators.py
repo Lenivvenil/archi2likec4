@@ -4,8 +4,7 @@ from archi2likec4.generators import (
     generate_audit_md,
     generate_datastore_mapping_c4,
     generate_deployment_c4,
-    generate_deployment_mapping_c4,
-    generate_deployment_view,
+    generate_deployment_overview_view,
     generate_domain_c4,
     generate_domain_functional_view,
     generate_domain_integration_view,
@@ -556,7 +555,7 @@ class TestGenerateSolutionViews:
         assert unresolved == 1
 
     def test_deployment_view_enriched_from_deploy_map(self):
-        """Deployment view with app-only elements uses deployment_map for infra."""
+        """Deployment view uses deployment_map for infra paths; app paths excluded."""
         sv = SolutionView(
             name='deployment_architecture.AppOnly',
             view_type='deployment',
@@ -570,8 +569,11 @@ class TestGenerateSolutionViews:
             deployment_map=deploy_map)
         assert 'app_only' in files
         content = files['app_only']
-        assert 'channels.efs' in content
-        assert 'server_1' in content
+        # App path is NOT included directly — it lives inside node via instanceOf
+        assert 'channels.efs' not in content
+        # Infra path appears with prod. prefix and .** suffix
+        assert 'prod.server_1.**' in content
+        assert 'deployment view' in content
 
 
 # ── Deployment generators ───────────────────────────────────────────────
@@ -579,22 +581,22 @@ class TestGenerateSolutionViews:
 class TestGenerateSpec_InfraKinds:
     def test_spec_includes_infra_node(self):
         spec = generate_spec()
-        assert 'element infraNode' in spec
-        assert 'element infraZone' in spec
-        assert 'element infraSoftware' in spec
-        assert 'element infraLocation' in spec
+        assert 'deploymentNode infraNode' in spec
+        assert 'deploymentNode infraZone' in spec
+        assert 'deploymentNode infraSoftware' in spec
+        assert 'deploymentNode infraLocation' in spec
         assert 'archi-tech' in spec
 
     def test_spec_infra_zone_style(self):
         spec = generate_spec()
         # infraZone should have dotted border
-        zone_idx = spec.index('element infraZone')
+        zone_idx = spec.index('deploymentNode infraZone')
         zone_block = spec[zone_idx:spec.index('}', spec.index('}', zone_idx) + 1) + 1]
         assert 'border dotted' in zone_block
 
-    def test_spec_includes_deployed_on(self):
+    def test_spec_no_deployed_on(self):
         spec = generate_spec()
-        assert 'relationship deployedOn' in spec
+        assert 'relationship deployedOn' not in spec
 
     def test_spec_includes_infra_tags(self):
         spec = generate_spec()
@@ -616,7 +618,8 @@ class TestGenerateDeploymentC4:
         assert "archi_id 'n-1'" in content
         assert "tech_type 'Node'" in content
         assert "description 'vCPU: 8'" in content
-        assert 'model {' in content
+        assert 'deployment {' in content
+        assert 'environment prod {' in content
 
     def test_nested_nodes(self):
         child = DeploymentNode(
@@ -637,25 +640,47 @@ class TestGenerateDeploymentC4:
         child_line = next(ln for ln in lines if 'pg = infraSoftware' in ln)
         assert len(child_line) - len(child_line.lstrip()) > len(parent_line) - len(parent_line.lstrip())
 
+    def test_instance_of_inserted(self):
+        """instanceOf is added for apps mapped to a node via deployment_map."""
+        node = DeploymentNode(
+            c4_id='srv_1', name='Server 1', archi_id='n-1',
+            tech_type='Node', kind='infraNode',
+        )
+        deployment_map = [('channels.efs', 'srv_1'), ('products.mls', 'srv_1')]
+        content = generate_deployment_c4([node], deployment_map=deployment_map)
+        assert 'instanceOf channels.efs' in content
+        assert 'instanceOf products.mls' in content
 
-class TestGenerateDeploymentMapping:
-    def test_mapping(self):
-        mapping = [('channels.efs', 'server_1'), ('products.mls', 'db_cluster')]
-        content = generate_deployment_mapping_c4(mapping)
-        assert 'channels.efs -[deployedOn]-> server_1' in content
-        assert 'products.mls -[deployedOn]-> db_cluster' in content
-        assert 'model {' in content
+    def test_instance_of_nested_path(self):
+        """instanceOf is placed inside the correct nested node by full path."""
+        child = DeploymentNode(
+            c4_id='pg', name='PostgreSQL', archi_id='sw-1',
+            tech_type='SystemSoftware', kind='infraSoftware',
+        )
+        parent = DeploymentNode(
+            c4_id='srv_1', name='Server 1', archi_id='n-1',
+            tech_type='Node', kind='infraNode',
+            children=[child],
+        )
+        deployment_map = [('channels.aim.aim', 'srv_1.pg')]
+        content = generate_deployment_c4([parent], deployment_map=deployment_map)
+        assert 'instanceOf channels.aim.aim' in content
+        # Should NOT be at root level
+        lines = content.split('\n')
+        pg_idx = next(i for i, ln in enumerate(lines) if 'pg = infraSoftware' in ln)
+        instance_idx = next(i for i, ln in enumerate(lines) if 'instanceOf channels.aim.aim' in ln)
+        assert instance_idx > pg_idx
 
 
-class TestGenerateDeploymentView:
+class TestGenerateDeploymentOverviewView:
     def test_view_content(self):
-        content = generate_deployment_view()
-        assert 'view deployment_architecture' in content
-        assert 'infraLocation' in content
-        assert 'infraZone' in content
-        assert 'infraNode' in content
-        assert 'infraSoftware' in content
-        assert 'dataStore' in content
+        content = generate_deployment_overview_view()
+        assert 'deployment view deployment_architecture' in content
+        assert 'prod.**' in content
+
+    def test_custom_env(self):
+        content = generate_deployment_overview_view(env='staging')
+        assert 'staging.**' in content
 
 
 class TestGenerateDatastoreMapping:
@@ -832,8 +857,8 @@ class TestGenerateAuditMd:
                              children=[zone])
         built = MockBuilt(deployment_nodes=[loc])
         result = generate_audit_md(built, 0, 0, MockConfig())
-        # LAN is nested under DC, should not be flagged
-        assert 'LAN' not in result or 'Проблемы иерархии развёртывания' not in result
+        # LAN is nested under DC, should not be flagged — no QA-10 section at all
+        assert 'Проблемы иерархии развёртывания' not in result
 
 
     def test_stable_qa_ids(self):
@@ -912,15 +937,16 @@ class TestSolutionViewDeployment:
             deployment_map=deploy_map)
         assert 'payment_deploy' in files
         content = files['payment_deploy']
-        # App paths included
-        assert 'channels.efs' in content
-        assert 'products.abs' in content
-        # Infra paths pulled from deployment_map
-        assert 'dc.server_1' in content
-        assert 'dc.server_2' in content
+        # App paths are NOT included in deployment views (they live inside nodes via instanceOf)
+        assert 'channels.efs' not in content
+        assert 'products.abs' not in content
+        # Infra paths pulled from deployment_map, with prod. prefix and .** wildcard
+        assert 'prod.dc.server_1.**' in content
+        assert 'prod.dc.server_2.**' in content
+        assert 'deployment view' in content
 
-    def test_deployment_view_no_wildcard_expansion(self):
-        """Deployment view must NOT contain .* wildcard expansion."""
+    def test_deployment_view_uses_wildcard_expansion(self):
+        """Deployment view uses .** wildcard to include nested deployment nodes."""
         sv = SolutionView(
             name='deployment_architecture.InfraOnly',
             view_type='deployment',
@@ -931,7 +957,10 @@ class TestSolutionViewDeployment:
         files, _, _ = generate_solution_views(
             [sv], {}, {}, tech_archi_to_c4=tech_archi_to_c4)
         content = files['infra_only']
-        assert '.*' not in content
+        # Ancestor dedup: dc.server_1 is ancestor of dc.server_1.pg → only dc.server_1.** emitted
+        assert 'prod.dc.server_1.**' in content
+        assert 'prod.dc.server_1.pg.**' not in content
+        assert 'deployment view' in content
 
 
 # ── generate_solution_views: subdomain-aware paths ───────────────────────
