@@ -215,6 +215,6 @@ class DeploymentNode:
     name: str
     archi_id: str
     tech_type: str          # ArchiMate type
-    kind: str = 'infraNode' # LikeC4 element kind: infraNode | infraZone | infraSoftware | infraLocation | dataStore
+    kind: str = 'infraNode' # LikeC4 element kind: infraNode | infraZone | infraSoftware | infraLocation
     documentation: str = ''
     children: list['DeploymentNode'] = field(default_factory=list)

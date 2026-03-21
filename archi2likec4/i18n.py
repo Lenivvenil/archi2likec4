@@ -336,7 +336,7 @@ _MESSAGES: dict[str, dict[str, dict[str, str]]] = {
                 '1. SystemSoftware must be nested in a Node (AggregationRelationship)\n'
                 '2. Location must contain at least one Node\n'
                 '3. Root Node must be nested in a Location\n'
-                '4. Leaf nodes (software/dataStore) must not have children\n'
+                '4. Leaf nodes (infraSoftware) must not have children\n'
                 '5. Nesting depth must not exceed 6 levels\n'
                 '6. An element must not appear in multiple tree branches'
             ),
@@ -360,7 +360,7 @@ _QA10_ISSUES: dict[str, dict[str, str]] = {
     },
     'leaf_with_children': {
         'ru': 'Leaf-нод (ПО/хранилище) содержит дочерние элементы',
-        'en': 'Leaf node (software/dataStore) has children',
+        'en': 'Leaf node (infraSoftware) has children',
     },
     'excessive_depth': {
         'ru': 'Чрезмерная глубина вложенности (>6 уровней)',

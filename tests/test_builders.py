@@ -1093,7 +1093,7 @@ class TestBuildTechArchiToC4Map:
         assert result['sw-1'] == 'dc.worker.pg'
 
 
-# ── dataStore detection ─────────────────────────────────────────────────
+# ── Kind assignment ────────────────────────────────────────────────────
 
 class TestDataStoreDetection:
     def test_postgresql_becomes_infrasoftware(self):

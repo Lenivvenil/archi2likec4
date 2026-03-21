@@ -34,7 +34,7 @@ def main():
     built = _build(parsed, config)
 
     # Build lookup indices (same as build_integrations uses)
-    comp_c4_path, comp_system_id = _build_comp_c4_path(built.systems)
+    comp_c4_path = _build_comp_c4_path(built.systems)
     comp_index = _build_comp_index(built.systems)
 
     # Build element type index from ALL parsed elements

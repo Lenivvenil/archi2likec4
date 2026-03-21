@@ -198,7 +198,7 @@ def main():
     subsection('Skip reason breakdown')
 
     from archi2likec4.builders.integrations import _build_comp_c4_path as build_paths
-    comp_c4_path, comp_system_id = build_paths(systems)
+    comp_c4_path = build_paths(systems)
     iface_c4_path = built.iface_c4_path
 
     skip_no_source = 0

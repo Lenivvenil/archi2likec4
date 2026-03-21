@@ -227,7 +227,7 @@ class TestDeploymentNode:
         assert parent.children[0].c4_id == 'child1'
 
     def test_kind_options(self):
-        for kind in ('infraNode', 'infraZone', 'infraSoftware', 'infraLocation', 'dataStore'):
+        for kind in ('infraNode', 'infraZone', 'infraSoftware', 'infraLocation'):
             dn = DeploymentNode(
                 c4_id='n', name='N', archi_id='a', tech_type='Node', kind=kind,
             )
