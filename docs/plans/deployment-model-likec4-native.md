@@ -67,16 +67,16 @@
 генерацию устаревшего `mapping.c4`, заменить вызов `generate_deployment_view` на
 `generate_deployment_overview_view`.
 
-- [ ] В `archi2likec4/pipeline.py` убрать импорты `generate_deployment_mapping_c4`, `generate_deployment_view`
-- [ ] Добавить импорт `generate_deployment_overview_view` в `pipeline.py`
-- [ ] Изменить вызов `generate_deployment_c4(built.deployment_nodes)` → `generate_deployment_c4(built.deployment_nodes, built.deployment_map)`
-- [ ] Удалить блок генерации `deployment/mapping.c4` (вызов `generate_deployment_mapping_c4`)
-- [ ] Изменить вызов `generate_deployment_view()` → `generate_deployment_overview_view()`
-- [ ] Оставить генерацию `deployment/datastore-mapping.c4` (persists — логический уровень, не деплой)
-- [ ] Обновить лог-сообщение на `'deployment/ (topology + view)'`
-- [ ] В `tests/test_pipeline_e2e.py` обновить ассерт `'element infraNode' in spec` → `'deploymentNode infraNode' in spec`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] В `archi2likec4/pipeline.py` убрать импорты `generate_deployment_mapping_c4`, `generate_deployment_view`
+- [x] Добавить импорт `generate_deployment_overview_view` в `pipeline.py`
+- [x] Изменить вызов `generate_deployment_c4(built.deployment_nodes)` → `generate_deployment_c4(built.deployment_nodes, built.deployment_map)`
+- [x] Удалить блок генерации `deployment/mapping.c4` (вызов `generate_deployment_mapping_c4`)
+- [x] Изменить вызов `generate_deployment_view()` → `generate_deployment_overview_view()`
+- [x] Оставить генерацию `deployment/datastore-mapping.c4` (persists — логический уровень, не деплой)
+- [x] Обновить лог-сообщение на `'deployment/ (topology + view)'`
+- [x] В `tests/test_pipeline_e2e.py` обновить ассерт `'element infraNode' in spec` → `'deploymentNode infraNode' in spec`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 
