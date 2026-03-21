@@ -68,15 +68,22 @@ jobs:
 
       - name: Update Formula
         run: |
+          set -e
           VERSION="${{ steps.meta.outputs.version }}"
           SHA256="${{ steps.meta.outputs.sha256 }}"
           URL="${{ steps.meta.outputs.url }}"
           sed -i "s|url \".*\"|url \"${URL}\"|" Formula/archi2likec4.rb
           sed -i "s|sha256 \".*\"|sha256 \"${SHA256}\"|" Formula/archi2likec4.rb
+          grep -q "archi2likec4-${VERSION}.tar.gz" Formula/archi2likec4.rb \
+            || { echo "ERROR: url pattern not updated in Formula"; exit 1; }
+          grep -q "${SHA256}" Formula/archi2likec4.rb \
+            || { echo "ERROR: sha256 pattern not updated in Formula"; exit 1; }
 
       - name: Commit and push
         run: |
+          set -e
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git diff --quiet && { echo "ERROR: Formula unchanged after sed — aborting"; exit 1; }
           git commit -am "archi2likec4 ${{ steps.meta.outputs.version }}"
           git push
