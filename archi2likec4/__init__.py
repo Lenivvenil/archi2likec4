@@ -1,9 +1,10 @@
 """archi2likec4 — Convert coArchi XML (ArchiMate) to LikeC4 .c4 files."""
 
 try:
+    from importlib.metadata import PackageNotFoundError as _PkgNotFound
     from importlib.metadata import version as _pkg_version
     __version__: str = _pkg_version('archi2likec4')
-except Exception:
+except _PkgNotFound:
     __version__ = '1.3.0'
 
 from .config import ConvertConfig, load_config

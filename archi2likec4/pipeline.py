@@ -423,20 +423,22 @@ def _generate(
     """Phase 4: generate .c4 files."""
     logger.info('Generating files...')
 
+    # Resolve once so all subsequent operations use the same absolute path
+    output_dir = output_dir.resolve()
+
     # Clean & create dirs (with safety checks)
     _OUTPUT_MARKER = '.archi2likec4-output'
     if output_dir.exists():
-        resolved = output_dir.resolve()
-        if resolved == Path.cwd().resolve() or resolved == Path.home().resolve():
-            raise ConfigError(f'FATAL: refusing to rmtree dangerous path: {resolved}')
-        if len(resolved.parts) <= 2:  # root or one level (e.g. /tmp, C:\Users)
-            raise ConfigError(f'FATAL: refusing to rmtree root-level path: {resolved}')
-        has_marker = (resolved / _OUTPUT_MARKER).exists()
-        if not has_marker and any(resolved.iterdir()):
+        if output_dir == Path.cwd().resolve() or output_dir == Path.home().resolve():
+            raise ConfigError(f'FATAL: refusing to rmtree dangerous path: {output_dir}')
+        if len(output_dir.parts) <= 2:  # root or one level (e.g. /tmp, C:\Users)
+            raise ConfigError(f'FATAL: refusing to rmtree root-level path: {output_dir}')
+        has_marker = (output_dir / _OUTPUT_MARKER).exists()
+        if not has_marker and any(output_dir.iterdir()):
             raise ConfigError(
-                f'FATAL: {resolved} does not look like a converter output dir '
+                f'FATAL: {output_dir} does not look like a converter output dir '
                 f'(missing {_OUTPUT_MARKER}). Refusing to delete.')
-        shutil.rmtree(resolved)
+        shutil.rmtree(output_dir)
     output_dir.mkdir(parents=True, exist_ok=True)
     (output_dir / _OUTPUT_MARKER).write_text('', encoding='utf-8')
     domains_dir = output_dir / 'domains'
