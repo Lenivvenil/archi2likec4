@@ -732,8 +732,8 @@ class TestSyncOutput:
         config = ConvertConfig()
         config.output_dir = tmp_path / 'output'
         config.sync_target = None
-        # Should not raise
-        _sync_output(config)
+        # Should not raise and return True (no-op success)
+        assert _sync_output(config) is True
 
 
 

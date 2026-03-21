@@ -216,7 +216,7 @@ def build_deployment_map(
     sys_subdomain: dict[str, str] | None = None,
     promoted_archi_to_c4: dict[str, list[str]] | None = None,
 ) -> list[tuple[str, str]]:
-    """Build (app_c4_path, node_c4_id) pairs from cross-layer RealizationRelationship.
+    """Build (app_c4_path, node_c4_path) pairs from cross-layer RealizationRelationship.
 
     Resolves ApplicationComponent ↔ Node/SystemSoftware/Device via RealizationRelationship.
     When a promoted parent archi_id is encountered, fans out to all child system paths.

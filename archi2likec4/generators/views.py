@@ -7,6 +7,8 @@ import logging
 from ..models import RawRelationship, SolutionView
 from ..utils import escape_str
 
+logger = logging.getLogger(__name__)
+
 
 def generate_landscape_view() -> str:
     """Generate the top-level landscape view."""
@@ -157,7 +159,6 @@ def generate_solution_views(  # noqa: C901
       - integration: entity cap (≤10); fan-out fix; orphan removal; exclude dataStore
       - deployment: app paths without .*; infra paths without .*; ancestor dedup; exclude dataEntity
     """
-    _logger = logging.getLogger(__name__)
     if entity_archi_ids is None:
         entity_archi_ids = set()
 
@@ -313,7 +314,7 @@ def generate_solution_views(  # noqa: C901
                     # QA-11: warn on element count (estimate)
                     est = sys_element_count.get(system_paths[0], 0)
                     if est > _MAX_FUNCTIONAL:
-                        _logger.warning('QA-11: functional view %s has ~%d elements '
+                        logger.warning('QA-11: functional view %s has ~%d elements '
                                         '(threshold: %d)', view_id, est, _MAX_FUNCTIONAL)
                 else:
                     # Multi-system: determine primary system (most elements)
@@ -342,7 +343,7 @@ def generate_solution_views(  # noqa: C901
                         if primary_sys else len(system_paths)
                     )
                     if est > _MAX_FUNCTIONAL:
-                        _logger.warning('QA-11: functional view %s has ~%d elements '
+                        logger.warning('QA-11: functional view %s has ~%d elements '
                                         '(threshold: %d)', view_id, est, _MAX_FUNCTIONAL)
 
             elif sv.view_type == 'integration':
@@ -421,7 +422,7 @@ def generate_solution_views(  # noqa: C901
                     if len(resolved_entities) <= _MAX_INTEGRATION_ENTITIES:
                         include_entities = True
                     else:
-                        _logger.info('Integration view %s: %d data entities exceed cap (%d), excluding',
+                        logger.info('Integration view %s: %d data entities exceed cap (%d), excluding',
                                      view_id, len(resolved_entities), _MAX_INTEGRATION_ENTITIES)
 
                 lines.append(f"  view {view_id} {{")
@@ -447,11 +448,13 @@ def generate_solution_views(  # noqa: C901
                 # QA-11: warn on element count
                 est = len(system_paths) + len(rel_pairs) + (len(resolved_entities) if include_entities else 0)
                 if est > _MAX_INTEGRATION:
-                    _logger.warning('QA-11: integration view %s has ~%d elements '
+                    logger.warning('QA-11: integration view %s has ~%d elements '
                                     '(threshold: %d)', view_id, est, _MAX_INTEGRATION)
 
             elif sv.view_type == 'deployment':
-                # Deployment view: separate app paths from infra paths
+                # Deployment view: collect infra paths from diagram and deployment_map.
+                # App paths are NOT included in the view — they are placed inside infra
+                # nodes via ``instanceOf`` in deployment/topology.c4.
                 resolved_unique = list(dict.fromkeys(c4_paths))
                 if resolved_unique:
                     tech_c4_values = set((tech_archi_to_c4 or {}).values())
@@ -479,38 +482,34 @@ def generate_solution_views(  # noqa: C901
                                             infra_paths.append(target)
 
                     # Ancestor dedup for infra: if both 'loc' and 'loc.cluster.node' are present,
-                    # remove 'loc' — keep only the most specific paths
+                    # keep only the ancestor (with .**) to avoid redundant includes.
                     deduped_infra: list[str] = []
                     infra_set = set(infra_paths)
                     for ip in infra_paths:
-                        # Check if any other infra path is a descendant of ip
-                        has_descendant = any(
-                            other != ip and other.startswith(ip + '.')
+                        # Keep ip only if no other path is a proper ancestor of ip
+                        has_ancestor = any(
+                            other != ip and ip.startswith(other + '.')
                             for other in infra_set
                         )
-                        if not has_descendant:
+                        if not has_ancestor:
                             deduped_infra.append(ip)
                     infra_paths = deduped_infra
 
-                    lines.append(f"  view {view_id} {{")
-                    lines.append(f"    title '{escape_str(title)}'")
-                    lines.append("    include")
-                    # App paths: without .* (don't expand appFunction)
-                    for ap in app_paths:
-                        lines.append(f"      {ap},")
-                    # Infra paths: no .* — only elements from the Archi view
-                    # are included (stand-specific nodes only)
-                    for ip in infra_paths:
-                        lines.append(f"      {ip},")
-                    if lines[-1].endswith(','):
-                        lines[-1] = lines[-1][:-1]
-                    lines.append("    exclude * where kind is dataEntity")
-                    lines.append("  }")
-                    # QA-11: warn on element count
-                    est = len(app_paths) + len(infra_paths)
-                    if est > _MAX_DEPLOYMENT:
-                        _logger.warning('QA-11: deployment view %s has ~%d elements '
-                                        '(threshold: %d)', view_id, est, _MAX_DEPLOYMENT)
+                    if infra_paths:
+                        lines.append(f"  deployment view {view_id} {{")
+                        lines.append(f"    title '{escape_str(title)}'")
+                        lines.append("    include")
+                        # Infra paths: prod.<path>.** to include all nested deployment nodes
+                        for ip in infra_paths:
+                            lines.append(f"      prod.{ip}.**,")
+                        if lines[-1].endswith(','):
+                            lines[-1] = lines[-1][:-1]
+                        lines.append("  }")
+                        # QA-11: warn on element count
+                        est = len(infra_paths)
+                        if est > _MAX_DEPLOYMENT:
+                            logger.warning('QA-11: deployment view %s has ~%d elements '
+                                            '(threshold: %d)', view_id, est, _MAX_DEPLOYMENT)
 
             lines.append('')
 
@@ -518,13 +517,13 @@ def generate_solution_views(  # noqa: C901
         lines.append('')
         # Only emit file if it contains at least one view block
         content = '\n'.join(lines)
-        if '  view ' in content:
+        if '  view ' in content or '  deployment view ' in content:
             files[solution_slug] = content
 
     if total_unresolved:
         resolved = total_elements - total_unresolved
         ratio = total_unresolved / total_elements if total_elements else 0
-        _logger.warning('%d/%d diagram element(s) could not be resolved '
+        logger.warning('%d/%d diagram element(s) could not be resolved '
                         '(%.0f%% unresolved, %d resolved)',
                         total_unresolved, total_elements, ratio * 100, resolved)
     return files, total_unresolved, total_elements
