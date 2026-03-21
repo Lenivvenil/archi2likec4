@@ -17,11 +17,13 @@ jobs:
         with:
           python-version: "3.12"
       - name: Version consistency check
+        env:
+          RELEASE_TAG: ${{ github.event.release.tag_name }}
         run: |
           python -c "
-          import tomllib
+          import tomllib, os
           v = tomllib.load(open('pyproject.toml', 'rb'))['project']['version']
-          tag = '${{ github.event.release.tag_name }}'
+          tag = os.environ['RELEASE_TAG']
           assert f'v{v}' == tag, f'Tag mismatch: v{v} != {tag}'
           print(f'Version check passed: v{v} == {tag}')
           "
@@ -50,11 +52,16 @@ jobs:
           VERSION="${VERSION#v}"
           URL="https://files.pythonhosted.org/packages/source/a/archi2likec4/archi2likec4-${VERSION}.tar.gz"
           # Retry up to 5 times — PyPI propagation may lag a few seconds
+          SHA256=""
           for i in 1 2 3 4 5; do
-            SHA256=$(curl -sL "$URL" | shasum -a 256 | cut -d' ' -f1)
-            [ -n "$SHA256" ] && break
+            SHA256=$(curl -fsSL "$URL" 2>/dev/null | shasum -a 256 | cut -d' ' -f1) || true
+            # Reject the SHA256 of empty input (curl returned nothing)
+            [ -n "$SHA256" ] && [ "$SHA256" != "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855" ] && break
+            SHA256=""
+            echo "Attempt $i failed, retrying in 10s..."
             sleep 10
           done
+          [ -n "$SHA256" ] || { echo "ERROR: Failed to download $URL after 5 attempts"; exit 1; }
           echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
           echo "sha256=${SHA256}" >> "$GITHUB_OUTPUT"
           echo "url=${URL}" >> "$GITHUB_OUTPUT"

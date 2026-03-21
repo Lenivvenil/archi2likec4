@@ -301,12 +301,15 @@ class TestVersionConsistency:
 class TestCLIVersion:
     """--version flag and help output."""
 
-    def test_version_flag(self):
+    def test_version_flag(self, capsys):
         """--version prints version string and exits 0."""
+        import archi2likec4
         with patch('sys.argv', ['archi2likec4', '--version']):
             with pytest.raises(SystemExit) as exc_info:
                 main()
             assert exc_info.value.code == 0
+        captured = capsys.readouterr()
+        assert archi2likec4.__version__ in captured.out
 
     def test_help_shows_web(self, capsys):
         """--help output mentions the 'web' subcommand."""
