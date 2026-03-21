@@ -86,13 +86,13 @@
 генерировать `deployment view` вместо `view`, использовать `prod.<path>.**` для infra-узлов,
 убрать app-paths из include (они живут внутри нод через `instanceOf`), дедуплицировать предков.
 
-- [ ] В `archi2likec4/generators/views.py` строки 453–513: изменить `view {view_id}` → `deployment view {view_id}`
-- [ ] Убрать добавление `app_paths` в `include` блок (только `infra_paths`)
-- [ ] Добавить `prod.{ip}.**` формат для каждого infra пути
-- [ ] Изменить логику ancestor dedup: оставлять путь только если нет другого пути, являющегося его предком (`has_ancestor = any(other != ip and ip.startswith(other + '.') for other in infra_set)`); если предок есть — отбросить
-- [ ] Добавить guard: эмитировать блок deployment view только если `infra_paths` непустой
-- [ ] Убрать `exclude * where kind is dataEntity` из deployment view (не применимо)
-- [ ] Обновить detection строки: `'  view ' in content or '  deployment view ' in content`
-- [ ] Обновить тесты в `tests/test_generators.py`: `test_deployment_solution_view_includes_infra_from_map` — убрать ассерты на app_paths, добавить ассерты `'prod.dc.server_1.**' in content`; `test_deployment_view_no_wildcard_expansion` переименовать в `test_deployment_view_uses_wildcard_expansion` с проверкой `'prod.<path>.**' in content` и ancestor dedup
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] В `archi2likec4/generators/views.py` строки 453–513: изменить `view {view_id}` → `deployment view {view_id}`
+- [x] Убрать добавление `app_paths` в `include` блок (только `infra_paths`)
+- [x] Добавить `prod.{ip}.**` формат для каждого infra пути
+- [x] Изменить логику ancestor dedup: оставлять путь только если нет другого пути, являющегося его предком (`has_ancestor = any(other != ip and ip.startswith(other + '.') for other in infra_set)`); если предок есть — отбросить
+- [x] Добавить guard: эмитировать блок deployment view только если `infra_paths` непустой
+- [x] Убрать `exclude * where kind is dataEntity` из deployment view (не применимо)
+- [x] Обновить detection строки: `'  view ' in content or '  deployment view ' in content`
+- [x] Обновить тесты в `tests/test_generators.py`: `test_deployment_solution_view_includes_infra_from_map` — убрать ассерты на app_paths, добавить ассерты `'prod.dc.server_1.**' in content`; `test_deployment_view_no_wildcard_expansion` переименовать в `test_deployment_view_uses_wildcard_expansion` с проверкой `'prod.<path>.**' in content` и ancestor dedup
+- [x] Add/update tests for the above changes
+- [x] Mark completed
