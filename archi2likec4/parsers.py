@@ -2,8 +2,9 @@
 
 import logging
 import re
-import xml.etree.ElementTree as ET
 from pathlib import Path
+
+import defusedxml.ElementTree as ET
 
 from .exceptions import ParseError
 from .models import (
@@ -35,6 +36,8 @@ def _detect_special_folder(xml_path: Path) -> str:
         if (parent / 'application').is_dir():
             model_root = parent / 'application'
             break
+    if model_root is None:
+        return ''
     current = xml_path.parent
     while current != model_root and current.name != 'application' and current != current.parent:
         folder_xml = current / 'folder.xml'
@@ -208,6 +211,9 @@ def parse_application_components(model_root: Path) -> list[AppComponent]:
         documentation = root.get('documentation', '')
         if not name:
             continue
+        if not archi_id:
+            logger.warning('Skipping ApplicationComponent with empty id in %s', xml_path)
+            continue
         props: dict[str, str] = {}
         for prop_el in root.findall('properties', NS) + root.findall('properties'):
             key = prop_el.get('key', '')
@@ -236,7 +242,8 @@ def parse_application_interfaces(model_root: Path) -> list[AppInterface]:
             continue
         try:
             tree = ET.parse(xml_path)
-        except ET.ParseError:
+        except ET.ParseError as e:
+            logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
             continue
         root = tree.getroot()
@@ -244,6 +251,9 @@ def parse_application_interfaces(model_root: Path) -> list[AppInterface]:
         archi_id = root.get('id', '')
         documentation = root.get('documentation', '')
         if not name:
+            continue
+        if not archi_id:
+            logger.warning('Skipping ApplicationInterface with empty id in %s', xml_path)
             continue
         results.append(AppInterface(archi_id=archi_id, name=name, documentation=documentation))
     if parse_errors:
@@ -266,7 +276,8 @@ def parse_data_objects(model_root: Path) -> list[DataObject]:
             continue
         try:
             tree = ET.parse(xml_path)
-        except ET.ParseError:
+        except ET.ParseError as e:
+            logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
             continue
         root = tree.getroot()
@@ -274,6 +285,9 @@ def parse_data_objects(model_root: Path) -> list[DataObject]:
         archi_id = root.get('id', '')
         documentation = root.get('documentation', '')
         if not name:
+            continue
+        if not archi_id:
+            logger.warning('Skipping DataObject with empty id in %s', xml_path)
             continue
         results.append(DataObject(archi_id=archi_id, name=name, documentation=documentation))
     if parse_errors:
@@ -297,7 +311,8 @@ def parse_application_functions(model_root: Path) -> list[AppFunction]:
             continue
         try:
             tree = ET.parse(xml_path)
-        except ET.ParseError:
+        except ET.ParseError as e:
+            logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
             continue
         root = tree.getroot()
@@ -305,6 +320,9 @@ def parse_application_functions(model_root: Path) -> list[AppFunction]:
         archi_id = root.get('id', '')
         documentation = root.get('documentation', '')
         if not name:
+            continue
+        if not archi_id:
+            logger.warning('Skipping ApplicationFunction with empty id in %s', xml_path)
             continue
 
         parent_id = _find_parent_component(xml_path, app_dir)

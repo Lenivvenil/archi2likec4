@@ -11,8 +11,7 @@ from ..models import (
     System,
 )
 from ..utils import make_id, make_unique_id
-from .deployment import _build_deployment_path_index
-from .integrations import _build_comp_c4_path
+from ._paths import build_comp_c4_path, build_deployment_path_index
 
 logger = logging.getLogger(__name__)
 
@@ -41,7 +40,7 @@ def build_data_access(  # noqa: C901
     When a relationship references a promoted parent, fan out to ALL children
     so each child gets a separate data access link.
     """
-    comp_c4_path = _build_comp_c4_path(systems)
+    comp_c4_path = build_comp_c4_path(systems)
 
     entity_by_archi: dict[str, DataEntity] = {e.archi_id: e for e in entities}
 
@@ -115,7 +114,7 @@ def build_datastore_entity_links(
     if not deployment_nodes or not entities:
         return []
 
-    tech_path = _build_deployment_path_index(deployment_nodes)
+    tech_path = build_deployment_path_index(deployment_nodes)
     entity_by_archi = {e.archi_id: e for e in entities}
 
     seen: set[tuple[str, str]] = set()

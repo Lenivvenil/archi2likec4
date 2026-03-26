@@ -4,7 +4,7 @@ from dataclasses import dataclass, field
 
 # ── Transliteration table (Cyrillic → Latin) ────────────────────────────
 
-_CYRILLIC_MAP = {
+CYRILLIC_MAP = {
     'а': 'a', 'б': 'b', 'в': 'v', 'г': 'g', 'д': 'd', 'е': 'e', 'ё': 'yo',
     'ж': 'zh', 'з': 'z', 'и': 'i', 'й': 'y', 'к': 'k', 'л': 'l', 'м': 'm',
     'н': 'n', 'о': 'o', 'п': 'p', 'р': 'r', 'с': 's', 'т': 't', 'у': 'u',
@@ -12,7 +12,7 @@ _CYRILLIC_MAP = {
     'ъ': '', 'ы': 'y', 'ь': '', 'э': 'e', 'ю': 'yu', 'я': 'ya',
 }
 
-_RESERVED = frozenset({
+RESERVED = frozenset({
     'specification', 'model', 'views', 'deployment', 'extend', 'element',
     'tag', 'include', 'exclude', 'style', 'color', 'shape', 'technology',
     'description', 'title', 'link', 'icon', 'metadata', 'navigateto',

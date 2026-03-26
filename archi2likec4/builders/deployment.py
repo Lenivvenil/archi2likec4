@@ -9,6 +9,7 @@ from ..models import (
     TechElement,
 )
 from ..utils import flatten_deployment_nodes, make_id, make_unique_id
+from ._paths import build_deployment_path_index
 
 logger = logging.getLogger(__name__)
 
@@ -164,27 +165,11 @@ def _is_descendant(node: DeploymentNode, target_archi_id: str) -> bool:
     return False
 
 
-def _build_deployment_path_index(
-    nodes: list[DeploymentNode],
-    prefix: str = '',
-) -> dict[str, str]:
-    """Build archi_id → qualified c4 path for all nodes in the tree.
-
-    Root nodes get their c4_id as path; nested nodes get parent.child paths.
-    """
-    result: dict[str, str] = {}
-    for node in nodes:
-        path = f'{prefix}{node.c4_id}' if not prefix else f'{prefix}.{node.c4_id}'
-        result[node.archi_id] = path
-        result.update(_build_deployment_path_index(node.children, path))
-    return result
-
-
 def build_tech_archi_to_c4_map(
     deployment_nodes: list[DeploymentNode],
 ) -> dict[str, str]:
-    """Build archi_id → c4_path for all deployment nodes (public wrapper)."""
-    return _build_deployment_path_index(deployment_nodes)
+    """Build archi_id → c4_path for all deployment nodes."""
+    return build_deployment_path_index(deployment_nodes)
 
 
 def _build_app_path_index(
@@ -227,7 +212,7 @@ def build_deployment_map(
     app_path = _build_app_path_index(systems, sys_domain, sys_subdomain)
 
     # Build tech index: archi_id → qualified c4 path (parent.child for nested)
-    tech_path = _build_deployment_path_index(deployment_nodes)
+    tech_path = build_deployment_path_index(deployment_nodes)
 
     # Only ApplicationComponent is resolvable via app_path (systems/subsystems).
     _app_types = {'ApplicationComponent'}
@@ -327,7 +312,7 @@ def validate_deployment_tree(
     _check_sibling_uniqueness(deployment_nodes, '<root>')
 
     # (d) Qualified paths must not contain '..'
-    paths = _build_deployment_path_index(deployment_nodes)
+    paths = build_deployment_path_index(deployment_nodes)
     for archi_id, path in paths.items():
         if '..' in path:
             node_name = seen_archi.get(archi_id, '?')

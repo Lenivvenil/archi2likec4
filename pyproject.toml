@@ -16,7 +16,7 @@ classifiers = [
     "Natural Language :: English",
     "Typing :: Typed",
 ]
-dependencies = []
+dependencies = ["defusedxml>=0.7"]
 
 [project.urls]
 Homepage = "https://github.com/Lenivvenil/archi2likec4"

@@ -466,8 +466,8 @@ def main():
             mapped_node_paths.add('.'.join(parts[:i]))
 
     # Build node path index
-    from archi2likec4.builders.deployment import _build_deployment_path_index
-    path_index = _build_deployment_path_index(deployment_nodes)
+    from archi2likec4.builders._paths import build_deployment_path_index
+    path_index = build_deployment_path_index(deployment_nodes)
     inv_path = {v: k for k, v in path_index.items()}
 
     orphan_nodes = []

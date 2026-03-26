@@ -7,22 +7,9 @@ from ..models import (
     RawRelationship,
     System,
 )
+from ._paths import build_comp_c4_path
 
 logger = logging.getLogger(__name__)
-
-
-def _build_comp_c4_path(systems: list[System]) -> dict[str, str]:
-    """Build archi_id → c4_path map (system or subsystem full path)."""
-    comp_c4_path: dict[str, str] = {}
-    for sys in systems:
-        if sys.archi_id:
-            comp_c4_path[sys.archi_id] = sys.c4_id
-        for eid in sys.extra_archi_ids:
-            comp_c4_path[eid] = sys.c4_id
-        for sub in sys.subsystems:
-            if sub.archi_id:
-                comp_c4_path[sub.archi_id] = f'{sys.c4_id}.{sub.c4_id}'
-    return comp_c4_path
 
 
 def build_integrations(  # noqa: C901
@@ -37,7 +24,7 @@ def build_integrations(  # noqa: C901
     is the number of eligible relationships with unresolvable endpoints and
     total_eligible is the total number of eligible (non-structural) relationships.
     """
-    comp_c4_path = _build_comp_c4_path(systems)
+    comp_c4_path = build_comp_c4_path(systems)
 
     raw_integrations: list[Integration] = []
     skipped = 0

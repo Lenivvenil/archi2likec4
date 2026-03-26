@@ -3,10 +3,10 @@
 import re
 
 from .models import (
-    _CYRILLIC_MAP,
-    _RESERVED,
+    CYRILLIC_MAP,
     DEFAULT_PROP_MAP,
     DEFAULT_STANDARD_KEYS,
+    RESERVED,
     AppComponent,
     DeploymentNode,
 )
@@ -17,12 +17,26 @@ def transliterate(text: str) -> str:
     result = []
     for ch in text:
         lower = ch.lower()
-        if lower in _CYRILLIC_MAP:
-            mapped = _CYRILLIC_MAP[lower]
+        if lower in CYRILLIC_MAP:
+            mapped = CYRILLIC_MAP[lower]
             result.append(mapped.upper() if ch.isupper() else mapped)
         else:
             result.append(ch)
     return ''.join(result)
+
+
+_VALID_C4_ID = re.compile(r'^[a-z][a-z0-9_-]*$')
+
+
+def validate_c4_id(value: str) -> str:
+    """Validate that *value* is a well-formed LikeC4 identifier.
+
+    Raises ValueError if the identifier contains characters that would produce
+    invalid LikeC4 syntax when interpolated into .c4 output.
+    """
+    if not _VALID_C4_ID.match(value):
+        raise ValueError(f'Invalid LikeC4 identifier: {value!r}')
+    return value
 
 
 def make_id(name: str, prefix: str = '') -> str:
@@ -38,8 +52,9 @@ def make_id(name: str, prefix: str = '') -> str:
         text = f'{prefix}_{text}'
     if text[0].isdigit():
         text = 'n' + text
-    if text in _RESERVED:
+    if text in RESERVED:
         text = text + '_el'
+    assert _VALID_C4_ID.match(text), f'make_id produced invalid identifier: {text!r}'
     return text
 
 

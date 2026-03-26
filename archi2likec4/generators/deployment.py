@@ -44,10 +44,11 @@ def _render_deployment_node(
 def generate_deployment_c4(
     nodes: list[DeploymentNode],
     deployment_map: list[tuple[str, str]] | None = None,
+    env: str = 'prod',
 ) -> str:
     """Generate deployment/topology.c4 using the LikeC4 Deployment Model.
 
-    Wraps the topology in ``deployment { environment prod { ... } }`` and
+    Wraps the topology in ``deployment { environment <env> { ... } }`` and
     adds ``instanceOf <app_c4_path>`` inside each infrastructure node that has
     application components deployed to it (as per deployment_map).
     """
@@ -61,7 +62,7 @@ def generate_deployment_c4(
         '// ── Deployment Topology ──────────────────────────────────',
         'deployment {',
         '',
-        '  environment prod {',
+        f'  environment {env} {{',
         '',
     ]
     for node in sorted(nodes, key=lambda n: n.name):

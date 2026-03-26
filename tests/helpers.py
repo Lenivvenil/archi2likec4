@@ -1,5 +1,9 @@
 """Shared mock objects for tests."""
 
+from pathlib import Path
+
+from archi2likec4.models import DEFAULT_PROP_MAP, DEFAULT_STANDARD_KEYS
+
 
 class MockConfig:
     """Mock for ConvertConfig — all fields with defaults matching ConvertConfig."""
@@ -21,6 +25,13 @@ class MockConfig:
         max_unassigned_systems_warn=20,
         domain_renames=None,
         extra_domain_patterns=None,
+        model_root=None,
+        output_dir=None,
+        property_map=None,
+        standard_keys=None,
+        sync_target=None,
+        sync_protected_top=None,
+        sync_protected_paths=None,
     ):
         self.promote_children = promote_children or {}
         self.promote_warn_threshold = promote_warn_threshold
@@ -38,6 +49,13 @@ class MockConfig:
         self.max_unassigned_systems_warn = max_unassigned_systems_warn
         self.domain_renames = domain_renames or {}
         self.extra_domain_patterns = extra_domain_patterns or []
+        self.model_root = model_root if model_root is not None else Path('architectural_repository/model')
+        self.output_dir = output_dir if output_dir is not None else Path('output')
+        self.property_map = property_map if property_map is not None else dict(DEFAULT_PROP_MAP)
+        self.standard_keys = standard_keys if standard_keys is not None else list(DEFAULT_STANDARD_KEYS)
+        self.sync_target = sync_target
+        self.sync_protected_top = sync_protected_top if sync_protected_top is not None else frozenset()
+        self.sync_protected_paths = sync_protected_paths if sync_protected_paths is not None else frozenset()
 
 
 class MockBuilt:
