@@ -15,6 +15,7 @@ dev = [
     { name = "pytest-cov" },
     { name = "pyyaml" },
     { name = "ruff" },
+    { name = "tomli", marker = "python_full_version < '3.11'" },
 ]
 federation = [
     { name = "pyyaml" },
@@ -35,6 +36,7 @@ requires-dist = [
     { name = "pyyaml", marker = "extra == 'federation'", specifier = ">=6.0" },
     { name = "pyyaml", marker = "extra == 'web'", specifier = ">=6.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
+    { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0" },
 ]
 provides-extras = ["federation", "web", "dev"]
 

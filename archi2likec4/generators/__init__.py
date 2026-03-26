@@ -4,8 +4,7 @@ from .audit import generate_audit_md
 from .deployment import (
     generate_datastore_mapping_c4,
     generate_deployment_c4,
-    generate_deployment_mapping_c4,
-    generate_deployment_view,
+    generate_deployment_overview_view,
 )
 from .domains import generate_domain_c4
 from .entities import generate_entities
@@ -24,8 +23,7 @@ __all__ = [
     'generate_audit_md',
     'generate_datastore_mapping_c4',
     'generate_deployment_c4',
-    'generate_deployment_mapping_c4',
-    'generate_deployment_view',
+    'generate_deployment_overview_view',
     'generate_domain_c4',
     'generate_domain_functional_view',
     'generate_domain_integration_view',

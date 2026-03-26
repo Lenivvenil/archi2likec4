@@ -8,8 +8,18 @@ from ..utils import escape_str
 _MAX_DESC_LEN = 500
 
 
-def _render_deployment_node(node: DeploymentNode, lines: list[str], indent: int) -> None:
-    """Recursively render a DeploymentNode and its children."""
+def _render_deployment_node(
+    node: DeploymentNode,
+    lines: list[str],
+    indent: int,
+    current_path: str,
+    instances: dict[str, list[str]],
+) -> None:
+    """Recursively render a DeploymentNode and its children.
+
+    Appends ``instanceOf <app_path>`` for each application mapped to this node
+    via the deployment_map passed to :func:`generate_deployment_c4`.
+    """
     pad = ' ' * indent
     title = escape_str(node.name)
     lines.append(f"{pad}{node.c4_id} = {node.kind} '{title}' {{")
@@ -22,37 +32,42 @@ def _render_deployment_node(node: DeploymentNode, lines: list[str], indent: int)
     lines.append(f"{pad}    archi_id '{node.archi_id}'")
     lines.append(f"{pad}    tech_type '{node.tech_type}'")
     lines.append(f'{pad}  }}')
+    for app_path in instances.get(current_path, []):
+        lines.append(f'{pad}  instanceOf {app_path}')
     for child in sorted(node.children, key=lambda c: c.name):
         lines.append('')
-        _render_deployment_node(child, lines, indent + 2)
+        child_path = f'{current_path}.{child.c4_id}'
+        _render_deployment_node(child, lines, indent + 2, child_path, instances)
     lines.append(f'{pad}}}')
 
 
-def generate_deployment_c4(nodes: list[DeploymentNode]) -> str:
-    """Generate deployment/topology.c4 with infrastructure nodes and containers."""
+def generate_deployment_c4(
+    nodes: list[DeploymentNode],
+    deployment_map: list[tuple[str, str]] | None = None,
+) -> str:
+    """Generate deployment/topology.c4 using the LikeC4 Deployment Model.
+
+    Wraps the topology in ``deployment { environment prod { ... } }`` and
+    adds ``instanceOf <app_c4_path>`` inside each infrastructure node that has
+    application components deployed to it (as per deployment_map).
+    """
+    # Build inverse index: full infra path → [app c4 paths]
+    instances: dict[str, list[str]] = {}
+    if deployment_map:
+        for app_path, infra_path in deployment_map:
+            instances.setdefault(infra_path, []).append(app_path)
+
     lines = [
         '// ── Deployment Topology ──────────────────────────────────',
-        'model {',
+        'deployment {',
+        '',
+        '  environment prod {',
         '',
     ]
     for node in sorted(nodes, key=lambda n: n.name):
-        _render_deployment_node(node, lines, indent=2)
+        _render_deployment_node(node, lines, indent=4, current_path=node.c4_id, instances=instances)
         lines.append('')
-    lines.append('}')
-    lines.append('')
-    return '\n'.join(lines)
-
-
-def generate_deployment_mapping_c4(mapping: list[tuple[str, str]]) -> str:
-    """Generate deployment/mapping.c4 with app→infrastructure relationships."""
-    lines = [
-        '// ── Deployment Mapping (App → Infrastructure) ────────────',
-        'model {',
-        '',
-    ]
-    for app_path, node_id in sorted(mapping):
-        lines.append(f'  {app_path} -[deployedOn]-> {node_id}')
-    lines.append('')
+    lines.append('  }')
     lines.append('}')
     lines.append('')
     return '\n'.join(lines)
@@ -73,21 +88,15 @@ def generate_datastore_mapping_c4(links: list[tuple[str, str]]) -> str:
     return '\n'.join(lines)
 
 
-def generate_deployment_view() -> str:
-    """Generate views/deployment-architecture.c4."""
-    return """\
-views {
+def generate_deployment_overview_view(env: str = 'prod') -> str:
+    """Generate views/deployment-architecture.c4 using deployment view syntax."""
+    return f"""\
+views {{
 
-  view deployment_architecture {
+  deployment view deployment_architecture {{
     title 'Deployment Architecture'
+    include {env}.**
+  }}
 
-    include
-      element.kind = infraLocation,
-      element.kind = infraZone,
-      element.kind = infraNode,
-      element.kind = infraSoftware,
-      element.kind = dataStore
-  }
-
-}
+}}
 """

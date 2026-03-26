@@ -69,21 +69,21 @@ specification {
   color archi-tech #93D275
   color archi-tech-light #C5E6B8
 
-  element infraNode {
+  deploymentNode infraNode {
     style {
       shape rectangle
       color archi-tech
     }
   }
 
-  element infraSoftware {
+  deploymentNode infraSoftware {
     style {
       shape cylinder
       color archi-tech-light
     }
   }
 
-  element infraZone {
+  deploymentNode infraZone {
     style {
       shape rectangle
       color archi-tech
@@ -91,7 +91,7 @@ specification {
     }
   }
 
-  element infraLocation {
+  deploymentNode infraLocation {
     style {
       shape rectangle
       color archi-tech
@@ -102,11 +102,6 @@ specification {
   // ── Relationship kinds ─────────────────────────────────
   relationship persists {
     color archi-store
-    line dashed
-  }
-
-  relationship deployedOn {
-    color archi-tech
     line dashed
   }
 
