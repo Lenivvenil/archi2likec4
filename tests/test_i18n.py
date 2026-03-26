@@ -18,11 +18,11 @@ class TestGetMsg:
         desc = get_msg('QA-1', 'description', 'ru', count=10)
         assert '10 систем' in desc
 
-    def test_unknown_qa_returns_empty(self):
-        assert get_msg('QA-99', 'title', 'ru') == ''
+    def test_unknown_qa_returns_field_key(self):
+        assert get_msg('QA-99', 'title', 'ru') == 'title'
 
-    def test_unknown_field_returns_empty(self):
-        assert get_msg('QA-1', 'nonexistent', 'ru') == ''
+    def test_unknown_field_returns_field_key(self):
+        assert get_msg('QA-1', 'nonexistent', 'ru') == 'nonexistent'
 
     def test_all_qa_ids_have_both_langs(self):
         for qa_id in [f'QA-{i}' for i in range(1, 11)]:

@@ -527,7 +527,7 @@ def get_msg(qa_id: str, field: str, lang: str = 'ru', **kwargs: object) -> str:
     """
     msgs = _MESSAGES.get(qa_id, {})
     lang_msgs = msgs.get(lang, msgs.get('ru', {}))
-    template = lang_msgs.get(field, '')
+    template = lang_msgs.get(field, field)
     if kwargs:
         try:
             return template.format(**kwargs)
@@ -538,7 +538,8 @@ def get_msg(qa_id: str, field: str, lang: str = 'ru', **kwargs: object) -> str:
 
 def get_qa10_issue(issue_key: str, lang: str = 'ru') -> str:
     """Get localized QA-10 sub-issue label."""
-    return _QA10_ISSUES.get(issue_key, {}).get(lang, issue_key)
+    d = _QA10_ISSUES.get(issue_key, {})
+    return d.get(lang, d.get('ru', issue_key))
 
 
 def get_audit_label(key: str, lang: str = 'ru', **kwargs: object) -> str:

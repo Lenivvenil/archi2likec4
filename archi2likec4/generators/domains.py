@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from ..models import Subdomain, System
-from ..utils import escape_str
+from ..utils import escape_str, validate_c4_id
 
 if TYPE_CHECKING:
     pass
@@ -50,6 +50,7 @@ def generate_domain_c4(
     in a ``subdomain`` block; remaining systems are placed directly under the
     domain (fallback).
     """
+    validate_c4_id(domain_c4_id)
     lines = [
         f'// ── {domain_name} ──────────────────────────────────────',
         'model {',

@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from ..models import AppFunction, Subsystem, System
-from ..utils import escape_str
+from ..utils import escape_str, validate_c4_id
 
 _MAX_DESC_LEN = 500
 _MAX_FN_DESC_LEN = 300
@@ -66,6 +66,8 @@ def generate_system_detail_c4(domain_c4_id: str, sys: System) -> str:
     If the system belongs to a subdomain, the path is
     ``{domain}.{subdomain}.{system}`` instead of ``{domain}.{system}``.
     """
+    validate_c4_id(domain_c4_id)
+    validate_c4_id(sys.c4_id)
     full_path = f'{domain_c4_id}.{sys.subdomain}.{sys.c4_id}' if sys.subdomain else f'{domain_c4_id}.{sys.c4_id}'
     lines = [
         f'// ── {sys.name} (detail) ──────────────────────────────────',

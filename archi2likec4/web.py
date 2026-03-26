@@ -12,7 +12,7 @@ from urllib.parse import urlparse
 if TYPE_CHECKING:
     from flask import Flask
 
-from .exceptions import ConfigError
+from .exceptions import Archi2LikeC4Error, ConfigError
 
 logger = logging.getLogger('archi2likec4.web')
 
@@ -128,8 +128,13 @@ def create_app(
             raise ConfigError(str(e)) from e
         config.model_root = model_root
         config.output_dir = output_dir
-        parsed = _parse(model_root, config)
-        built = _build(parsed, config)
+        try:
+            parsed = _parse(model_root, config)
+            built = _build(parsed, config)
+        except Archi2LikeC4Error:
+            raise
+        except Exception as e:
+            raise Archi2LikeC4Error(f'Pipeline error: {e}') from e
         _, _, _, sv_unresolved, sv_total = _validate(built, config)
         summary, incidents = compute_audit_incidents(built, sv_unresolved, sv_total, config)
         available_domains = sorted(
@@ -152,7 +157,7 @@ def create_app(
             _invalidate_cache()
         return response
 
-    @app.errorhandler(ConfigError)
+    @app.errorhandler(Archi2LikeC4Error)
     def _handle_runtime_error(error):
         return f'<h1>Configuration Error</h1><pre>{html.escape(str(error))}</pre>', 500
 
@@ -275,7 +280,7 @@ def create_app(
         redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name and domain:
             if not _VALID_C4_ID.match(domain):
-                return f'Invalid domain identifier: {domain}', 400
+                return f'Invalid domain identifier: {html.escape(domain)}', 400
             config = _load_config_safe()
             overrides = dict(config.domain_overrides)
             overrides[name] = domain
@@ -324,7 +329,7 @@ def create_app(
         redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if name and domain:
             if not _VALID_C4_ID.match(domain):
-                return f'Invalid domain identifier: {domain}', 400
+                return f'Invalid domain identifier: {html.escape(domain)}', 400
             config = _load_config_safe()
             promote = dict(config.promote_children)
             promote[name] = domain
