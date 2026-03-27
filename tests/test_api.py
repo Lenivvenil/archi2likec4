@@ -7,6 +7,8 @@ import pytest
 from archi2likec4.exceptions import ConfigError, ParseError, ValidationError
 from archi2likec4.pipeline import ConvertResult, convert
 
+_SV_PATCH = 'archi2likec4.pipeline.generate_solution_views'
+
 
 def _make_config(*, strict=False, dry_run=False, sync_target=None):
     cfg = MagicMock()
@@ -23,11 +25,11 @@ class TestConvertReturnsResult:
         """convert() returns a ConvertResult with expected fields."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build') as mock_build, \
-             patch('archi2likec4.pipeline._validate') as mock_validate, \
+             patch(_SV_PATCH, return_value=({}, 0, 0)), \
+             patch('archi2likec4.pipeline._validate', return_value=(1, 0)), \
              patch('archi2likec4.pipeline._generate', return_value=10):
             mock_build.return_value.systems = [MagicMock()] * 3
             mock_build.return_value.integrations = [MagicMock()] * 5
-            mock_validate.return_value = (1, 0, {}, 0, 0)
             cfg = _make_config()
             result = convert(tmp_path, tmp_path / 'out', config=cfg)
         assert isinstance(result, ConvertResult)
@@ -41,11 +43,11 @@ class TestConvertReturnsResult:
         """convert() with dry_run=True does not call _generate."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build') as mock_build, \
-             patch('archi2likec4.pipeline._validate') as mock_validate, \
+             patch(_SV_PATCH, return_value=({}, 0, 0)), \
+             patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
              patch('archi2likec4.pipeline._generate') as mock_gen:
             mock_build.return_value.systems = []
             mock_build.return_value.integrations = []
-            mock_validate.return_value = (0, 0, {}, 0, 0)
             cfg = _make_config()
             result = convert(tmp_path, tmp_path / 'out', config=cfg, dry_run=True)
         mock_gen.assert_not_called()
@@ -56,15 +58,36 @@ class TestConvertReturnsResult:
         with patch('archi2likec4.pipeline.load_config') as mock_load, \
              patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build') as mock_build, \
-             patch('archi2likec4.pipeline._validate') as mock_validate, \
+             patch(_SV_PATCH, return_value=({}, 0, 0)), \
+             patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
              patch('archi2likec4.pipeline._generate', return_value=5):
             cfg = _make_config()
             mock_load.return_value = cfg
             mock_build.return_value.systems = []
             mock_build.return_value.integrations = []
-            mock_validate.return_value = (0, 0, {}, 0, 0)
             convert(tmp_path, tmp_path / 'out')
         mock_load.assert_called_once()
+
+    def test_convert_does_not_mutate_caller_config(self, tmp_path):
+        """convert() must not mutate the ConvertConfig passed by the caller."""
+        from archi2likec4.config import load_config
+        original_cfg = load_config(None)
+        original_model_root = original_cfg.model_root
+        original_output_dir = original_cfg.output_dir
+        original_dry_run = original_cfg.dry_run
+
+        with patch('archi2likec4.pipeline._parse'), \
+             patch('archi2likec4.pipeline._build') as mock_build, \
+             patch(_SV_PATCH, return_value=({}, 0, 0)), \
+             patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
+             patch('archi2likec4.pipeline._generate', return_value=0):
+            mock_build.return_value.systems = []
+            mock_build.return_value.integrations = []
+            convert(tmp_path, tmp_path / 'out', config=original_cfg, dry_run=True)
+
+        assert original_cfg.model_root == original_model_root
+        assert original_cfg.output_dir == original_output_dir
+        assert original_cfg.dry_run == original_dry_run
 
 
 class TestConvertRaisesOnBadInput:
@@ -80,10 +103,10 @@ class TestConvertRaisesOnBadInput:
         """ValidationError when quality gates fail (gate_errors > 0)."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build') as mock_build, \
-             patch('archi2likec4.pipeline._validate') as mock_validate:
+             patch(_SV_PATCH, return_value=({}, 0, 0)), \
+             patch('archi2likec4.pipeline._validate', return_value=(0, 2)):  # 2 errors
             mock_build.return_value.systems = []
             mock_build.return_value.integrations = []
-            mock_validate.return_value = (0, 2, {}, 0, 0)  # 2 errors
             cfg = _make_config()
             with pytest.raises(ValidationError, match='Quality gates failed'):
                 convert(tmp_path, tmp_path / 'out', config=cfg)
@@ -92,10 +115,10 @@ class TestConvertRaisesOnBadInput:
         """ValidationError when strict=True and gate_warnings > 0."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build') as mock_build, \
-             patch('archi2likec4.pipeline._validate') as mock_validate:
+             patch(_SV_PATCH, return_value=({}, 0, 0)), \
+             patch('archi2likec4.pipeline._validate', return_value=(3, 0)):  # 3 warnings
             mock_build.return_value.systems = []
             mock_build.return_value.integrations = []
-            mock_validate.return_value = (3, 0, {}, 0, 0)  # 3 warnings, 0 errors
             cfg = _make_config(strict=True)
             with pytest.raises(ValidationError, match='strict mode'):
                 convert(tmp_path, tmp_path / 'out', config=cfg)

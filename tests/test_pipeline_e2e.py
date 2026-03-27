@@ -187,18 +187,15 @@ class TestValidate:
         """Empty build produces 0 warnings and 0 errors."""
         built = _make_empty_built()
         config = ConvertConfig()
-        warnings, errors, sv_files, sv_unresolved, sv_total = _validate(built, config)
+        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
         assert warnings == 0
         assert errors == 0
-        assert sv_total == 0
-        assert sv_unresolved == 0
-        assert isinstance(sv_files, dict)
 
     def test_orphan_fns_above_threshold_produces_warning(self):
         """orphan_fns exceeding max_orphan_functions_warn triggers a warning."""
         built = _make_empty_built()._replace(orphan_fns=10)
         config = ConvertConfig(max_orphan_functions_warn=5)
-        warnings, errors, _, _, _ = _validate(built, config)
+        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
         assert warnings >= 1
         assert errors == 0
 
@@ -206,7 +203,7 @@ class TestValidate:
         """orphan_fns exactly at threshold does NOT trigger a warning."""
         built = _make_empty_built()._replace(orphan_fns=5)
         config = ConvertConfig(max_orphan_functions_warn=5)
-        warnings, errors, _, _, _ = _validate(built, config)
+        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
         assert warnings == 0
 
     def test_unassigned_above_threshold_produces_warning(self):
@@ -221,7 +218,7 @@ class TestValidate:
             domain_systems={'unassigned': unassigned},
         )
         config = ConvertConfig(max_unassigned_systems_warn=20)
-        warnings, errors, _, _, _ = _validate(built, config)
+        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
         assert warnings >= 1
 
     def test_unassigned_below_threshold_no_warning(self):
@@ -233,13 +230,13 @@ class TestValidate:
             domain_systems={'unassigned': unassigned},
         )
         config = ConvertConfig(max_unassigned_systems_warn=20)
-        warnings, errors, _, _, _ = _validate(built, config)
+        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
         assert warnings == 0
 
     def test_strict_mode_no_criticals_no_extra_warnings(self):
         """strict=True with no critical incidents does not add warnings."""
         built = _make_empty_built()
         config = ConvertConfig(strict=True)
-        warnings, errors, _, _, _ = _validate(built, config)
+        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
         assert warnings == 0
         assert errors == 0
