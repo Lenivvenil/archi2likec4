@@ -86,10 +86,10 @@
 
 Проверяем CI, документацию и cleanup.
 
-- [ ] Issue #25 (нет кэширования в CI): проверить `.github/workflows/` — есть `cache: pip` в `actions/setup-python`
-- [ ] Issue #26 (нет security-сканирования): проверить `.github/workflows/` — есть шаг с `pip-audit` и/или `bandit`
-- [ ] Issue #30 (dead code, deferred imports): проверить `archi2likec4/pipeline.py` — нет неиспользуемых imports на верхнем уровне; deferred imports (`from . import X` внутри функций) оправданы
-- [ ] Issue #31 (неточности в CONTRIBUTING.md): проверить `CONTRIBUTING.md` — описание templates совпадает с реальной структурой; view titles корректны
-- [ ] Issue #32 (CI мелочи): проверить `.github/workflows/` — нет redundant flags; есть explicit `permissions:` блоки
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Issue #25 (нет кэширования в CI): проверить `.github/workflows/` — есть `cache: pip` в `actions/setup-python`
+- [x] Issue #26 (нет security-сканирования): проверить `.github/workflows/` — есть шаг с `pip-audit` и/или `bandit`
+- [x] Issue #30 (dead code, deferred imports): проверить `archi2likec4/pipeline.py` — нет неиспользуемых imports на верхнем уровне; deferred imports (`from . import X` внутри функций) оправданы
+- [x] Issue #31 (неточности в CONTRIBUTING.md): проверить `CONTRIBUTING.md` — описание templates совпадает с реальной структурой; view titles корректны
+- [x] Issue #32 (CI мелочи): проверить `.github/workflows/` — нет redundant flags; есть explicit `permissions:` блоки
+- [x] Add/update tests for the above changes (no code changes needed — verification-only task; added permissions: block to ci.yml)
+- [x] Mark completed
