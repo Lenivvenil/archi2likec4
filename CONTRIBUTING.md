@@ -62,7 +62,7 @@ See the example file for all available options.
 - `archi2likec4/parsers.py` — coArchi XML parsing
 - `archi2likec4/builders/` — system hierarchy and domain assignment (package)
 - `archi2likec4/generators/` — LikeC4 .c4 file generation (package)
-- `archi2likec4/templates/` — Jinja2 templates for .c4 and AUDIT.md
+- `archi2likec4/templates/` — Jinja2 HTML templates for the Flask web UI
 - `archi2likec4/audit_data.py` — structured QA incident computation
 - `archi2likec4/i18n.py` — ru/en message catalog
 - `archi2likec4/federation.py` — federation script generation
