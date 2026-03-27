@@ -368,7 +368,8 @@ def parse_technology_elements(model_root: Path) -> list[TechElement]:
             continue
         try:
             tree = ET.parse(xml_path)
-        except ET.ParseError:
+        except ET.ParseError as e:
+            logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
             continue
         root = tree.getroot()
@@ -441,7 +442,8 @@ def parse_relationships(model_root: Path) -> list[RawRelationship]:
             continue
         try:
             tree = ET.parse(xml_path)
-        except ET.ParseError:
+        except ET.ParseError as e:
+            logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
             continue
         root = tree.getroot()
@@ -701,7 +703,8 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
             continue
         try:
             tree = ET.parse(xml_path)
-        except ET.ParseError:
+        except ET.ParseError as e:
+            logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
             continue
         root = tree.getroot()
