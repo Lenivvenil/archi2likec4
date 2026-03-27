@@ -1,0 +1,67 @@
+# task execution prompt
+# this prompt is used for each task iteration in phase 1
+#
+# available variables:
+#   {{PLAN_FILE}} - path to the plan file being executed
+#   {{PROGRESS_FILE}} - path to the progress log file
+#   {{GOAL}} - human-readable goal description
+#   {{DEFAULT_BRANCH}} - default branch name (main, master, trunk, etc.)
+
+Read the plan file at {{PLAN_FILE}}. Find the FIRST Task section (### Task N: or ### Iteration N:) that has uncompleted checkboxes ([ ]).
+
+If NO Task section has [ ] but ## Success criteria, ## Overview, or ## Context still has [ ]: either satisfy those items and mark them [x] if actionable, or output <<<RALPHEX:ALL_TASKS_DONE>>> if they are verification-only (manual testing, deployment, etc.) — do not loop indefinitely when remaining items are not actionable by you.
+
+If a Task section has [ ] checkboxes you cannot complete (manual testing, deployment verification, external checks): mark them [x] with a note like "[x] manual test (skipped - not automatable)" and proceed. Do not loop indefinitely on non-automatable items inside Task sections.
+
+NOTE: Progress is logged to {{PROGRESS_FILE}} - this file contains detailed execution steps and can be reviewed for debugging.
+
+CRITICAL CONSTRAINT: Complete ONE Task section per iteration.
+A Task section is a "### Task N:" or "### Iteration N:" header with all its checkboxes underneath.
+Complete ALL checkboxes in that section, then STOP.
+Do NOT continue to the next section - the external loop will call you again for it.
+
+## Project context: archi2likec4
+
+Python library that converts coArchi XML (ArchiMate) to LikeC4 .c4 files. Read CLAUDE.md before touching any code. Key rules:
+- Logging: always logging.getLogger(__name__), never hardcode the module name string
+- Exceptions: raise domain exceptions from archi2likec4.exceptions — ConfigError, ParseError, ValidationError
+- Typing: disallow_untyped_defs = true for all modules except web.py, parsers.py, scripts/federate_template.py
+- Line length: 120 chars (ruff)
+- ParseResult (pipeline.py) and BuildResult (_result.py) are the data contracts — all fields fully typed
+- Unit tests use MockConfig and MockBuilt from tests/helpers.py
+- Coverage gate: 85% (pytest --cov-fail-under=85)
+- When creating GitHub issues: gh issue create --title "[PRIORITY] title" --label "labels" with body sections ## Проблема, ## Решение, ## Файлы, ## Трудозатраты
+
+STEP 0 - ANNOUNCE:
+Before starting work, output a brief overview (up to 200 words) explaining:
+- Which task number you picked and its title
+- What the task will accomplish
+- Key files or components involved
+This helps the user understand what's happening in the current iteration.
+
+STEP 1 - IMPLEMENT:
+- Read CLAUDE.md to understand project conventions
+- Read the plan's Overview to understand the work
+- Implement ALL items in the current Task section (all [ ] checkboxes under it)
+- Write tests for the implementation
+
+STEP 2 - VALIDATE:
+- Run the test and lint commands specified in the plan
+- Default validation for this project:
+    ruff check archi2likec4/ tests/
+    python -m pytest tests/ -v --tb=short --cov=archi2likec4 --cov-fail-under=85
+    mypy archi2likec4/ --ignore-missing-imports
+- Fix any failures, repeat until all validation passes
+
+STEP 3 - COMPLETE (after validation passes):
+- Update progress: edit {{PLAN_FILE}} and change [ ] to [x] for each checkbox you implemented in the current Task section. If Task sections are complete but ## Success criteria, ## Overview, or ## Context has [ ] items that the implementation satisfies, mark them [x] in this same edit to avoid extra loop iterations. If any such items are NOT satisfied, do NOT mark them and do NOT output ALL_TASKS_DONE — continue to the next iteration to address them.
+- Commit all changes (code + updated plan) with message: feat: <brief task description>
+- Check if any [ ] checkboxes remain in Task sections (### Task N: or ### Iteration N:)
+- If NO more [ ] checkboxes in the entire plan, output exactly: <<<RALPHEX:ALL_TASKS_DONE>>>
+- If more Task sections have [ ] checkboxes, STOP HERE - do not continue
+
+If any phase fails after reasonable fix attempts, output exactly: <<<RALPHEX:TASK_FAILED>>>
+
+REMINDER: ONE section (Task/Iteration) per loop cycle. After commit, STOP and let the loop handle the next section.
+
+OUTPUT FORMAT: No markdown formatting (no **bold**, `code`, # headers). Plain text and - lists are fine. Do not echo phase names or step numbers - just do the work.
