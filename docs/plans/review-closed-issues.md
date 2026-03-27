@@ -44,13 +44,13 @@
 
 Проверяем обработку ошибок в parsers и pipeline.
 
-- [ ] Issue #16 (непоследовательная обработка XML): проверить `archi2likec4/parsers.py` — все `ET.ParseError` ловятся через `logger.warning`, не пробрасываются raw
-- [ ] Issue #17 (_detect_special_folder сравнение с None): проверить что используется `is None` / `is not None`, не `== None`
-- [ ] Issue #22 (_load_data не ловит ParseError): проверить `archi2likec4/pipeline.py` — `_load_data()` ловит `ParseError` наряду с `ConfigError`
-- [ ] Найти тесты в `tests/test_parsers.py`, `tests/test_pipeline_e2e.py`
-- [ ] Если fix отсутствует — создать `gh issue create` с меткой `regression`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Issue #16 (непоследовательная обработка XML): проверить `archi2likec4/parsers.py` — все `ET.ParseError` ловятся через `logger.warning`, не пробрасываются raw
+- [x] Issue #17 (_detect_special_folder сравнение с None): проверить что используется `is None` / `is not None`, не `== None`
+- [x] Issue #22 (_load_data не ловит ParseError): проверить `archi2likec4/pipeline.py` — `_load_data()` ловит `ParseError` наряду с `ConfigError`
+- [x] Найти тесты в `tests/test_parsers.py`, `tests/test_pipeline_e2e.py`
+- [x] Если fix отсутствует — создать `gh issue create` с меткой `regression`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 

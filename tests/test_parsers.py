@@ -983,3 +983,77 @@ class TestEmptyArchiId:
         with caplog.at_level(logging.WARNING):
             parse_location_elements(tmp_path)
         assert any('empty id' in r.message for r in caplog.records)
+
+
+# ── Issue #16: consistent ET.ParseError handling ─────────────────────────
+
+class TestParserErrorConsistency:
+    """Issue #16: all parsers must use logger.warning for ET.ParseError, not propagate raw."""
+
+    def test_location_malformed_warns_not_raises(self, tmp_path, caplog):
+        """parse_location_elements: malformed XML is logged at WARNING level, no exception."""
+        import logging
+        other_dir = tmp_path / 'other'
+        other_dir.mkdir()
+        (other_dir / 'Location_bad.xml').write_text('<broken<xml', encoding='utf-8')
+        with caplog.at_level(logging.WARNING):
+            result = parse_location_elements(tmp_path)
+        assert result == []
+        assert any('Cannot parse' in r.message for r in caplog.records)
+
+    def test_location_partial_malformed_returns_valid(self, tmp_path):
+        """parse_location_elements: one malformed + one valid → returns only valid."""
+        other_dir = tmp_path / 'other'
+        other_dir.mkdir()
+        (other_dir / 'Location_bad.xml').write_text('<broken', encoding='utf-8')
+        (other_dir / 'Location_ok.xml').write_text(
+            '<archimate:Location xmlns:archimate="http://www.archimatetool.com/archimate"'
+            ' id="loc-1" name="DC1"/>',
+            encoding='utf-8',
+        )
+        result = parse_location_elements(tmp_path)
+        assert len(result) == 1
+        assert result[0].archi_id == 'loc-1'
+
+
+# ── Issue #17: _detect_special_folder uses `is None` ─────────────────────
+
+class TestDetectSpecialFolderNoneCheck:
+    """Issue #17: _detect_special_folder must use `is None`, not `== None`."""
+
+    def test_no_application_dir_returns_empty(self, tmp_path):
+        """When application/ dir does not exist, model_root stays None → return ''."""
+        xml = tmp_path / 'SomePath' / 'ApplicationComponent_x.xml'
+        xml.parent.mkdir(parents=True)
+        xml.touch()
+        # No application/ directory: model_root will remain None → return ''
+        assert _detect_special_folder(xml) == ''
+
+    def test_application_dir_no_special_folder_returns_empty(self, tmp_path):
+        """application/ exists but no !-prefixed folder → return ''."""
+        app_dir = tmp_path / 'application'
+        sub = app_dir / 'normal_folder'
+        sub.mkdir(parents=True)
+        (sub / 'folder.xml').write_text('<folder name="Normal"/>', encoding='utf-8')
+        xml = sub / 'ApplicationComponent_x.xml'
+        xml.touch()
+        assert _detect_special_folder(xml) == ''
+
+
+# ── Issue #22: ParseError propagates from _parse ─────────────────────────
+
+class TestPipelineParseErrorPropagation:
+    """Issue #22: ParseError from parsers must propagate through convert() to caller."""
+
+    def test_convert_propagates_parse_error(self, tmp_path):
+        """When _parse raises ParseError, convert() re-raises it unchanged."""
+        from unittest.mock import patch
+
+        from archi2likec4.exceptions import ParseError as PE
+        from archi2likec4.pipeline import convert
+        from tests.helpers import MockConfig
+
+        cfg = MockConfig()
+        with patch('archi2likec4.pipeline._parse', side_effect=PE('all XMLs bad')), \
+                pytest.raises(PE, match='all XMLs bad'):
+            convert(tmp_path, tmp_path / 'out', config=cfg)

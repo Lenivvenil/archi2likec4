@@ -661,8 +661,8 @@ def parse_location_elements(model_root: Path) -> list[TechElement]:
             continue
         try:
             tree = ET.parse(xml_path)
-        except ET.ParseError:
-            logger.debug('Skipping malformed Location XML: %s', xml_path)
+        except ET.ParseError as e:
+            logger.warning('Cannot parse %s: %s', xml_path, e)
             continue
         root = tree.getroot()
         name = root.get('name', '').strip()
