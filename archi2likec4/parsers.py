@@ -374,7 +374,7 @@ def parse_technology_elements(model_root: Path) -> list[TechElement]:
             continue
         root = tree.getroot()
         name = root.get('name', '').strip()
-        archi_id = root.get('id', '')
+        archi_id = root.get('id', '').strip()
         documentation = root.get('documentation', '')
         if not name:
             continue
@@ -666,7 +666,7 @@ def parse_location_elements(model_root: Path) -> list[TechElement]:
             continue
         root = tree.getroot()
         name = root.get('name', '').strip()
-        archi_id = root.get('id', '')
+        archi_id = root.get('id', '').strip()
         documentation = root.get('documentation', '')
         if not name:
             continue

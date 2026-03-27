@@ -79,7 +79,7 @@ def app_client(tmp_path):
     with patch('archi2likec4.config.load_config', return_value=config), \
          patch('archi2likec4.pipeline._parse', return_value=MagicMock()), \
          patch('archi2likec4.pipeline._build', return_value=mock_built), \
-         patch('archi2likec4.pipeline._validate', return_value=(0, 0, {}, 0, 0)), \
+         patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
          patch('archi2likec4.audit_data.compute_audit_incidents',
                return_value=(summary, incidents)):
         app = web.create_app(
@@ -273,7 +273,7 @@ def app_client_with_subdomains(tmp_path):
     with patch('archi2likec4.config.load_config', return_value=config), \
          patch('archi2likec4.pipeline._parse', return_value=MagicMock()), \
          patch('archi2likec4.pipeline._build', return_value=mock_built), \
-         patch('archi2likec4.pipeline._validate', return_value=(0, 0, {}, 0, 0)), \
+         patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
          patch('archi2likec4.audit_data.compute_audit_incidents',
                return_value=(summary, incidents)):
         app = web.create_app(
@@ -365,7 +365,7 @@ class TestXSSPrevention:
         })
         assert resp.status_code == 400
         body = resp.data.decode()
-        assert '&lt;img' in body or '<img' not in body
+        assert '&lt;img' in body
 
     def test_promote_system_xss_input_rejected(self, app_client):
         """promote_system with XSS payload should return 400."""

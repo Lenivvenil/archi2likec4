@@ -25,9 +25,10 @@ class TestValidateNoSideEffects:
         assert len(result) == 2
 
     def test_validate_does_not_mutate_built(self) -> None:
+        import copy
         built = MockBuilt(orphan_fns=10, domain_systems={'unassigned': ['a', 'b']})
         orphan_before = built.orphan_fns
-        ds_before = dict(built.domain_systems)
+        ds_before = copy.deepcopy(built.domain_systems)
         _validate(built, MockConfig(), sv_unresolved=0, sv_total=10)
         assert built.orphan_fns == orphan_before
         assert built.domain_systems == ds_before

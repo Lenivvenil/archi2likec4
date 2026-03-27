@@ -135,8 +135,8 @@ def create_app(
             raise
         except Exception as e:
             raise Archi2LikeC4Error(f'Pipeline error: {e}') from e
-        _, _, _, sv_unresolved, sv_total = _validate(built, config)
-        summary, incidents = compute_audit_incidents(built, sv_unresolved, sv_total, config)
+        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
+        summary, incidents = compute_audit_incidents(built, 0, 0, config)
         available_domains = sorted(
             d for d in built.domain_systems
             if d != 'unassigned' and built.domain_systems[d]
