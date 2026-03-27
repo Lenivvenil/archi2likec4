@@ -79,6 +79,8 @@ def app_client(tmp_path):
     with patch('archi2likec4.config.load_config', return_value=config), \
          patch('archi2likec4.pipeline._parse', return_value=MagicMock()), \
          patch('archi2likec4.pipeline._build', return_value=mock_built), \
+         patch('archi2likec4.pipeline._build_solution_view_index', return_value={}), \
+         patch('archi2likec4.generators.views.generate_solution_views', return_value=({}, 0, 0)), \
          patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
          patch('archi2likec4.audit_data.compute_audit_incidents',
                return_value=(summary, incidents)):
@@ -273,6 +275,8 @@ def app_client_with_subdomains(tmp_path):
     with patch('archi2likec4.config.load_config', return_value=config), \
          patch('archi2likec4.pipeline._parse', return_value=MagicMock()), \
          patch('archi2likec4.pipeline._build', return_value=mock_built), \
+         patch('archi2likec4.pipeline._build_solution_view_index', return_value={}), \
+         patch('archi2likec4.generators.views.generate_solution_views', return_value=({}, 0, 0)), \
          patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
          patch('archi2likec4.audit_data.compute_audit_incidents',
                return_value=(summary, incidents)):

@@ -121,7 +121,8 @@ def create_app(
         if '_data' in _cache and now - _cache.get('_ts', 0) < _CACHE_TTL:
             return _cache['_data']
 
-        from .pipeline import _build, _parse, _validate
+        from .generators.views import generate_solution_views
+        from .pipeline import _build, _build_solution_view_index, _parse, _validate
         try:
             config = load_config(config_path)
         except (FileNotFoundError, ConfigError, OSError) as e:
@@ -135,8 +136,19 @@ def create_app(
             raise
         except Exception as e:
             raise Archi2LikeC4Error(f'Pipeline error: {e}') from e
-        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
-        summary, incidents = compute_audit_incidents(built, 0, 0, config)
+        sys_subdomain = _build_solution_view_index(built)
+        _, sv_unresolved, sv_total = generate_solution_views(
+            built.solution_views, built.archi_to_c4, built.sys_domain,
+            built.relationships,
+            promoted_archi_to_c4=built.promoted_archi_to_c4,
+            tech_archi_to_c4=built.tech_archi_to_c4,
+            entity_archi_ids={e.archi_id for e in built.entities},
+            deployment_map=built.deployment_map,
+            sys_subdomain=sys_subdomain or None,
+            deployment_env=config.deployment_env,
+        )
+        warnings, errors = _validate(built, config, sv_unresolved=sv_unresolved, sv_total=sv_total)
+        summary, incidents = compute_audit_incidents(built, sv_unresolved, sv_total, config)
         available_domains = sorted(
             d for d in built.domain_systems
             if d != 'unassigned' and built.domain_systems[d]
