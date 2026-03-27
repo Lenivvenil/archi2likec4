@@ -73,12 +73,12 @@
 
 Проверяем тесты и i18n.
 
-- [ ] Issue #20 (приватные константы models.py в utils.py): проверить `archi2likec4/utils.py` — нет импортов `_` констант из `models.py`; если нужны константы — они публичные
-- [ ] Issue #23 (i18n fallback непоследователен): проверить `archi2likec4/i18n.py` — `get_qa10_issue()` имеет fallback на `'ru'` как и остальные функции
-- [ ] Issue #24 (MockConfig неполный): проверить `tests/helpers.py` — `MockConfig` содержит все поля из `ConvertConfig` включая `audit_suppress`, `audit_suppress_incidents`, `promote_warn_threshold`, `standard_keys`, `deployment_env`, `language`, и `promote_children`
-- [ ] Если fix отсутствует — создать `gh issue create` с меткой `regression`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Issue #20 (приватные константы models.py в utils.py): проверить `archi2likec4/utils.py` — нет импортов `_` констант из `models.py`; если нужны константы — они публичные
+- [x] Issue #23 (i18n fallback непоследователен): проверить `archi2likec4/i18n.py` — `get_qa10_issue()` имеет fallback на `'ru'` как и остальные функции
+- [x] Issue #24 (MockConfig неполный): проверить `tests/helpers.py` — `MockConfig` содержит все поля из `ConvertConfig` включая `audit_suppress`, `audit_suppress_incidents`, `promote_warn_threshold`, `standard_keys`, `deployment_env`, `language`, и `promote_children`
+- [x] Если fix отсутствует — создать `gh issue create` с меткой `regression`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 

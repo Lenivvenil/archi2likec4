@@ -29,6 +29,7 @@ class MockConfig:
         output_dir=None,
         property_map=None,
         standard_keys=None,
+        deployment_env='prod',
         sync_target=None,
         sync_protected_top=None,
         sync_protected_paths=None,
@@ -53,6 +54,7 @@ class MockConfig:
         self.output_dir = output_dir if output_dir is not None else Path('output')
         self.property_map = property_map if property_map is not None else dict(DEFAULT_PROP_MAP)
         self.standard_keys = standard_keys if standard_keys is not None else list(DEFAULT_STANDARD_KEYS)
+        self.deployment_env = deployment_env
         self.sync_target = sync_target
         self.sync_protected_top = sync_protected_top if sync_protected_top is not None else frozenset()
         self.sync_protected_paths = sync_protected_paths if sync_protected_paths is not None else frozenset()
