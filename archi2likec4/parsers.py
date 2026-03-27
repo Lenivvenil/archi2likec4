@@ -378,6 +378,9 @@ def parse_technology_elements(model_root: Path) -> list[TechElement]:
         documentation = root.get('documentation', '')
         if not name:
             continue
+        if not archi_id:
+            logger.warning('Skipping TechElement with empty id in %s', xml_path)
+            continue
 
         # Extract tech_type from XML tag: 'archimate:Node' → 'Node'
         tag = root.tag
@@ -666,6 +669,9 @@ def parse_location_elements(model_root: Path) -> list[TechElement]:
         archi_id = root.get('id', '')
         documentation = root.get('documentation', '')
         if not name:
+            continue
+        if not archi_id:
+            logger.warning('Skipping Location with empty id in %s', xml_path)
             continue
         results.append(TechElement(
             archi_id=archi_id, name=name,

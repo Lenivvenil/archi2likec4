@@ -337,3 +337,52 @@ class TestOpenRedirect:
         })
         assert resp.status_code == 302
         assert resp.headers['Location'].endswith('/')
+
+
+# ── XSS prevention (Issue #21) ────────────────────────────────────────
+
+class TestXSSPrevention:
+    """Issue #21: domain field must be validated/escaped before HTML output."""
+
+    def test_assign_domain_xss_input_rejected(self, app_client):
+        """assign_domain with XSS payload should return 400, not reflect raw HTML."""
+        xss = '<script>alert(1)</script>'
+        resp = app_client.post('/assign-domain', data={
+            'name': 'TestSys',
+            'domain': xss,
+        })
+        assert resp.status_code == 400
+        body = resp.data.decode()
+        # Raw script tag must not appear unescaped in response
+        assert '<script>' not in body
+
+    def test_assign_domain_xss_input_escaped_in_response(self, app_client):
+        """assign_domain error response must html-escape the domain value."""
+        xss = '<img src=x onerror=alert(1)>'
+        resp = app_client.post('/assign-domain', data={
+            'name': 'TestSys',
+            'domain': xss,
+        })
+        assert resp.status_code == 400
+        body = resp.data.decode()
+        assert '&lt;img' in body or '<img' not in body
+
+    def test_promote_system_xss_input_rejected(self, app_client):
+        """promote_system with XSS payload should return 400."""
+        xss = '<script>alert(1)</script>'
+        resp = app_client.post('/promote-system', data={
+            'name': 'TestSys',
+            'domain': xss,
+        })
+        assert resp.status_code == 400
+        body = resp.data.decode()
+        assert '<script>' not in body
+
+    def test_assign_domain_valid_id_accepted(self, app_client):
+        """assign_domain with valid c4 id should not return 400."""
+        resp = app_client.post('/assign-domain', data={
+            'name': 'TestSys',
+            'domain': 'valid-domain',
+        })
+        # Should redirect (302), not bad request
+        assert resp.status_code in (302, 200)

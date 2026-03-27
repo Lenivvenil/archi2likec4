@@ -30,13 +30,13 @@
 
 Проверяем безопасность: XSS, валидация входных данных.
 
-- [ ] Issue #21 (XSS в web.py): проверить `archi2likec4/web.py` — все места где `domain` подставляется в HTML ответы используют `html.escape()`
-- [ ] Issue #18 (пустой archi_id): проверить `archi2likec4/parsers.py` — после `.get('id', '')` есть проверка на пустую строку с `logger.warning` и skip
-- [ ] Issue #15 (нет валидации c4_id): проверить что c4_id проходит через валидацию перед интерполяцией в `.c4` синтаксис (недопустимые символы, пустая строка)
-- [ ] Найти тесты для каждого случая в `tests/test_web.py`, `tests/test_parsers.py`
-- [ ] Если fix отсутствует — создать `gh issue create` с меткой `regression`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Issue #21 (XSS в web.py): проверить `archi2likec4/web.py` — все места где `domain` подставляется в HTML ответы используют `html.escape()`
+- [x] Issue #18 (пустой archi_id): проверить `archi2likec4/parsers.py` — после `.get('id', '')` есть проверка на пустую строку с `logger.warning` и skip; добавлены проверки для `parse_technology_elements` и `parse_location_elements` (regression fix)
+- [x] Issue #15 (нет валидации c4_id): проверить что c4_id проходит через валидацию перед интерполяцией в `.c4` синтаксис (недопустимые символы, пустая строка)
+- [x] Найти тесты для каждого случая в `tests/test_web.py`, `tests/test_parsers.py`
+- [x] Если fix отсутствует — создать `gh issue create` с меткой `regression`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 

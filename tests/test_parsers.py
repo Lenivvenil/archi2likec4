@@ -925,3 +925,61 @@ class TestXmlSecurity:
         assert parsers_module.ET is defused_et, (
             "parsers.py must use defusedxml.ElementTree, not xml.etree.ElementTree"
         )
+
+
+# ── Issue #18: empty archi_id validation ─────────────────────────────────
+
+class TestEmptyArchiId:
+    """Issue #18: parsers must skip elements with empty id and log a warning."""
+
+    def test_tech_element_empty_id_skipped(self, tmp_path):
+        """parse_technology_elements: element with empty id must be skipped."""
+        tech_dir = tmp_path / 'technology'
+        tech_dir.mkdir()
+        (tech_dir / 'Node_n1.xml').write_text(
+            '<archimate:Node xmlns:archimate="http://www.archimatetool.com/archimate"'
+            ' name="Server" id=""/>',
+            encoding='utf-8',
+        )
+        result = parse_technology_elements(tmp_path)
+        assert result == []
+
+    def test_tech_element_empty_id_warns(self, tmp_path, caplog):
+        """parse_technology_elements: empty id must produce a warning."""
+        import logging
+        tech_dir = tmp_path / 'technology'
+        tech_dir.mkdir()
+        (tech_dir / 'Node_n1.xml').write_text(
+            '<archimate:Node xmlns:archimate="http://www.archimatetool.com/archimate"'
+            ' name="Server" id=""/>',
+            encoding='utf-8',
+        )
+        with caplog.at_level(logging.WARNING):
+            parse_technology_elements(tmp_path)
+        assert any('empty id' in r.message for r in caplog.records)
+
+    def test_location_element_empty_id_skipped(self, tmp_path):
+        """parse_location_elements: element with empty id must be skipped."""
+        other_dir = tmp_path / 'other'
+        other_dir.mkdir()
+        (other_dir / 'Location_loc1.xml').write_text(
+            '<archimate:Location xmlns:archimate="http://www.archimatetool.com/archimate"'
+            ' name="Datacenter" id=""/>',
+            encoding='utf-8',
+        )
+        result = parse_location_elements(tmp_path)
+        assert result == []
+
+    def test_location_element_empty_id_warns(self, tmp_path, caplog):
+        """parse_location_elements: empty id must produce a warning."""
+        import logging
+        other_dir = tmp_path / 'other'
+        other_dir.mkdir()
+        (other_dir / 'Location_loc1.xml').write_text(
+            '<archimate:Location xmlns:archimate="http://www.archimatetool.com/archimate"'
+            ' name="Datacenter" id=""/>',
+            encoding='utf-8',
+        )
+        with caplog.at_level(logging.WARNING):
+            parse_location_elements(tmp_path)
+        assert any('empty id' in r.message for r in caplog.records)
