@@ -45,11 +45,11 @@ def _detect_special_folder(xml_path: Path) -> str:
             try:
                 tree = ET.parse(folder_xml)
                 root = tree.getroot()
-                folder_name = root.get('name', '')
+                folder_name: str = root.get('name', '') or ''
                 if folder_name.startswith('!'):
                     return folder_name
             except ET.ParseError:
-                logger.debug('Failed to parse folder.xml: %s', folder_xml)
+                logger.warning('Failed to parse folder.xml: %s', folder_xml)
         current = current.parent
     return ''
 
@@ -67,7 +67,7 @@ def _is_in_trash(xml_path: Path, base_dir: Path) -> bool:
                 if name == 'trash':
                     return True
             except ET.ParseError:
-                logger.debug('Failed to parse folder.xml: %s', folder_xml)
+                logger.warning('Failed to parse folder.xml: %s', folder_xml)
         current = current.parent
     return False
 
@@ -86,11 +86,11 @@ def _find_parent_component(xml_path: Path, app_dir: Path) -> str:
             try:
                 tree = ET.parse(ac_xmls[0])
                 root = tree.getroot()
-                archi_id = root.get('id', '')
+                archi_id: str = root.get('id', '') or ''
                 if archi_id:
                     return archi_id
             except ET.ParseError:
-                logger.debug('Skipping malformed XML: %s', ac_xmls[0])
+                logger.warning('Skipping malformed XML: %s', ac_xmls[0])
         elif len(ac_xmls) > 1:
             # Multiple components: try to match by folder name
             folder_xml = current / 'folder.xml'
@@ -100,18 +100,18 @@ def _find_parent_component(xml_path: Path, app_dir: Path) -> str:
                     ft = ET.parse(folder_xml)
                     folder_name = ft.getroot().get('name', '').strip().lower()
                 except ET.ParseError:
-                    logger.debug('Skipping malformed folder.xml: %s', folder_xml)
+                    logger.warning('Skipping malformed folder.xml: %s', folder_xml)
             if folder_name:
                 for ac_xml in ac_xmls:
                     try:
                         tree = ET.parse(ac_xml)
                         root = tree.getroot()
                         ac_name = root.get('name', '').strip().lower()
-                        archi_id = root.get('id', '')
+                        archi_id = str(root.get('id', '') or '')
                         if ac_name == folder_name and archi_id:
                             return archi_id
                     except ET.ParseError:
-                        logger.debug('Skipping malformed XML: %s', ac_xml)
+                        logger.warning('Skipping malformed XML: %s', ac_xml)
             # Still ambiguous — skip and walk up
         current = current.parent
     return ''
@@ -493,7 +493,7 @@ def _find_functional_areas_dir(diagrams_dir: Path) -> Path | None:
             if name.lower().replace(' ', '_') == 'functional_areas':
                 return child
         except ET.ParseError:
-            logger.debug('Skipping malformed folder.xml: %s', folder_xml)
+            logger.warning('Skipping malformed folder.xml: %s', folder_xml)
     return None
 
 
@@ -527,7 +527,7 @@ def parse_domain_mapping(
             tree = ET.parse(folder_xml)
             domain_name = tree.getroot().get('name', '').strip()
         except ET.ParseError:
-            logger.debug('Skipping malformed folder.xml: %s', folder_xml)
+            logger.warning('Skipping malformed folder.xml: %s', folder_xml)
             continue
         if not domain_name:
             continue
@@ -543,7 +543,7 @@ def parse_domain_mapping(
             try:
                 tree = ET.parse(view_xml)
             except ET.ParseError:
-                logger.debug('Skipping malformed diagram XML: %s', view_xml)
+                logger.warning('Skipping malformed diagram XML: %s', view_xml)
                 continue
             _extract_app_component_refs(tree.getroot(), archi_ids)
 
@@ -594,7 +594,7 @@ def parse_subdomains(
             tree = ET.parse(folder_xml)
             domain_name = tree.getroot().get('name', '').strip()
         except ET.ParseError:
-            logger.debug('Skipping malformed folder.xml: %s', folder_xml)
+            logger.warning('Skipping malformed folder.xml: %s', folder_xml)
             continue
         if not domain_name:
             continue
@@ -617,7 +617,7 @@ def parse_subdomains(
                 sub_tree = ET.parse(sub_folder_xml)
                 subdomain_name = sub_tree.getroot().get('name', '').strip()
             except ET.ParseError:
-                logger.debug('Skipping malformed folder.xml: %s', sub_folder_xml)
+                logger.warning('Skipping malformed folder.xml: %s', sub_folder_xml)
                 continue
             if not subdomain_name:
                 continue
@@ -632,7 +632,7 @@ def parse_subdomains(
                 try:
                     view_tree = ET.parse(view_xml)
                 except ET.ParseError:
-                    logger.debug('Skipping malformed diagram XML: %s', view_xml)
+                    logger.warning('Skipping malformed diagram XML: %s', view_xml)
                     continue
                 _extract_app_component_refs(view_tree.getroot(), component_ids)
 

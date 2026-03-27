@@ -1,6 +1,9 @@
 """Tests verifying MEDIUM refactoring fixes: #9, #10, #11, #12, #13."""
 
+import ast
 import copy
+import importlib
+import inspect
 
 from archi2likec4.config import ConvertConfig
 from archi2likec4.exceptions import (
@@ -9,7 +12,7 @@ from archi2likec4.exceptions import (
     GenerateError,
 )
 from archi2likec4.generators._common import render_metadata, truncate_desc
-from archi2likec4.pipeline import _validate
+from archi2likec4.pipeline import _validate, convert
 from tests.helpers import MockBuilt, MockConfig
 
 # --- Issue #9: _validate has no side effects ---
@@ -63,6 +66,33 @@ class TestConfigCopy:
         cfg.dry_run = True
         assert cfg.dry_run is True
 
+    def test_convert_does_not_mutate_caller_config(self, tmp_path) -> None:
+        """Regression: convert() must copy the config object, not mutate the caller's."""
+
+        model = tmp_path / 'model'
+        app = model / 'application'
+        app.mkdir(parents=True)
+        (app / 'ApplicationComponent_s1.xml').write_text(
+            '<element id="s-1" name="Sys1"/>', encoding='utf-8',
+        )
+        (model / 'relations').mkdir()
+        (model / 'diagrams').mkdir()
+
+        original = ConvertConfig(
+            promote_children={},
+            domain_renames={},
+            extra_domain_patterns=[],
+        )
+        dry_run_before = original.dry_run
+        model_root_before = original.model_root
+        output_dir_before = original.output_dir
+
+        convert(model, tmp_path / 'out', config=original, dry_run=True)
+
+        assert original.dry_run is dry_run_before
+        assert original.model_root == model_root_before
+        assert original.output_dir == output_dir_before
+
 
 # --- Issue #11: BuildError and GenerateError exist ---
 
@@ -110,6 +140,39 @@ class TestTruncateDesc:
         text = 'a' * 500
         assert truncate_desc(text) == text
 
+    def test_generators_use_truncate_desc(self) -> None:
+        """Regression: generators must import AND call truncate_desc, with no local re-implementation."""
+        _GENERATOR_MODULES = ['domains', 'systems', 'entities', 'deployment']
+        for name in _GENERATOR_MODULES:
+            mod = importlib.import_module(f'archi2likec4.generators.{name}')
+            source = inspect.getsource(mod)
+            tree = ast.parse(source)
+            imports_truncate = any(
+                isinstance(node, ast.ImportFrom)
+                and node.module == '_common'
+                and any(alias.name == 'truncate_desc' for alias in node.names)
+                for node in ast.walk(tree)
+            )
+            assert imports_truncate, (
+                f'archi2likec4/generators/{name}.py must import truncate_desc from ._common'
+            )
+            calls_truncate = any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == 'truncate_desc'
+                for node in ast.walk(tree)
+            )
+            assert calls_truncate, (
+                f'archi2likec4/generators/{name}.py must actually call truncate_desc()'
+            )
+            local_defs = [
+                node.name for node in ast.walk(tree)
+                if isinstance(node, ast.FunctionDef) and node.name == 'truncate_desc'
+            ]
+            assert not local_defs, (
+                f'archi2likec4/generators/{name}.py must not redefine truncate_desc locally'
+            )
+
 
 # --- Issue #13: render_metadata helper ---
 
@@ -140,3 +203,36 @@ class TestRenderMetadata:
         render_metadata(lines, 'id-789', '')
         assert lines[0] == 'existing line'
         assert len(lines) == 4
+
+    def test_generators_use_render_metadata(self) -> None:
+        """Regression: generators must import AND call render_metadata, with no local re-implementation."""
+        _GENERATOR_MODULES = ['domains', 'systems', 'entities', 'deployment']
+        for name in _GENERATOR_MODULES:
+            mod = importlib.import_module(f'archi2likec4.generators.{name}')
+            source = inspect.getsource(mod)
+            tree = ast.parse(source)
+            imports_render = any(
+                isinstance(node, ast.ImportFrom)
+                and node.module == '_common'
+                and any(alias.name == 'render_metadata' for alias in node.names)
+                for node in ast.walk(tree)
+            )
+            assert imports_render, (
+                f'archi2likec4/generators/{name}.py must import render_metadata from ._common'
+            )
+            calls_render = any(
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Name)
+                and node.func.id == 'render_metadata'
+                for node in ast.walk(tree)
+            )
+            assert calls_render, (
+                f'archi2likec4/generators/{name}.py must actually call render_metadata()'
+            )
+            local_defs = [
+                node.name for node in ast.walk(tree)
+                if isinstance(node, ast.FunctionDef) and node.name == 'render_metadata'
+            ]
+            assert not local_defs, (
+                f'archi2likec4/generators/{name}.py must not redefine render_metadata locally'
+            )

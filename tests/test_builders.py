@@ -2117,23 +2117,44 @@ class TestBuilderEncapsulation:
     """Issue #1: builder submodules must not import private _ functions from each other."""
 
     def test_no_private_cross_imports_between_builder_submodules(self):
-        """No submodule in builders/ should import a _ function from a sibling submodule."""
+        """No submodule in builders/ should import a _ function from a sibling submodule.
+
+        Dynamically discovers all builder submodules and checks both relative
+        and absolute imports.
+        """
         import ast
         import importlib
         import inspect
+        from pathlib import Path
 
-        submod_names = ['systems', 'domains', 'data', 'integrations', 'deployment']
+        builders_dir = Path(importlib.import_module('archi2likec4.builders').__file__).parent
+        submod_names = [
+            p.stem for p in sorted(builders_dir.glob('*.py'))
+            if p.stem != '__init__'
+        ]
+        assert len(submod_names) >= 5, f'Expected at least 5 builder submodules, found {submod_names}'
 
         for name in submod_names:
             mod = importlib.import_module(f'archi2likec4.builders.{name}')
             source = inspect.getsource(mod)
             tree = ast.parse(source)
+            siblings = [s for s in submod_names if s != name]
             for node in ast.walk(tree):
                 if not isinstance(node, ast.ImportFrom):
                     continue
-                if node.level > 0 and node.module in submod_names:
+                # Check relative imports: from .sibling import _foo
+                if node.level > 0 and node.module in siblings:
                     for alias in node.names:
                         assert not alias.name.startswith('_'), (
                             f'archi2likec4/builders/{name}.py imports private '
                             f'{alias.name!r} from .{node.module}'
                         )
+                # Check absolute imports: from archi2likec4.builders.sibling import _foo
+                if node.level == 0 and node.module:
+                    for sibling in siblings:
+                        if node.module == f'archi2likec4.builders.{sibling}':
+                            for alias in node.names:
+                                assert not alias.name.startswith('_'), (
+                                    f'archi2likec4/builders/{name}.py imports private '
+                                    f'{alias.name!r} from {node.module}'
+                                )
