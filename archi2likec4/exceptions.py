@@ -15,3 +15,11 @@ class ParseError(Archi2LikeC4Error):
 
 class ValidationError(Archi2LikeC4Error):
     """Raised when the built model fails quality-gate validation."""
+
+
+class BuildError(Archi2LikeC4Error):
+    """Raised when the build phase encounters an unrecoverable error."""
+
+
+class GenerateError(Archi2LikeC4Error):
+    """Raised when the generate phase cannot write output files."""

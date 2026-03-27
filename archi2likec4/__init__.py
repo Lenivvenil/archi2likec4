@@ -8,7 +8,7 @@ except _PkgNotFound:
     __version__ = '1.3.0'
 
 from .config import ConvertConfig, load_config
-from .exceptions import Archi2LikeC4Error, ConfigError, ParseError, ValidationError
+from .exceptions import Archi2LikeC4Error, BuildError, ConfigError, GenerateError, ParseError, ValidationError
 from .pipeline import ConvertResult, convert
 from .pipeline import main as run_pipeline
 
@@ -20,7 +20,9 @@ __all__ = [
     'ConvertResult',
     'run_pipeline',
     'Archi2LikeC4Error',
+    'BuildError',
     'ConfigError',
+    'GenerateError',
     'ParseError',
     'ValidationError',
 ]
