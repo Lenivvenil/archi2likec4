@@ -910,3 +910,18 @@ class TestParserErrorPaths:
         xml = sub / 'ApplicationComponent_x.xml'
         xml.touch()
         assert _detect_special_folder(xml) == ''
+
+
+# ── XML security (Issue #7) ───────────────────────────────────────────────
+
+class TestXmlSecurity:
+    """Issue #7: parsers must use defusedxml to prevent XXE attacks."""
+
+    def test_parsers_uses_defusedxml_not_stdlib(self):
+        """ET alias in parsers must be defusedxml.ElementTree, not xml.etree.ElementTree."""
+        import defusedxml.ElementTree as defused_et
+
+        import archi2likec4.parsers as parsers_module
+        assert parsers_module.ET is defused_et, (
+            "parsers.py must use defusedxml.ElementTree, not xml.etree.ElementTree"
+        )

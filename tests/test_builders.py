@@ -2109,3 +2109,31 @@ class TestValidateDeploymentTree:
         violations = validate_deployment_tree([root])
         # 'top..x' contains '..' — must be caught
         assert any('..' in v for v in violations), f'Expected double-dot violation, got: {violations}'
+
+
+# ── Builder encapsulation (Issue #1) ────────────────────────────────────
+
+class TestBuilderEncapsulation:
+    """Issue #1: builder submodules must not import private _ functions from each other."""
+
+    def test_no_private_cross_imports_between_builder_submodules(self):
+        """No submodule in builders/ should import a _ function from a sibling submodule."""
+        import ast
+        import importlib
+        import inspect
+
+        submod_names = ['systems', 'domains', 'data', 'integrations', 'deployment']
+
+        for name in submod_names:
+            mod = importlib.import_module(f'archi2likec4.builders.{name}')
+            source = inspect.getsource(mod)
+            tree = ast.parse(source)
+            for node in ast.walk(tree):
+                if not isinstance(node, ast.ImportFrom):
+                    continue
+                if node.level > 0 and node.module in submod_names:
+                    for alias in node.names:
+                        assert not alias.name.startswith('_'), (
+                            f'archi2likec4/builders/{name}.py imports private '
+                            f'{alias.name!r} from .{node.module}'
+                        )

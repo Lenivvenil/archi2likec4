@@ -853,6 +853,22 @@ class TestSyncProtectedConfig:
         assert 'sync_protected_paths' in _KNOWN_YAML_KEYS
 
 
+# ── Bank-specific defaults (Issue #6) ────────────────────────────────────
+
+class TestBankSpecificDefaults:
+    """Issue #6: organization-specific defaults must be empty; values go in .archi2likec4.yaml."""
+
+    def test_default_domain_renames_is_empty(self):
+        assert _DEFAULT_DOMAIN_RENAMES == {}
+
+    def test_default_promote_children_is_empty(self):
+        assert _DEFAULT_PROMOTE_CHILDREN == {}
+
+    def test_default_extra_domain_patterns_is_empty(self):
+        from archi2likec4.config import _DEFAULT_EXTRA_DOMAIN_PATTERNS
+        assert _DEFAULT_EXTRA_DOMAIN_PATTERNS == []
+
+
 class TestExceptionHierarchy:
     """Verify exception class relationships."""
 

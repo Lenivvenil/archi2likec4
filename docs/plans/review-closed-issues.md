@@ -16,13 +16,13 @@
 
 Проверяем три самых важных закрытых issue — CRITICAL и HIGH приоритет.
 
-- [ ] Issue #1 (приватные функции между builder-подмодулями): проверить `archi2likec4/builders/`, что нет прямого импорта `_` функций между подмодулями; все публичные через `__init__.py`
-- [ ] Issue #6 (банко-специфичные дефолты в config.py и models.py): проверить, что `_DEFAULT_DOMAIN_RENAMES`, `_DEFAULT_EXTRA_DOMAIN_PATTERNS`, `_DEFAULT_PROMOTE_CHILDREN` помечены как bank-specific или вынесены из дефолтной конфигурации
-- [ ] Issue #7 (XXE через xml.etree.ElementTree): проверить `archi2likec4/parsers.py` — все `ET.parse()` заменены на `defusedxml`; проверить `pyproject.toml` что `defusedxml` в зависимостях
-- [ ] Для каждого: найти соответствующий тест в `tests/` который это покрывает
-- [ ] Если fix отсутствует — создать `gh issue create` с меткой `regression`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Issue #1 (приватные функции между builder-подмодулями): проверить `archi2likec4/builders/`, что нет прямого импорта `_` функций между подмодулями; все публичные через `__init__.py`
+- [x] Issue #6 (банко-специфичные дефолты в config.py и models.py): проверить, что `_DEFAULT_DOMAIN_RENAMES`, `_DEFAULT_EXTRA_DOMAIN_PATTERNS`, `_DEFAULT_PROMOTE_CHILDREN` помечены как bank-specific или вынесены из дефолтной конфигурации
+- [x] Issue #7 (XXE через xml.etree.ElementTree): проверить `archi2likec4/parsers.py` — все `ET.parse()` заменены на `defusedxml`; проверить `pyproject.toml` что `defusedxml` в зависимостях
+- [x] Для каждого: найти соответствующий тест в `tests/` который это покрывает
+- [x] Если fix отсутствует — создать `gh issue create` с меткой `regression`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 
