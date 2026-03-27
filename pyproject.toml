@@ -51,8 +51,10 @@ python_version = "3.10"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+
+[[tool.mypy.overrides]]
+module = ["flask", "flask.*", "yaml", "defusedxml", "defusedxml.*"]
 ignore_missing_imports = true
-disable_error_code = ["import-untyped"]
 
 [[tool.mypy.overrides]]
 module = "archi2likec4.web"

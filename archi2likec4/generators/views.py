@@ -143,6 +143,7 @@ def generate_solution_views(  # noqa: C901
     entity_archi_ids: set[str] | None = None,
     deployment_map: list[tuple[str, str]] | None = None,
     sys_subdomain: dict[str, str] | None = None,
+    deployment_env: str = 'prod',
 ) -> tuple[dict[str, str], int, int]:
     """Generate solution view .c4 files.
 
@@ -488,9 +489,9 @@ def generate_solution_views(  # noqa: C901
                         lines.append(f"  deployment view {view_id} {{")
                         lines.append(f"    title '{escape_str(title)}'")
                         lines.append("    include")
-                        # Infra paths: prod.<path>.** to include all nested deployment nodes
+                        # Infra paths: <env>.<path>.** to include all nested deployment nodes
                         for ip in infra_paths:
-                            lines.append(f"      prod.{ip}.**,")
+                            lines.append(f"      {deployment_env}.{ip}.**,")
                         if lines[-1].endswith(','):
                             lines[-1] = lines[-1][:-1]
                         lines.append("  }")

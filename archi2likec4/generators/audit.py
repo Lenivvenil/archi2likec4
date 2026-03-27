@@ -9,11 +9,12 @@ from ..i18n import get_audit_label
 
 if TYPE_CHECKING:
     from ..audit_data import AuditIncident
+    from ..builders._result import BuildResult
     from ..config import ConvertConfig
 
 
 def generate_audit_md(
-    built: object,
+    built: BuildResult,
     sv_unresolved: int,
     sv_total: int,
     config: ConvertConfig,
@@ -28,7 +29,7 @@ def generate_audit_md(
     from .. import __version__
     from ..audit_data import compute_audit_incidents
 
-    lang: str = getattr(config, 'language', 'ru')
+    lang: str = config.language
     summary, all_incidents = compute_audit_incidents(built, sv_unresolved, sv_total, config)
 
     # Filter out suppressed and zero-count incidents (keep for suppressed_count tracking)

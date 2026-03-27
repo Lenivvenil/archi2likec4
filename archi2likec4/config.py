@@ -96,6 +96,9 @@ class ConvertConfig:
     # i18n: language for AUDIT.md and Web UI ('ru' or 'en')
     language: str = 'ru'
 
+    # Deployment environment name used in LikeC4 deployment views
+    deployment_env: str = 'prod'
+
     # Auto-sync: copy output_dir to this directory after generation
     sync_target: Path | None = None
 
@@ -160,7 +163,7 @@ _KNOWN_YAML_KEYS: set[str] = {
     'quality_gates',
     'audit_suppress', 'audit_suppress_incidents',
     'domain_overrides', 'subdomain_overrides', 'reviewed_systems',
-    'language', 'strict', 'sync_target',
+    'language', 'deployment_env', 'strict', 'sync_target',
     'property_map', 'standard_keys',
     'sync_protected_top', 'sync_protected_paths',
 }
@@ -349,6 +352,12 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             raise ConfigError(
                 f"language: expected 'ru' or 'en', got '{data['language']}'")
         config.language = lang
+
+    if 'deployment_env' in data:
+        env_val = str(data['deployment_env']).strip()
+        if not env_val:
+            raise ConfigError("deployment_env: must not be empty")
+        config.deployment_env = env_val
 
     if 'strict' in data:
         val = data['strict']

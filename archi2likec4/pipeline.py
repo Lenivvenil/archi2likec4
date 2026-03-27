@@ -546,7 +546,8 @@ def _generate(
         deployment_dir = output_dir / 'deployment'
         deployment_dir.mkdir(exist_ok=True)
         (deployment_dir / 'topology.c4').write_text(
-            generate_deployment_c4(built.deployment_nodes, built.deployment_map),
+            generate_deployment_c4(built.deployment_nodes, built.deployment_map,
+                                   env=config.deployment_env),
             encoding='utf-8')
         file_count += 1
 
@@ -717,6 +718,7 @@ def convert(
         entity_archi_ids={e.archi_id for e in built.entities},
         deployment_map=built.deployment_map,
         sys_subdomain=sys_subdomain or None,
+        deployment_env=config.deployment_env,
     )
 
     gate_warnings, gate_errors = _validate(built, config, sv_unresolved, sv_total)

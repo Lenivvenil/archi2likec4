@@ -1,9 +1,16 @@
 """Structured audit data: compute quality incidents as data objects."""
 
+from __future__ import annotations
+
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING
 
 from .i18n import get_msg, get_qa10_issue
-from .models import DEFAULT_STANDARD_KEYS, Subsystem, System
+from .models import DeploymentNode, Subsystem, System
+
+if TYPE_CHECKING:
+    from .builders._result import BuildResult
+    from .config import ConvertConfig
 
 # Maximum number of affected items shown in an incident's detail table.
 _MAX_AFFECTED_ITEMS = 30
@@ -52,10 +59,10 @@ _FIELD_LABELS: dict[str, str] = {
 
 
 def compute_audit_incidents(
-    built: object,
+    built: BuildResult,
     sv_unresolved: int,
     sv_total: int,
-    config: object,
+    config: ConvertConfig,
 ) -> tuple[AuditSummary, list[AuditIncident]]:
     """Compute structured audit incidents from build results.
 
@@ -64,8 +71,8 @@ def compute_audit_incidents(
     config.audit_suppress_incidents (QA-IDs to skip entirely).
     Uses config.language ('ru'|'en') for incident text.
     """
-    lang: str = getattr(config, 'language', 'ru')
-    systems: list[System] = built.systems  # type: ignore[attr-defined]
+    lang: str = config.language
+    systems: list[System] = built.systems
 
     # Flat list of all systems + subsystems
     all_sys: list[System | Subsystem] = []
@@ -73,18 +80,18 @@ def compute_audit_incidents(
         all_sys.append(sys_item)
         all_sys.extend(sys_item.subsystems)
 
-    suppress: set[str] = set(getattr(config, 'audit_suppress', []))
-    suppress_incidents: set[str] = set(getattr(config, 'audit_suppress_incidents', []))
+    suppress: set[str] = set(config.audit_suppress)
+    suppress_incidents: set[str] = set(config.audit_suppress_incidents)
 
     total_sys = len(systems)
     incidents: list[AuditIncident] = []
 
     # ── Summary metrics ──────────────────────────────────────────────
-    unassigned: list[System] = built.domain_systems.get('unassigned', [])  # type: ignore[attr-defined]
+    unassigned: list[System] = built.domain_systems.get('unassigned', [])
     unassigned_count = len(unassigned)
     assigned_count = total_sys - unassigned_count
 
-    standard_keys = getattr(config, 'standard_keys', DEFAULT_STANDARD_KEYS)
+    standard_keys = config.standard_keys
     meta_check_keys = [k for k in standard_keys if k != 'full_name']
     meta_possible = len(all_sys) * len(meta_check_keys)
     meta_filled = sum(
@@ -93,7 +100,7 @@ def compute_audit_incidents(
     )
     meta_pct = round(meta_filled / meta_possible * 100) if meta_possible else 100
 
-    deployment_map: list = built.deployment_map  # type: ignore[attr-defined]
+    deployment_map: list[tuple[str, str]] = built.deployment_map
     # Collect all paths present in the deployment map.
     # A system is considered deployed if any deployment path equals its c4_path
     # or starts with its c4_path followed by '.' (subsystem/component entries).
@@ -106,8 +113,8 @@ def compute_audit_incidents(
         total_subsystems=sum(len(s.subsystems) for s in systems),
         meta_completeness_pct=meta_pct,
         assigned_count=assigned_count,
-        total_integrations=len(built.integrations),  # type: ignore[attr-defined]
-        total_entities=len(built.entities),  # type: ignore[attr-defined]
+        total_integrations=len(built.integrations),
+        total_entities=len(built.entities),
         deployment_mappings=len(deployment_map),
     )
 
@@ -192,8 +199,8 @@ def compute_audit_incidents(
         ))
 
     # ── QA-4: Promote candidates ─────────────────────────────────────
-    promote_threshold = getattr(config, 'promote_warn_threshold', 10)
-    already_promoted = set(getattr(config, 'promote_children', {}).keys())
+    promote_threshold = config.promote_warn_threshold
+    already_promoted = set(config.promote_children.keys())
     candidates = [
         (s.name, len(s.subsystems))
         for s in systems
@@ -238,7 +245,7 @@ def compute_audit_incidents(
         ))
 
     # ── QA-6: Orphan functions ───────────────────────────────────────
-    orphan_fns: int = built.orphan_fns  # type: ignore[attr-defined]
+    orphan_fns: int = built.orphan_fns
     if orphan_fns > 0:
         incidents.append(AuditIncident(
             qa_id='QA-6',
@@ -252,8 +259,8 @@ def compute_audit_incidents(
         ))
 
     # ── QA-7: Lost integrations ──────────────────────────────────────
-    skipped_intg: int = getattr(built, 'intg_skipped', 0)
-    total_eligible: int = getattr(built, 'intg_total_eligible', 0)
+    skipped_intg: int = built.intg_skipped
+    total_eligible: int = built.intg_total_eligible
     if skipped_intg > 0 and total_eligible > 0:
         pct = round(skipped_intg / total_eligible * 100)
         incidents.append(AuditIncident(
@@ -328,7 +335,7 @@ def compute_audit_incidents(
         ))
 
     # ── QA-10: Deployment hierarchy issues ─────────────────────────
-    deployment_nodes: list = built.deployment_nodes  # type: ignore[attr-defined]
+    deployment_nodes: list[DeploymentNode] = built.deployment_nodes
     if deployment_nodes:
         from .utils import flatten_deployment_nodes
         all_dn = flatten_deployment_nodes(deployment_nodes)
@@ -358,9 +365,9 @@ def compute_audit_incidents(
             # Collect ALL archi_ids that are transitively nested under any Location
             under_location: set[str] = set()
 
-            def _collect_descendants(node: object) -> None:
-                for child in node.children:  # type: ignore[attr-defined]
-                    under_location.add(child.archi_id)  # type: ignore[attr-defined]
+            def _collect_descendants(node: DeploymentNode) -> None:
+                for child in node.children:
+                    under_location.add(child.archi_id)
                     _collect_descendants(child)
 
             for loc in locations:
