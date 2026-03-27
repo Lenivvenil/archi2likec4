@@ -4,6 +4,9 @@ from __future__ import annotations
 
 from ..models import DataAccess, DataEntity
 from ..utils import escape_str
+from ._common import render_metadata, truncate_desc
+
+_MAX_ENTITY_DESC_LEN = 300
 
 
 def generate_entities(entities: list[DataEntity], data_access: list[DataAccess]) -> str:
@@ -34,24 +37,13 @@ def generate_entities(entities: list[DataEntity], data_access: list[DataAccess])
     else:
         for entity in entities:
             title = escape_str(entity.name)
+            lines.append(f"  {entity.c4_id} = dataEntity '{title}' {{")
+            lines.append('    #entity')
             if entity.documentation:
-                desc = escape_str(entity.documentation)
-                if len(desc) > 300:
-                    desc = desc[:297] + '...'
-                lines.append(f"  {entity.c4_id} = dataEntity '{title}' {{")
-                lines.append('    #entity')
+                desc = truncate_desc(escape_str(entity.documentation), max_len=_MAX_ENTITY_DESC_LEN)
                 lines.append(f"    description '{desc}'")
-                lines.append("    metadata {")
-                lines.append(f"      archi_id '{entity.archi_id}'")
-                lines.append("    }")
-                lines.append("  }")
-            else:
-                lines.append(f"  {entity.c4_id} = dataEntity '{title}' {{")
-                lines.append('    #entity')
-                lines.append("    metadata {")
-                lines.append(f"      archi_id '{entity.archi_id}'")
-                lines.append("    }")
-                lines.append("  }")
+            render_metadata(lines, entity.archi_id, '  ')
+            lines.append("  }")
             lines.append('')
 
     # Access relationships (migrated from ArchiMate AccessRelationship)

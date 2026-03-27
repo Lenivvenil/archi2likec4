@@ -2,15 +2,9 @@
 
 from __future__ import annotations
 
-from typing import TYPE_CHECKING
-
 from ..models import Subdomain, System
 from ..utils import escape_str, validate_c4_id
-
-if TYPE_CHECKING:
-    pass
-
-_MAX_DESC_LEN = 500
+from ._common import render_metadata, truncate_desc
 
 
 def _render_system(sys: System, lines: list[str], indent: int = 2) -> None:
@@ -20,20 +14,14 @@ def _render_system(sys: System, lines: list[str], indent: int = 2) -> None:
     for tag in sys.tags:
         lines.append(f'{pad}  #{tag}')
     if sys.documentation:
-        desc = escape_str(sys.documentation)
-        if len(desc) > _MAX_DESC_LEN:
-            desc = desc[:_MAX_DESC_LEN - 3] + '...'
+        desc = truncate_desc(escape_str(sys.documentation))
         lines.append(f"{pad}  description '{desc}'")
     for url, link_title in sys.links:
         lines.append(f"{pad}  link {url} '{escape_str(link_title)}'")
-    lines.append(f'{pad}  metadata {{')
-    lines.append(f"{pad}    archi_id '{sys.archi_id}'")
-    for key, value in sys.metadata.items():
-        lines.append(f"{pad}    {key} '{escape_str(value)}'")
+    extra: dict[str, str] = {key: escape_str(value) for key, value in sys.metadata.items()}
     if sys.api_interfaces:
-        ifaces_str = '; '.join(sys.api_interfaces)
-        lines.append(f"{pad}    api_interfaces '{escape_str(ifaces_str)}'")
-    lines.append(f'{pad}  }}')
+        extra['api_interfaces'] = escape_str('; '.join(sys.api_interfaces))
+    render_metadata(lines, sys.archi_id, pad, extra=extra or None)
     # Subsystems and functions are rendered in systems/{c4_id}.c4 via extend
     lines.append(f'{pad}}}')
 

@@ -4,30 +4,20 @@ from __future__ import annotations
 
 from ..models import AppFunction, Subsystem, System
 from ..utils import escape_str, validate_c4_id
+from ._common import render_metadata, truncate_desc
 
-_MAX_DESC_LEN = 500
 _MAX_FN_DESC_LEN = 300
 
 
 def _render_appfunction(fn: AppFunction, lines: list[str], indent: int = 6) -> None:
     pad = ' ' * indent
     title = escape_str(fn.name)
+    lines.append(f"{pad}{fn.c4_id} = appFunction '{title}' {{")
     if fn.documentation:
-        desc = escape_str(fn.documentation)
-        if len(desc) > _MAX_FN_DESC_LEN:
-            desc = desc[:_MAX_FN_DESC_LEN - 3] + '...'
-        lines.append(f"{pad}{fn.c4_id} = appFunction '{title}' {{")
+        desc = truncate_desc(escape_str(fn.documentation), max_len=_MAX_FN_DESC_LEN)
         lines.append(f"{pad}  description '{desc}'")
-        lines.append(f"{pad}  metadata {{")
-        lines.append(f"{pad}    archi_id '{fn.archi_id}'")
-        lines.append(f"{pad}  }}")
-        lines.append(f'{pad}}}')
-    else:
-        lines.append(f"{pad}{fn.c4_id} = appFunction '{title}' {{")
-        lines.append(f"{pad}  metadata {{")
-        lines.append(f"{pad}    archi_id '{fn.archi_id}'")
-        lines.append(f"{pad}  }}")
-        lines.append(f'{pad}}}')
+    render_metadata(lines, fn.archi_id, pad)
+    lines.append(f'{pad}}}')
 
 
 def _render_subsystem(sub: Subsystem, lines: list[str], indent: int = 4) -> None:
@@ -37,17 +27,12 @@ def _render_subsystem(sub: Subsystem, lines: list[str], indent: int = 4) -> None
     for tag in sub.tags:
         lines.append(f'{pad}  #{tag}')
     if sub.documentation:
-        desc = escape_str(sub.documentation)
-        if len(desc) > _MAX_DESC_LEN:
-            desc = desc[:_MAX_DESC_LEN - 3] + '...'
+        desc = truncate_desc(escape_str(sub.documentation))
         lines.append(f"{pad}  description '{desc}'")
     for url, link_title in sub.links:
         lines.append(f"{pad}  link {url} '{escape_str(link_title)}'")
-    lines.append(f'{pad}  metadata {{')
-    lines.append(f"{pad}    archi_id '{sub.archi_id}'")
-    for key, value in sub.metadata.items():
-        lines.append(f"{pad}    {key} '{escape_str(value)}'")
-    lines.append(f'{pad}  }}')
+    extra: dict[str, str] = {key: escape_str(value) for key, value in sub.metadata.items()}
+    render_metadata(lines, sub.archi_id, pad, extra=extra or None)
     # Render nested appFunctions
     if sub.functions:
         lines.append('')

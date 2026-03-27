@@ -4,8 +4,7 @@ from __future__ import annotations
 
 from ..models import DeploymentNode
 from ..utils import escape_str
-
-_MAX_DESC_LEN = 500
+from ._common import render_metadata, truncate_desc
 
 
 def _render_deployment_node(
@@ -24,14 +23,9 @@ def _render_deployment_node(
     title = escape_str(node.name)
     lines.append(f"{pad}{node.c4_id} = {node.kind} '{title}' {{")
     if node.documentation:
-        desc = escape_str(node.documentation)
-        if len(desc) > _MAX_DESC_LEN:
-            desc = desc[:_MAX_DESC_LEN - 3] + '...'
+        desc = truncate_desc(escape_str(node.documentation))
         lines.append(f"{pad}  description '{desc}'")
-    lines.append(f'{pad}  metadata {{')
-    lines.append(f"{pad}    archi_id '{node.archi_id}'")
-    lines.append(f"{pad}    tech_type '{node.tech_type}'")
-    lines.append(f'{pad}  }}')
+    render_metadata(lines, node.archi_id, pad, extra={'tech_type': node.tech_type})
     for app_path in instances.get(current_path, []):
         lines.append(f'{pad}  instanceOf {app_path}')
     for child in sorted(node.children, key=lambda c: c.name):
