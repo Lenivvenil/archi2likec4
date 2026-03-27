@@ -58,14 +58,14 @@
 
 Проверяем рефакторинги: side effects, дублирование кода, иерархия исключений.
 
-- [ ] Issue #9 (validate-фаза с побочными эффектами): проверить `archi2likec4/pipeline.py` — `_validate()` не пишет файлы, не мутирует `built`
-- [ ] Issue #10 (config мутируется in-place): проверить `archi2likec4/pipeline.py` — `convert()` делает копию config или config immutable
-- [ ] Issue #11 (нет BuildError/GenerateError): проверить `archi2likec4/exceptions.py` — есть ли `BuildError` и `GenerateError` в иерархии
-- [ ] Issue #12 (дублирование truncate): проверить `archi2likec4/generators/_common.py` — есть `truncate_desc()` хелпер, используемый всеми генераторами
-- [ ] Issue #13 (дублирование metadata): проверить `archi2likec4/generators/_common.py` — есть `render_metadata()` хелпер
-- [ ] Если fix отсутствует — создать `gh issue create` с меткой `regression`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Issue #9 (validate-фаза с побочными эффектами): проверить `archi2likec4/pipeline.py` — `_validate()` не пишет файлы, не мутирует `built`
+- [x] Issue #10 (config мутируется in-place): проверить `archi2likec4/pipeline.py` — `convert()` делает копию config или config immutable
+- [x] Issue #11 (нет BuildError/GenerateError): проверить `archi2likec4/exceptions.py` — есть ли `BuildError` и `GenerateError` в иерархии
+- [x] Issue #12 (дублирование truncate): проверить `archi2likec4/generators/_common.py` — есть `truncate_desc()` хелпер, используемый всеми генераторами
+- [x] Issue #13 (дублирование metadata): проверить `archi2likec4/generators/_common.py` — есть `render_metadata()` хелпер
+- [x] Если fix отсутствует — создать `gh issue create` с меткой `regression`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 
