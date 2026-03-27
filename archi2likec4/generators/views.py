@@ -258,17 +258,6 @@ def generate_solution_views(  # noqa: C901
                             c4_paths.append(child_path)
                     else:
                         unresolved += 1
-            else:
-                total_elements += len(sv.element_archi_ids)
-                for aid in sv.element_archi_ids:
-                    c4_path = archi_to_c4.get(aid)
-                    if c4_path:
-                        c4_paths.append(c4_path)
-                    elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
-                        for child_path in promoted_archi_to_c4[aid]:
-                            c4_paths.append(child_path)
-                    else:
-                        unresolved += 1
             total_unresolved += unresolved
 
             if not c4_paths and not entity_paths and sv.view_type != 'deployment':

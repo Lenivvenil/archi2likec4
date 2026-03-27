@@ -1,5 +1,7 @@
 """Pipeline: main() orchestration — parse, build, validate, generate."""
 
+import argparse
+import copy
 import logging
 import shutil
 import sys
@@ -7,6 +9,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
+from .audit_data import compute_audit_incidents
 from .builders import (
     BuildResult,
     apply_domain_prefix,
@@ -68,6 +71,7 @@ from .parsers import (
     parse_subdomains,
     parse_technology_elements,
 )
+from .utils import flatten_deployment_nodes
 
 logger = logging.getLogger(__name__)
 
@@ -287,7 +291,6 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     if reparented:
         logger.info('Visual nesting enrichment: %d nodes re-parented', reparented)
 
-    from .utils import flatten_deployment_nodes
     all_dn = flatten_deployment_nodes(deployment_nodes)
     logger.info('%d top-level deployment nodes, %d total',
                 len(deployment_nodes), len(all_dn))
@@ -345,27 +348,24 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     )
 
 
-def _validate(built: BuildResult, config: ConvertConfig) -> tuple[int, int, dict, int, int]:
-    """Phase 3: quality gates. Returns (warnings, errors, sv_files, sv_unresolved, sv_total)."""
-    warnings = 0
-    errors = 0
-
-    # Generate solution views (needed for both validation and output)
-    sys_subdomain_built: dict[str, str] = {
+def _build_solution_view_index(built: BuildResult) -> dict[str, str]:
+    """Build sys_subdomain map used by generate_solution_views."""
+    return {
         s.c4_id: s.subdomain
         for d_sys_list in built.domain_systems.values()
         for s in d_sys_list
         if s.subdomain
     }
-    solution_view_files, sv_unresolved, sv_total = generate_solution_views(
-        built.solution_views, built.archi_to_c4, built.sys_domain,
-        built.relationships,
-        promoted_archi_to_c4=built.promoted_archi_to_c4,
-        tech_archi_to_c4=built.tech_archi_to_c4,
-        entity_archi_ids={e.archi_id for e in built.entities},
-        deployment_map=built.deployment_map,
-        sys_subdomain=sys_subdomain_built or None,
-    )
+
+
+def _validate(built: BuildResult, config: ConvertConfig, sv_unresolved: int, sv_total: int) -> tuple[int, int]:
+    """Phase 3: quality gates. Returns (warnings, errors).
+
+    Solution views are generated separately in _generate so that this phase
+    remains purely diagnostic — it checks invariants but produces no artifacts.
+    """
+    warnings = 0
+    errors = 0
 
     # Gate 1: Solution view unresolved ratio
     if sv_total > 0:
@@ -398,7 +398,6 @@ def _validate(built: BuildResult, config: ConvertConfig) -> tuple[int, int, dict
 
     # Gate 4: Critical QA incidents (strict mode only)
     if config.strict:
-        from .audit_data import compute_audit_incidents
         _, audit_incidents = compute_audit_incidents(built, sv_unresolved, sv_total, config)
         critical = [i for i in audit_incidents
                     if i.severity == 'Critical' and not i.suppressed and i.count > 0]
@@ -408,19 +407,22 @@ def _validate(built: BuildResult, config: ConvertConfig) -> tuple[int, int, dict
                                inc.qa_id, inc.title, inc.count)
             warnings += len(critical)
 
-    return warnings, errors, solution_view_files, sv_unresolved, sv_total
+    return warnings, errors
 
 
 def _generate(
     built: BuildResult,
     output_dir: Path,
     config: ConvertConfig,
-    solution_view_files: dict[str, str],
+    solution_view_files: dict[str, str] | None = None,
     sv_unresolved: int = 0,
     sv_total: int = 0,
 ) -> int:
     """Phase 4: generate .c4 files."""
     logger.info('Generating files...')
+
+    if solution_view_files is None:
+        solution_view_files = {}
 
     # Resolve once so all subsequent operations use the same absolute path
     output_dir = output_dir.resolve()
@@ -697,13 +699,27 @@ def convert(
     if config is None:
         config = load_config(Path(config_path) if config_path else None)
 
+    config = copy.copy(config)
     config.model_root = model_root_path
     config.output_dir = output_dir_path
     config.dry_run = dry_run
 
     parsed = _parse(model_root_path, config)
     built = _build(parsed, config)
-    gate_warnings, gate_errors, sv_files, sv_unresolved, sv_total = _validate(built, config)
+
+    # Compute solution views once — metrics go to _validate, files go to _generate
+    sys_subdomain = _build_solution_view_index(built)
+    sv_files, sv_unresolved, sv_total = generate_solution_views(
+        built.solution_views, built.archi_to_c4, built.sys_domain,
+        built.relationships,
+        promoted_archi_to_c4=built.promoted_archi_to_c4,
+        tech_archi_to_c4=built.tech_archi_to_c4,
+        entity_archi_ids={e.archi_id for e in built.entities},
+        deployment_map=built.deployment_map,
+        sys_subdomain=sys_subdomain or None,
+    )
+
+    gate_warnings, gate_errors = _validate(built, config, sv_unresolved, sv_total)
 
     if gate_errors > 0:
         raise ValidationError(f'Quality gates failed with {gate_errors} error(s)')
@@ -731,8 +747,6 @@ def convert(
 # ── CLI entry point ──────────────────────────────────────────────────────
 
 def main() -> None:
-    import argparse
-
     from . import __version__
 
     # Subcommand dispatch for 'web' (before argparse — backward compatible)
