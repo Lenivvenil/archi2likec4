@@ -108,8 +108,8 @@ class TestDashboard:
     def test_dashboard_shows_metrics(self, app_client):
         resp = app_client.get('/')
         html = resp.data.decode()
-        assert '5' in html  # total_systems
-        assert '10' in html  # total_subsystems
+        assert '>5<' in html or '>5 ' in html or ' 5<' in html  # total_systems
+        assert '>10<' in html or '>10 ' in html or ' 10<' in html  # total_subsystems
         assert '60%' in html  # meta_completeness_pct
 
     def test_dashboard_shows_incidents(self, app_client):

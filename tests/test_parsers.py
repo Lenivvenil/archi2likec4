@@ -984,6 +984,30 @@ class TestEmptyArchiId:
             parse_location_elements(tmp_path)
         assert any('empty id' in r.message for r in caplog.records)
 
+    def test_tech_element_whitespace_id_skipped(self, tmp_path):
+        """parse_technology_elements: element with whitespace-only id must be skipped."""
+        tech_dir = tmp_path / 'technology'
+        tech_dir.mkdir()
+        (tech_dir / 'Node_n1.xml').write_text(
+            '<archimate:Node xmlns:archimate="http://www.archimatetool.com/archimate"'
+            ' name="Server" id="   "/>',
+            encoding='utf-8',
+        )
+        result = parse_technology_elements(tmp_path)
+        assert result == []
+
+    def test_location_element_whitespace_id_skipped(self, tmp_path):
+        """parse_location_elements: element with whitespace-only id must be skipped."""
+        other_dir = tmp_path / 'other'
+        other_dir.mkdir()
+        (other_dir / 'Location_loc1.xml').write_text(
+            '<archimate:Location xmlns:archimate="http://www.archimatetool.com/archimate"'
+            ' name="Datacenter" id="\t"/>',
+            encoding='utf-8',
+        )
+        result = parse_location_elements(tmp_path)
+        assert result == []
+
 
 # ── Issue #16: consistent ET.ParseError handling ─────────────────────────
 

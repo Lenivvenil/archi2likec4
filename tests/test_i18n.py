@@ -144,12 +144,12 @@ class TestFormatErrorHandling:
     def test_get_msg_bad_kwarg_returns_template(self):
         # QA-1 description template uses {count}; passing wrong kwarg triggers KeyError
         result = get_msg('QA-1', 'description', 'en', wrong_key='x')
-        # Should return the raw template string (not raise)
+        # Should return the raw template string with unformatted placeholders
         assert isinstance(result, str)
-        assert result != ''
+        assert '{count}' in result
 
     def test_get_audit_label_bad_kwarg_returns_template(self):
         # auto_generated uses {version} and {date}; wrong kwarg triggers KeyError
         result = get_audit_label('auto_generated', 'en', bad_key='x')
         assert isinstance(result, str)
-        assert result != ''
+        assert '{version}' in result
