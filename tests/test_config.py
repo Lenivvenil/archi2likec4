@@ -891,6 +891,60 @@ class TestBankSpecificDefaults:
         assert _DEFAULT_EXTRA_DOMAIN_PATTERNS == []
 
 
+class TestExtraViewPatterns:
+    """extra_view_patterns config loading and validation."""
+
+    def test_default_has_three_russian_patterns(self):
+        config = ConvertConfig()
+        assert len(config.extra_view_patterns) == 3
+        types = [p['view_type'] for p in config.extra_view_patterns]
+        assert 'functional' in types
+        assert 'integration' in types
+        assert 'deployment' in types
+
+    def test_load_from_yaml(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'extra_view_patterns': [
+            {'pattern': r'^Custom\.(.+)$', 'view_type': 'functional'},
+        ]})
+        assert len(config.extra_view_patterns) == 1
+        assert config.extra_view_patterns[0]['view_type'] == 'functional'
+
+    def test_empty_list_clears_patterns(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'extra_view_patterns': []})
+        assert config.extra_view_patterns == []
+
+    def test_invalid_type_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='expected list'):
+            _apply_yaml(config, {'extra_view_patterns': 'bad'})
+
+    def test_missing_key_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match="missing required key 'view_type'"):
+            _apply_yaml(config, {'extra_view_patterns': [{'pattern': r'^X$'}]})
+
+    def test_invalid_view_type_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match="must be 'functional'"):
+            _apply_yaml(config, {'extra_view_patterns': [
+                {'pattern': r'^X$', 'view_type': 'unknown'},
+            ]})
+
+    def test_invalid_regex_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='invalid regex'):
+            _apply_yaml(config, {'extra_view_patterns': [
+                {'pattern': r'[invalid', 'view_type': 'functional'},
+            ]})
+
+    def test_entry_not_mapping_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='expected mapping'):
+            _apply_yaml(config, {'extra_view_patterns': ['bad']})
+
+
 class TestExceptionHierarchy:
     """Verify exception class relationships."""
 

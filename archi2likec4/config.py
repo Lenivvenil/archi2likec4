@@ -28,6 +28,14 @@ _DEFAULT_EXTRA_DOMAIN_PATTERNS: list[dict[str, Any]] = []
 
 _DEFAULT_PROMOTE_CHILDREN: dict[str, str] = {}
 
+# Russian-language view-name patterns shipped as defaults.
+# Users can override via extra_view_patterns in .archi2likec4.yaml.
+_DEFAULT_EXTRA_VIEW_PATTERNS: list[dict[str, str]] = [
+    {'pattern': r'^Функциональная архитектура[.\s]+(.+)$', 'view_type': 'functional'},
+    {'pattern': r'^Интеграционная архитектура[.\s]+(.+)$', 'view_type': 'integration'},
+    {'pattern': r'^Схема разв[её]ртывания[.\s]+(.+)$', 'view_type': 'deployment'},
+]
+
 # Top-level names (files or entire dirs) never overwritten in sync target by default.
 # These protect common companion-repo artefacts that must survive a re-sync.
 # Can be overridden via sync_protected_top in .archi2likec4.yaml.
@@ -96,6 +104,10 @@ class ConvertConfig:
     # i18n: language for AUDIT.md and Web UI ('ru' or 'en')
     language: str = 'ru'
 
+    # Extra view-name regex patterns (locale-specific, e.g. Russian)
+    extra_view_patterns: list[dict[str, str]] = field(
+        default_factory=lambda: [dict(d) for d in _DEFAULT_EXTRA_VIEW_PATTERNS])
+
     # Deployment environment name used in LikeC4 deployment views
     deployment_env: str = 'prod'
 
@@ -163,7 +175,7 @@ _KNOWN_YAML_KEYS: set[str] = {
     'quality_gates',
     'audit_suppress', 'audit_suppress_incidents',
     'domain_overrides', 'subdomain_overrides', 'reviewed_systems',
-    'language', 'deployment_env', 'strict', 'sync_target',
+    'language', 'deployment_env', 'extra_view_patterns', 'strict', 'sync_target',
     'property_map', 'standard_keys',
     'sync_protected_top', 'sync_protected_paths',
 }
@@ -358,6 +370,36 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
         if not env_val:
             raise ConfigError("deployment_env: must not be empty")
         config.deployment_env = env_val
+
+    if 'extra_view_patterns' in data:
+        val = data['extra_view_patterns']
+        if not isinstance(val, list):
+            raise ConfigError(
+                f"extra_view_patterns: expected list, got {type(val).__name__}")
+        validated_vp: list[dict[str, str]] = []
+        for i, entry in enumerate(val):
+            if not isinstance(entry, dict):
+                raise ConfigError(
+                    f"extra_view_patterns[{i}]: expected mapping, got {type(entry).__name__}")
+            for key in ('pattern', 'view_type'):
+                if key not in entry:
+                    raise ConfigError(
+                        f"extra_view_patterns[{i}]: missing required key '{key}'")
+                if not isinstance(entry[key], str):
+                    raise ConfigError(
+                        f"extra_view_patterns[{i}]['{key}']: expected string, "
+                        f"got {type(entry[key]).__name__}")
+            if entry['view_type'] not in ('functional', 'integration', 'deployment'):
+                raise ConfigError(
+                    f"extra_view_patterns[{i}]['view_type']: must be 'functional', "
+                    f"'integration', or 'deployment', got '{entry['view_type']}'")
+            try:
+                re.compile(entry['pattern'])
+            except re.error as err:
+                raise ConfigError(
+                    f"extra_view_patterns[{i}]['pattern']: invalid regex: {err}") from err
+            validated_vp.append({'pattern': entry['pattern'], 'view_type': entry['view_type']})
+        config.extra_view_patterns = validated_vp
 
     if 'strict' in data:
         val = data['strict']

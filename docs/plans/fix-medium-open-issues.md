@@ -16,15 +16,15 @@
 
 В `parsers.py` есть regex паттерны специфичные для русского языка — выносим в конфиг.
 
-- [ ] Найти все `re.compile(...)` паттерны с русскими строками в `archi2likec4/parsers.py`
-- [ ] В `archi2likec4/config.py`: добавить поля в `ConvertConfig` для каждого русскоязычного паттерна (например `integration_pattern: str`, `domain_pattern: str`) с дефолтными значениями равными текущим хардкодам
-- [ ] Добавить обработку новых полей в `load_config()` в `archi2likec4/config.py`
-- [ ] В `archi2likec4/parsers.py`: заменить хардкод на обращение к конфигу; если parsers не имеют доступа к config — передавать паттерны как параметры в функции `parse_*()`
-- [ ] Обновить сигнатуры `parse_systems()`, `parse_subdomains()` и т.д. если нужно
-- [ ] В `tests/helpers.py`: если `MockConfig` не имеет новых полей — добавить с теми же дефолтами
-- [ ] Закоммитить: `refactor: move hardcoded Russian regex patterns to config (#19)`
-- [ ] Add/update tests for the above changes (`tests/test_config.py`: тест загрузки паттернов из YAML; `tests/test_parsers.py`: тест с кастомным паттерном)
-- [ ] Mark completed
+- [x] Найти все `re.compile(...)` паттерны с русскими строками в `archi2likec4/parsers.py`
+- [x] В `archi2likec4/config.py`: добавить поля в `ConvertConfig` для каждого русскоязычного паттерна (например `integration_pattern: str`, `domain_pattern: str`) с дефолтными значениями равными текущим хардкодам
+- [x] Добавить обработку новых полей в `load_config()` в `archi2likec4/config.py`
+- [x] В `archi2likec4/parsers.py`: заменить хардкод на обращение к конфигу; если parsers не имеют доступа к config — передавать паттерны как параметры в функции `parse_*()`
+- [x] Обновить сигнатуры `parse_systems()`, `parse_subdomains()` и т.д. если нужно
+- [x] В `tests/helpers.py`: если `MockConfig` не имеет новых полей — добавить с теми же дефолтами
+- [x] Закоммитить: `refactor: move hardcoded Russian regex patterns to config (#19)`
+- [x] Add/update tests for the above changes (`tests/test_config.py`: тест загрузки паттернов из YAML; `tests/test_parsers.py`: тест с кастомным паттерном)
+- [x] Mark completed
 
 ---
 

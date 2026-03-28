@@ -473,7 +473,10 @@ class TestParseSolutionViewsDeployment:
             'Схема развёртывания.Платёжный сервис',
             elements=['n-1'],
         )
-        result = parse_solution_views(tmp_path)
+        ru_patterns = [
+            {'pattern': r'^Схема разв[её]ртывания[.\s]+(.+)$', 'view_type': 'deployment'},
+        ]
+        result = parse_solution_views(tmp_path, extra_view_patterns=ru_patterns)
         assert len(result) == 1
         assert result[0].view_type == 'deployment'
 
@@ -672,6 +675,43 @@ class TestParseSolutionViewsFuncInteg:
         assert len(result) == 2
         slugs = {sv.solution for sv in result}
         assert len(slugs) == 2, f'Expected distinct slugs for different names, got {slugs}'
+
+
+class TestParseSolutionViewsExtraPatterns:
+    """extra_view_patterns parameter allows custom locale patterns."""
+
+    def test_custom_pattern_matched(self, tmp_path):
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_c1.xml',
+            'Architecture fonctionnelle.Paiement',
+            elements=['sys-1'],
+        )
+        custom = [{'pattern': r'^Architecture fonctionnelle\.(.+)$', 'view_type': 'functional'}]
+        result = parse_solution_views(tmp_path, extra_view_patterns=custom)
+        assert len(result) == 1
+        assert result[0].view_type == 'functional'
+        assert result[0].solution == 'paiement'
+
+    def test_no_extra_patterns_skips_russian(self, tmp_path):
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_r1.xml',
+            'Функциональная архитектура.Платежи',
+            elements=['sys-1'],
+        )
+        result = parse_solution_views(tmp_path, extra_view_patterns=[])
+        assert len(result) == 0
+
+    def test_none_extra_patterns_skips_russian(self, tmp_path):
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_r1.xml',
+            'Функциональная архитектура.Платежи',
+            elements=['sys-1'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 0
 
 
 # ── parse_subdomains ─────────────────────────────────────────────────────

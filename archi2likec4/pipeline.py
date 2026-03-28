@@ -134,7 +134,7 @@ def _parse(model_root: Path, config: ConvertConfig) -> ParseResult:
         logger.info('%s: %d AppComponent refs on views', d.name, len(d.archi_ids))
 
     logger.info('Parsing solution views...')
-    solution_views = parse_solution_views(model_root)
+    solution_views = parse_solution_views(model_root, config.extra_view_patterns)
     func_views = sum(1 for v in solution_views if v.view_type == 'functional')
     integ_views = sum(1 for v in solution_views if v.view_type == 'integration')
     deploy_views = sum(1 for v in solution_views if v.view_type == 'deployment')

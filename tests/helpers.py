@@ -32,6 +32,7 @@ class MockConfig:
         standard_keys=None,
         deployment_env='prod',
         sync_target=None,
+        extra_view_patterns=None,
         sync_protected_top=None,
         sync_protected_paths=None,
     ):
@@ -56,6 +57,11 @@ class MockConfig:
         self.property_map = property_map if property_map is not None else dict(DEFAULT_PROP_MAP)
         self.standard_keys = standard_keys if standard_keys is not None else list(DEFAULT_STANDARD_KEYS)
         self.deployment_env = deployment_env
+        self.extra_view_patterns = extra_view_patterns if extra_view_patterns is not None else [
+            {'pattern': r'^Функциональная архитектура[.\s]+(.+)$', 'view_type': 'functional'},
+            {'pattern': r'^Интеграционная архитектура[.\s]+(.+)$', 'view_type': 'integration'},
+            {'pattern': r'^Схема разв[её]ртывания[.\s]+(.+)$', 'view_type': 'deployment'},
+        ]
         self.sync_target = sync_target
         self.sync_protected_top = sync_protected_top if sync_protected_top is not None else frozenset()
         self.sync_protected_paths = sync_protected_paths if sync_protected_paths is not None else frozenset()

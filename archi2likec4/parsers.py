@@ -680,24 +680,32 @@ def parse_location_elements(model_root: Path) -> list[TechElement]:
     return results
 
 
-def parse_solution_views(model_root: Path) -> list[SolutionView]:
+def parse_solution_views(
+    model_root: Path,
+    extra_view_patterns: list[dict[str, str]] | None = None,
+) -> list[SolutionView]:
     """Parse solution-level views (functional_architecture, integration_architecture).
 
     Scans diagrams/ recursively for ArchimateDiagramModel_*.xml files whose name
     attribute matches known view type patterns.
+
+    *extra_view_patterns* is a list of ``{"pattern": <regex>, "view_type": <type>}``
+    dicts for locale-specific patterns (e.g. Russian).  When ``None``, no extra
+    patterns are used (caller should pass ``config.extra_view_patterns``).
     """
     diagrams_dir = model_root / 'diagrams'
     if not diagrams_dir.is_dir():
         return []
 
-    # Pattern: functional_architecture.{solution} or fucntional_architecture.{solution}
+    # Built-in English patterns (always present)
     func_pat = re.compile(r'^(?:functional_architecture|fucntional_architecture)\.(.+)$', re.IGNORECASE)
     integ_pat = re.compile(r'^integration_architecture\.(.+)$', re.IGNORECASE)
-    # Also handle Russian patterns
-    func_pat_ru = re.compile(r'^Функциональная архитектура[.\s]+(.+)$', re.IGNORECASE)
-    integ_pat_ru = re.compile(r'^Интеграционная архитектура[.\s]+(.+)$', re.IGNORECASE)
     deploy_pat = re.compile(r'^(?:deployment_architecture|deployment_target)\.(.+)$', re.IGNORECASE)
-    deploy_pat_ru = re.compile(r'^Схема разв[её]ртывания[.\s]+(.+)$', re.IGNORECASE)
+
+    # Extra (locale-specific) patterns from config
+    extra_compiled: list[tuple[re.Pattern[str], str]] = []
+    for entry in extra_view_patterns or []:
+        extra_compiled.append((re.compile(entry['pattern'], re.IGNORECASE), entry['view_type']))
 
     results: list[SolutionView] = []
     seen_names: dict[str, int] = {}  # dedup_key → index in results
@@ -721,9 +729,11 @@ def parse_solution_views(model_root: Path) -> list[SolutionView]:
         # Determine view type and solution name
         view_type = ''
         solution_name = ''
-        for pat, vtype in [(func_pat, 'functional'), (integ_pat, 'integration'),
-                           (func_pat_ru, 'functional'), (integ_pat_ru, 'integration'),
-                           (deploy_pat, 'deployment'), (deploy_pat_ru, 'deployment')]:
+        all_patterns: list[tuple[re.Pattern[str], str]] = [
+            (func_pat, 'functional'), (integ_pat, 'integration'),
+            (deploy_pat, 'deployment'),
+        ] + extra_compiled
+        for pat, vtype in all_patterns:
             m = pat.match(diagram_name)
             if m:
                 view_type = vtype
