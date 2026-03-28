@@ -336,7 +336,7 @@ def main():
     print("=" * 80)
     print(f"""
 Eligible relationships:   {built.diagnostics.intg_total_eligible}
-Lost (unresolvable):      {len(lost_rels)}  ({len(lost_rels)*100/built.diagnostics.intg_total_eligible:.1f}%)
+Lost (unresolvable):      {len(lost_rels)}  ({(len(lost_rels)*100/built.diagnostics.intg_total_eligible if built.diagnostics.intg_total_eligible else 0.0):.1f}%)
 Self-loops (filtered):    {len(self_loop_rels)}
 Successful integrations:  {len(built.integrations)} (deduplicated)
 

@@ -382,6 +382,7 @@ else:
         entity_archi_ids={e.archi_id for e in built.entities},
         deployment_map=built.deployment_map,
         sys_subdomain=_sys_subdomain or None,
+        deployment_env=config.deployment_env,
     )
     for slug in sorted(sv_files.keys()):
         print(f'    {slug}.c4')
