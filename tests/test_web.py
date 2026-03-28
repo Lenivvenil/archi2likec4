@@ -440,3 +440,25 @@ class TestCSRFProtection:
         resp = app_client.get('/incident/QA-1')
         body = resp.data.decode()
         assert '_csrf_token' in body
+
+    def test_post_with_cross_origin_header_returns_403(self, app_client):
+        """POST with valid CSRF token but mismatched Origin header should be rejected."""
+        app_client.get('/')
+        with app_client.session_transaction() as sess:
+            token = sess.get('_csrf', '')
+        resp = app_client.post('/suppress/system', data={
+            'name': 'TestSys',
+            '_csrf_token': token,
+        }, headers={'Origin': 'https://evil.example.com'})
+        assert resp.status_code == 403
+
+    def test_post_with_cross_origin_referer_returns_403(self, app_client):
+        """POST with valid CSRF token but mismatched Referer header should be rejected."""
+        app_client.get('/')
+        with app_client.session_transaction() as sess:
+            token = sess.get('_csrf', '')
+        resp = app_client.post('/suppress/system', data={
+            'name': 'TestSys',
+            '_csrf_token': token,
+        }, headers={'Referer': 'https://evil.example.com/page'})
+        assert resp.status_code == 403
