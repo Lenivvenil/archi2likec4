@@ -463,3 +463,28 @@ class TestCSRFProtection:
             '_csrf_token': token,
         }, headers={'Referer': 'https://evil.example.com/page'})
         assert resp.status_code == 403
+
+    def test_secret_key_from_env(self, tmp_path, monkeypatch):
+        """When FLASK_SECRET_KEY is set, create_app uses it as secret_key."""
+        from archi2likec4 import web
+
+        config, summary, incidents, available_domains, mock_built = _mock_load_data()
+        model_dir = tmp_path / 'model'
+        model_dir.mkdir()
+
+        monkeypatch.setenv('FLASK_SECRET_KEY', 'stable-test-key')
+
+        with patch('archi2likec4.config.load_config', return_value=config), \
+             patch('archi2likec4.pipeline._parse', return_value=MagicMock()), \
+             patch('archi2likec4.pipeline._build', return_value=mock_built), \
+             patch('archi2likec4.pipeline._build_solution_view_index', return_value={}), \
+             patch('archi2likec4.generators.views.generate_solution_views', return_value=({}, 0, 0)), \
+             patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
+             patch('archi2likec4.audit_data.compute_audit_incidents',
+                   return_value=(summary, incidents)):
+            app = web.create_app(
+                config_path=None,
+                model_root=model_dir,
+                output_dir=tmp_path / 'output',
+            )
+            assert app.secret_key == 'stable-test-key'

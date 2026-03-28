@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import html
 import logging
+import os
 import secrets
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -86,7 +87,7 @@ def create_app(
 
     template_dir = Path(__file__).parent / 'templates'
     app = Flask(__name__, template_folder=str(template_dir))
-    app.secret_key = secrets.token_hex(32)
+    app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)
 
     def _safe_redirect(url: str) -> str:
         """Validate redirect URL to prevent open redirect attacks."""
