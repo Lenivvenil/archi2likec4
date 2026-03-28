@@ -15,7 +15,7 @@ if TYPE_CHECKING:
 
 from .exceptions import Archi2LikeC4Error, ConfigError
 
-logger = logging.getLogger('archi2likec4.web')
+logger = logging.getLogger(__name__)
 
 _SEVERITY_COLORS = {
     'Critical': '#dc3545',
@@ -197,7 +197,7 @@ def create_app(
     @app.route('/')
     def dashboard():
         config, summary, incidents, available_domains, built = _load_data()
-        lang = getattr(config, 'language', 'ru')
+        lang = config.language
         active_count = sum(1 for i in incidents if not i.suppressed)
         suppressed_count = sum(1 for i in incidents if i.suppressed)
         remed_domain = len(config.domain_overrides)
@@ -224,7 +224,7 @@ def create_app(
     @app.route('/incident/<qa_id>')
     def incident_detail(qa_id):
         config, summary, incidents, available_domains, built = _load_data()
-        lang = getattr(config, 'language', 'ru')
+        lang = config.language
         incident = next((i for i in incidents if i.qa_id == qa_id), None)
         if incident is None:
             return redirect('/')
@@ -248,7 +248,7 @@ def create_app(
     @app.route('/remediations')
     def remediations():
         config = _load_config_safe()
-        lang = getattr(config, 'language', 'ru')
+        lang = config.language
         return render_template(
             'remediations.html',
             t=_ui(lang), lang=lang,
@@ -385,10 +385,10 @@ def create_app(
     @app.route('/hierarchy')
     def hierarchy():
         config, summary, incidents, available_domains, built = _load_data()
-        lang = getattr(config, 'language', 'ru')
+        lang = config.language
 
         subdomain_names: dict[str, str] = {}
-        for sd in getattr(built, 'subdomains', []):
+        for sd in built.subdomains:
             subdomain_names[sd.c4_id] = sd.name
 
         domain_groups: dict[str, dict[str, list]] = {}
@@ -397,7 +397,7 @@ def create_app(
             if sys_list:
                 sd_map: dict[str, list] = {}
                 for sys in sorted(sys_list, key=lambda s: s.name):
-                    sd_key = getattr(sys, 'subdomain', '') or ''
+                    sd_key = sys.subdomain or ''
                     sd_map.setdefault(sd_key, []).append(sys)
                 ordered: dict[str, list] = {}
                 if '' in sd_map:

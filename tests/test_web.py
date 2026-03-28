@@ -178,8 +178,9 @@ class TestRemediations:
     def test_empty_remediations_shows_placeholder(self, app_client):
         """Default ConvertConfig has no remediations, page shows empty state."""
         resp = app_client.get('/remediations')
-        resp.data.decode()
+        body = resp.data.decode()
         assert resp.status_code == 200
+        assert body  # page renders non-empty HTML
 
 
 # ── Helper function tests ───────────────────────────────────────────────

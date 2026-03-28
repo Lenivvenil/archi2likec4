@@ -107,7 +107,7 @@ def _find_parent_component(xml_path: Path, app_dir: Path) -> str:
                         tree = ET.parse(ac_xml)
                         root = tree.getroot()
                         ac_name = root.get('name', '').strip().lower()
-                        archi_id = str(root.get('id', '') or '')
+                        archi_id = root.get('id', '') or ''
                         if ac_name == folder_name and archi_id:
                             return archi_id
                     except ET.ParseError:
