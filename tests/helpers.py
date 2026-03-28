@@ -83,8 +83,6 @@ class MockBuilt:
         promoted_archi_to_c4=None,
         promoted_parents=None,
         iface_c4_path=None,
-        solution_views=None,
-        domains_info=None,
         tech_archi_to_c4=None,
     ):
         self.systems = systems or []
@@ -104,6 +102,4 @@ class MockBuilt:
         self.promoted_archi_to_c4 = promoted_archi_to_c4 or {}
         self.promoted_parents = promoted_parents or {}
         self.iface_c4_path = iface_c4_path or {}
-        self.solution_views = solution_views or []
-        self.domains_info = domains_info or []
         self.tech_archi_to_c4 = tech_archi_to_c4 or {}

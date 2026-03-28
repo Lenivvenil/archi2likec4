@@ -160,8 +160,8 @@ def create_app(
             raise Archi2LikeC4Error(f'Pipeline error: {e}') from e
         sys_subdomain = _build_solution_view_index(built)
         _, sv_unresolved, sv_total = generate_solution_views(
-            built.solution_views, built.archi_to_c4, built.sys_domain,
-            built.relationships,
+            parsed.solution_views, built.archi_to_c4, built.sys_domain,
+            parsed.relationships,
             promoted_archi_to_c4=built.promoted_archi_to_c4,
             tech_archi_to_c4=built.tech_archi_to_c4,
             entity_archi_ids={e.archi_id for e in built.entities},

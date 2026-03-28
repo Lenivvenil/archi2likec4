@@ -339,9 +339,6 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
             intg_skipped=intg_skipped,
             intg_total_eligible=intg_total_eligible,
         ),
-        solution_views=parsed.solution_views,
-        relationships=parsed.relationships,
-        domains_info=parsed.domains_info,
         deployment_nodes=deployment_nodes,
         deployment_map=deployment_map,
         tech_archi_to_c4=tech_archi_to_c4,
@@ -417,6 +414,7 @@ def _generate(
     built: BuildResult,
     output_dir: Path,
     config: ConvertConfig,
+    domains_info: list[DomainInfo],
     solution_view_files: dict[str, str] | None = None,
     sv_unresolved: int = 0,
     sv_total: int = 0,
@@ -471,7 +469,7 @@ def _generate(
     file_count += 1
 
     # Domain files + views
-    all_domain_meta: dict[str, DomainInfo] = {d.c4_id: d for d in built.domains_info}
+    all_domain_meta: dict[str, DomainInfo] = {d.c4_id: d for d in domains_info}
     for extra in config.extra_domain_patterns:
         if extra['c4_id'] not in all_domain_meta:
             all_domain_meta[extra['c4_id']] = DomainInfo(
@@ -714,8 +712,8 @@ def convert(
     # Compute solution views once — metrics go to _validate, files go to _generate
     sys_subdomain = _build_solution_view_index(built)
     sv_files, sv_unresolved, sv_total = generate_solution_views(
-        built.solution_views, built.archi_to_c4, built.sys_domain,
-        built.relationships,
+        parsed.solution_views, built.archi_to_c4, built.sys_domain,
+        parsed.relationships,
         promoted_archi_to_c4=built.promoted_archi_to_c4,
         tech_archi_to_c4=built.tech_archi_to_c4,
         entity_archi_ids={e.archi_id for e in built.entities},
@@ -735,7 +733,10 @@ def convert(
     files_written = 0
     sync_ok = True
     if not config.dry_run:
-        files_written = _generate(built, output_dir_path, config, sv_files, sv_unresolved, sv_total)
+        files_written = _generate(
+            built, output_dir_path, config, parsed.domains_info,
+            sv_files, sv_unresolved, sv_total,
+        )
         if config.sync_target is not None:
             sync_ok = _sync_output(config)
 

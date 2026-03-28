@@ -33,11 +33,11 @@ BuildResult сжимается с 22 до 20 полей.
 Убираем `solution_views`, `relationships`, `domains_info` из BuildResult — они принадлежат ParseResult.
 ParseResult передаётся напрямую в функции generate-фазы.
 
-- [ ] В `archi2likec4/builders/_result.py`: удалить поля `solution_views`, `relationships`, `domains_info` из `BuildResult` NamedTuple (с 20 до 17 полей)
-- [ ] В `archi2likec4/pipeline.py` функция `_build()`: удалить строки `parsed.solution_views -> BuildResult.solution_views` и аналогичные для `relationships`, `domains_info` из конструктора BuildResult
-- [ ] В `archi2likec4/pipeline.py` функция `_generate()`: добавить три параметра `solution_views: list[SolutionView]`, `relationships: list[RawRelationship]`, `domains_info: list[DomainInfo]`; заменить обращения `built.solution_views` → `solution_views` и т.д.
-- [ ] В `archi2likec4/pipeline.py` функция `convert()`: при вызове `_generate(...)` передавать `solution_views=parsed.solution_views, relationships=parsed.relationships, domains_info=parsed.domains_info`
-- [ ] В `tests/helpers.py`: удалить `solution_views`, `relationships`, `domains_info` из `MockBuilt`
-- [ ] Закоммитить: `refactor: remove pass-through fields from BuildResult (#4)`
-- [ ] Add/update tests for the above changes (e2e тест в `tests/test_pipeline_e2e.py` должен пройти)
-- [ ] Mark completed
+- [x] В `archi2likec4/builders/_result.py`: удалить поля `solution_views`, `relationships`, `domains_info` из `BuildResult` NamedTuple (с 20 до 17 полей)
+- [x] В `archi2likec4/pipeline.py` функция `_build()`: удалить строки `parsed.solution_views -> BuildResult.solution_views` и аналогичные для `relationships`, `domains_info` из конструктора BuildResult
+- [x] В `archi2likec4/pipeline.py` функция `_generate()`: добавить параметр `domains_info: list[DomainInfo]`; заменить обращение `built.domains_info` → `domains_info`. `solution_views` и `relationships` не передаются в `_generate()` — они используются только в `convert()` и `web.py`, где теперь берутся из `parsed.*`
+- [x] В `archi2likec4/pipeline.py` функция `convert()`: при вызове `_generate(...)` передавать `parsed.domains_info`; `generate_solution_views()` теперь использует `parsed.solution_views` и `parsed.relationships`
+- [x] В `tests/helpers.py`: удалить `solution_views`, `relationships`, `domains_info` из `MockBuilt`
+- [x] Закоммитить: `refactor: remove pass-through fields from BuildResult (#4)`
+- [x] Add/update tests for the above changes (e2e тест в `tests/test_pipeline_e2e.py` должен пройти)
+- [x] Mark completed

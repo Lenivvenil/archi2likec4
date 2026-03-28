@@ -7,10 +7,7 @@ from ..models import (
     DataAccess,
     DataEntity,
     DeploymentNode,
-    DomainInfo,
     Integration,
-    RawRelationship,
-    SolutionView,
     Subdomain,
     System,
 )
@@ -39,9 +36,6 @@ class BuildResult(NamedTuple):
     promoted_parents: dict[str, list[str]]
     iface_c4_path: dict[str, str]
     diagnostics: BuildDiagnostics
-    solution_views: list[SolutionView]
-    relationships: list[RawRelationship]
-    domains_info: list[DomainInfo]
     deployment_nodes: list[DeploymentNode]
     deployment_map: list[tuple[str, str]]
     tech_archi_to_c4: dict[str, str]
