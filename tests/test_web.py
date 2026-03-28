@@ -8,6 +8,17 @@ from archi2likec4.audit_data import AuditIncident, AuditSummary
 from archi2likec4.config import ConvertConfig
 
 
+def _csrf_post(client, url, data=None, **kwargs):
+    """POST with a valid CSRF token from the session."""
+    # First GET to establish session with CSRF token
+    client.get('/')
+    with client.session_transaction() as sess:
+        token = sess.get('_csrf', '')
+    post_data = dict(data or {})
+    post_data['_csrf_token'] = token
+    return client.post(url, data=post_data, **kwargs)
+
+
 def _make_summary(**kwargs):
     defaults = dict(
         total_systems=5, total_subsystems=10, meta_completeness_pct=60,
@@ -317,7 +328,7 @@ class TestHierarchySubdomain:
 class TestOpenRedirect:
     def test_safe_redirect_rejects_absolute_url(self, app_client):
         """POST with absolute redirect URL should redirect to / instead."""
-        resp = app_client.post('/suppress/system', data={
+        resp = _csrf_post(app_client, '/suppress/system', data={
             'name': 'TestSys',
             'redirect': 'https://evil.com/steal',
         })
@@ -326,7 +337,7 @@ class TestOpenRedirect:
 
     def test_safe_redirect_allows_relative(self, app_client):
         """POST with relative redirect URL should be allowed."""
-        resp = app_client.post('/suppress/system', data={
+        resp = _csrf_post(app_client, '/suppress/system', data={
             'name': 'TestSys',
             'redirect': '/incident/QA-1',
         })
@@ -335,7 +346,7 @@ class TestOpenRedirect:
 
     def test_safe_redirect_rejects_protocol_relative(self, app_client):
         """POST with protocol-relative redirect URL (//evil.com) should redirect to /."""
-        resp = app_client.post('/suppress/system', data={
+        resp = _csrf_post(app_client, '/suppress/system', data={
             'name': 'TestSys',
             'redirect': '//evil.example/steal',
         })
@@ -351,7 +362,7 @@ class TestXSSPrevention:
     def test_assign_domain_xss_input_rejected(self, app_client):
         """assign_domain with XSS payload should return 400, not reflect raw HTML."""
         xss = '<script>alert(1)</script>'
-        resp = app_client.post('/assign-domain', data={
+        resp = _csrf_post(app_client, '/assign-domain', data={
             'name': 'TestSys',
             'domain': xss,
         })
@@ -363,7 +374,7 @@ class TestXSSPrevention:
     def test_assign_domain_xss_input_escaped_in_response(self, app_client):
         """assign_domain error response must html-escape the domain value."""
         xss = '<img src=x onerror=alert(1)>'
-        resp = app_client.post('/assign-domain', data={
+        resp = _csrf_post(app_client, '/assign-domain', data={
             'name': 'TestSys',
             'domain': xss,
         })
@@ -374,7 +385,7 @@ class TestXSSPrevention:
     def test_promote_system_xss_input_rejected(self, app_client):
         """promote_system with XSS payload should return 400."""
         xss = '<script>alert(1)</script>'
-        resp = app_client.post('/promote-system', data={
+        resp = _csrf_post(app_client, '/promote-system', data={
             'name': 'TestSys',
             'domain': xss,
         })
@@ -384,9 +395,48 @@ class TestXSSPrevention:
 
     def test_assign_domain_valid_id_accepted(self, app_client):
         """assign_domain with valid c4 id should not return 400."""
-        resp = app_client.post('/assign-domain', data={
+        resp = _csrf_post(app_client, '/assign-domain', data={
             'name': 'TestSys',
             'domain': 'valid-domain',
         })
         # Should redirect (302), not bad request
         assert resp.status_code in (302, 200)
+
+
+# ── CSRF protection (Issue #8) ───────────────────────────────────────
+
+class TestCSRFProtection:
+    """Issue #8: POST requests must include a valid CSRF token."""
+
+    def test_post_without_csrf_token_returns_403(self, app_client):
+        """POST without CSRF token should be rejected with 403."""
+        resp = app_client.post('/suppress/system', data={'name': 'TestSys'})
+        assert resp.status_code == 403
+
+    def test_post_with_wrong_csrf_token_returns_403(self, app_client):
+        """POST with incorrect CSRF token should be rejected with 403."""
+        app_client.get('/')
+        resp = app_client.post('/suppress/system', data={
+            'name': 'TestSys',
+            '_csrf_token': 'wrong-token',
+        })
+        assert resp.status_code == 403
+
+    def test_post_with_valid_csrf_token_succeeds(self, app_client):
+        """POST with valid CSRF token should succeed (302 redirect)."""
+        resp = _csrf_post(app_client, '/suppress/system', data={
+            'name': 'TestSys',
+        })
+        assert resp.status_code == 302
+
+    def test_csrf_token_present_in_dashboard_html(self, app_client):
+        """Dashboard page should contain CSRF hidden inputs in forms."""
+        resp = app_client.get('/')
+        body = resp.data.decode()
+        assert '_csrf_token' in body
+
+    def test_csrf_token_present_in_detail_html(self, app_client):
+        """Incident detail page should contain CSRF hidden inputs in forms."""
+        resp = app_client.get('/incident/QA-1')
+        body = resp.data.decode()
+        assert '_csrf_token' in body

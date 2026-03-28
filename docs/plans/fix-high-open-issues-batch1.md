@@ -36,14 +36,14 @@
 Паттерн: при GET-запросе генерируем `csrf_token` через `secrets.token_hex(32)`, кладём в cookie
 и инжектим в формы через context_processor. При POST — сверяем cookie с hidden input.
 
-- [ ] В `archi2likec4/web.py`: добавить `import secrets` (строка 1 импортов)
-- [ ] В `archi2likec4/web.py`: добавить `app.secret_key = secrets.token_hex(32)` сразу после создания `app`
-- [ ] В `archi2likec4/web.py`: добавить `@app.context_processor` — функция `inject_csrf()` которая при GET создаёт `secrets.token_hex(32)`, ставит в `session['_csrf']` и возвращает `{'csrf_token': session['_csrf']}`
-- [ ] В `archi2likec4/web.py`: переписать `_csrf_check()` — на POST сверять `request.form.get('_csrf_token')` с `session.get('_csrf')`; если не совпадает — `abort(403)`; оставить fallback Origin/Referer проверку как вторичный слой
-- [ ] В `archi2likec4/templates/base.html`: создать макрос или Jinja2 helper `{{ csrf_field() }}` как `<input type="hidden" name="_csrf_token" value="{{ csrf_token }}">`
-- [ ] В `archi2likec4/templates/detail.html`: добавить `{{ csrf_field() }}` во все 4 формы
-- [ ] В `archi2likec4/templates/dashboard.html`: добавить `{{ csrf_field() }}` во все 4 формы
-- [ ] В `archi2likec4/templates/remediations.html`: добавить `{{ csrf_field() }}` во все 6 форм (строки ~21, 45, 70, 94, 118 + новые)
-- [ ] Закоммитить: `fix: add session-based CSRF token protection to web UI (#8)`
-- [ ] Add/update tests for the above changes (`tests/test_web.py`: тест что POST без токена возвращает 403, с токеном — 302)
-- [ ] Mark completed
+- [x] В `archi2likec4/web.py`: добавить `import secrets` (строка 1 импортов)
+- [x] В `archi2likec4/web.py`: добавить `app.secret_key = secrets.token_hex(32)` сразу после создания `app`
+- [x] В `archi2likec4/web.py`: добавить `@app.context_processor` — функция `inject_csrf()` которая при GET создаёт `secrets.token_hex(32)`, ставит в `session['_csrf']` и возвращает `{'csrf_token': session['_csrf']}`
+- [x] В `archi2likec4/web.py`: переписать `_csrf_check()` — на POST сверять `request.form.get('_csrf_token')` с `session.get('_csrf')`; если не совпадает — `abort(403)`; оставить fallback Origin/Referer проверку как вторичный слой
+- [x] В `archi2likec4/templates/base.html`: создать макрос или Jinja2 helper `{{ csrf_field() }}` как `<input type="hidden" name="_csrf_token" value="{{ csrf_token }}">`
+- [x] В `archi2likec4/templates/detail.html`: добавить `{{ csrf_field() }}` во все 4 формы
+- [x] В `archi2likec4/templates/dashboard.html`: добавить `{{ csrf_field() }}` во все 4 формы
+- [x] В `archi2likec4/templates/remediations.html`: добавить `{{ csrf_field() }}` во все 6 форм (строки ~21, 45, 70, 94, 118 + новые)
+- [x] Закоммитить: `fix: add session-based CSRF token protection to web UI (#8)`
+- [x] Add/update tests for the above changes (`tests/test_web.py`: тест что POST без токена возвращает 403, с токеном — 302)
+- [x] Mark completed

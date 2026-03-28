@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import html
 import logging
+import secrets
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
@@ -64,7 +65,7 @@ def create_app(
 ) -> Flask:
     """Create Flask app for quality audit dashboard (without starting the server)."""
     try:
-        from flask import Flask, redirect, render_template, request
+        from flask import Flask, abort, redirect, render_template, request, session
     except ImportError as err:
         raise SystemExit(
             'Flask is required for web UI: pip install "archi2likec4[web]"'
@@ -85,6 +86,7 @@ def create_app(
 
     template_dir = Path(__file__).parent / 'templates'
     app = Flask(__name__, template_folder=str(template_dir))
+    app.secret_key = secrets.token_hex(32)
 
     def _safe_redirect(url: str) -> str:
         """Validate redirect URL to prevent open redirect attacks."""
@@ -92,11 +94,30 @@ def create_app(
             return '/'
         return url
 
+    @app.context_processor
+    def inject_csrf():
+        """Inject CSRF token into all templates and provide csrf_field() helper."""
+        if '_csrf' not in session:
+            session['_csrf'] = secrets.token_hex(32)
+        token = session['_csrf']
+
+        from markupsafe import Markup
+        def csrf_field():
+            return Markup(f'<input type="hidden" name="_csrf_token" value="{token}">')
+
+        return {'csrf_token': token, 'csrf_field': csrf_field}
+
     @app.before_request
     def _csrf_check():
-        """Reject cross-origin POST requests (Origin/Referer check)."""
+        """Reject POST requests without valid CSRF token, with Origin/Referer as secondary check."""
         if request.method != 'POST':
             return None
+        # Primary: session-based CSRF token check
+        form_token = request.form.get('_csrf_token', '')
+        session_token = session.get('_csrf', '')
+        if not session_token or not form_token or form_token != session_token:
+            abort(403)
+        # Secondary: Origin/Referer cross-origin check
         host_parsed = urlparse(request.host_url)
         host_netloc = host_parsed.netloc
         origin = request.headers.get('Origin') or ''
@@ -104,11 +125,11 @@ def create_app(
         if origin:
             origin_parsed = urlparse(origin)
             if origin_parsed.netloc != host_netloc:
-                return 'Forbidden: cross-origin POST', 403
+                abort(403)
         elif referer:
             referer_parsed = urlparse(referer)
             if referer_parsed.netloc != host_netloc:
-                return 'Forbidden: cross-origin POST', 403
+                abort(403)
         return None
 
     _cache: dict[str, object] = {}

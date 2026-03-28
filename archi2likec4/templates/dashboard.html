@@ -39,6 +39,7 @@
       <span class="suppress-item">
         {{ name }}
         <form method="post" action="/unsuppress/system">
+          {{ csrf_field() }}
           <input type="hidden" name="name" value="{{ name }}">
           <button type="submit" class="btn btn-danger" style="padding:0 4px;border:0;font-size:0.7em;">&times;</button>
         </form>
@@ -48,6 +49,7 @@
       <span class="suppress-item">
         {{ qid }}
         <form method="post" action="/unsuppress/incident">
+          {{ csrf_field() }}
           <input type="hidden" name="qa_id" value="{{ qid }}">
           <button type="submit" class="btn btn-danger" style="padding:0 4px;border:0;font-size:0.7em;">&times;</button>
         </form>
@@ -92,12 +94,14 @@
         <td>
           {% if inc.suppressed %}
             <form method="post" action="/unsuppress/incident" style="display:inline">
+              {{ csrf_field() }}
               <input type="hidden" name="qa_id" value="{{ inc.qa_id }}">
               <button type="submit" class="btn btn-success">{{ t.unsuppress }}</button>
             </form>
           {% else %}
             <a href="/incident/{{ inc.qa_id }}" class="btn">{{ t.details }}</a>
             <form method="post" action="/suppress/incident" style="display:inline">
+              {{ csrf_field() }}
               <input type="hidden" name="qa_id" value="{{ inc.qa_id }}">
               <button type="submit" class="btn">{{ t.suppress }}</button>
             </form>
