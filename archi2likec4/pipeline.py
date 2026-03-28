@@ -361,8 +361,9 @@ def _build_solution_view_index(built: BuildResult) -> dict[str, str]:
 def _validate(built: BuildResult, config: ConvertConfig, sv_unresolved: int, sv_total: int) -> tuple[int, int]:
     """Phase 3: quality gates. Returns (warnings, errors).
 
-    Solution views are generated separately in _generate so that this phase
-    remains purely diagnostic — it checks invariants but produces no artifacts.
+    Solution views are pre-generated in convert() before this phase runs.
+    This phase remains purely diagnostic — it checks invariants but produces
+    no artifacts.
     """
     warnings = 0
     errors = 0
@@ -527,7 +528,7 @@ def _generate(
         file_count += 1
         view_count += 1
 
-    # Solution views (already generated in _validate)
+    # Solution views (pre-generated in convert())
     for sol_slug, content in solution_view_files.items():
         (views_solutions_dir / f'{sol_slug}.c4').write_text(content, encoding='utf-8')
         file_count += 1

@@ -92,7 +92,7 @@ class TestPipelineE2E:
         assert len(built.systems) >= 2
         assert len(built.integrations) >= 1
 
-        _generate(built, output, config, {})
+        _generate(built, output, config, parsed.domains_info)
 
         # Verify output files exist
         assert (output / 'specification.c4').exists()
@@ -125,7 +125,7 @@ class TestPipelineE2E:
 
         parsed = _parse(model, config)
         built = _build(parsed, config)
-        _generate(built, output, config, {})
+        _generate(built, output, config, parsed.domains_info)
 
         # The custom domain file must be generated (not silently skipped)
         assert (output / 'domains' / 'custom_domain.c4').exists(), \

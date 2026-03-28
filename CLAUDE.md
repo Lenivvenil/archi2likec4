@@ -33,7 +33,7 @@ parse  →  build  →  validate  →  generate
 | `archi2likec4/builders/integrations.py` | Integration building and interface path resolution |
 | `archi2likec4/builders/data.py` | Data entities and dataStore detection |
 | `archi2likec4/builders/deployment.py` | Deployment topology and node mapping |
-| `archi2likec4/builders/_result.py` | `BuildResult` NamedTuple — data contract between build and generate phases |
+| `archi2likec4/builders/_result.py` | `BuildResult` NamedTuple and `BuildDiagnostics` dataclass — data contracts between build and generate phases |
 | `archi2likec4/generators/spec.py` | LikeC4 spec file (kinds, tags) |
 | `archi2likec4/generators/domains.py` | Domain and subdomain `.c4` files |
 | `archi2likec4/generators/systems.py` | System detail `.c4` files |
