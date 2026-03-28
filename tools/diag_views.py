@@ -192,7 +192,7 @@ for te in parsed.tech_elements:
 
 # Per-view stats
 view_stats = []
-for sv in built.solution_views:
+for sv in parsed.solution_views:
     total = len(sv.element_archi_ids)
     resolved = 0
     unresolved_items = []
@@ -375,8 +375,8 @@ else:
         if s.subdomain
     }
     sv_files, _, _ = generate_solution_views(
-        built.solution_views, built.archi_to_c4, built.sys_domain,
-        built.relationships,
+        parsed.solution_views, built.archi_to_c4, built.sys_domain,
+        parsed.relationships,
         promoted_archi_to_c4=built.promoted_archi_to_c4,
         tech_archi_to_c4=built.tech_archi_to_c4,
         entity_archi_ids={e.archi_id for e in built.entities},

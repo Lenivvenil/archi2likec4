@@ -385,7 +385,7 @@ def main():
     # ═══════════════════════════════════════════════════════════════════════
     section('5. SOLUTION VIEWS')
 
-    solution_views = built.solution_views
+    solution_views = parsed.solution_views
     kv('Total solution views', len(solution_views))
 
     total_view_elements = sum(len(sv.element_archi_ids) for sv in solution_views)
