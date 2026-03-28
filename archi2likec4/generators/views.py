@@ -133,7 +133,7 @@ def _system_path_from_c4(
     return path
 
 
-def generate_solution_views(  # noqa: C901
+def generate_solution_views(  # noqa: C901 — 3 view-type branches with distinct rendering logic; tracked as #2
     solution_views: list[SolutionView],
     archi_to_c4: dict[str, str],
     sys_domain: dict[str, str],

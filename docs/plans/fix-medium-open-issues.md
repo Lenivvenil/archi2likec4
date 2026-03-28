@@ -32,15 +32,15 @@
 
 6 из 12 модулей используют `# noqa: C901` — анализируем каждый и рефакторим где возможно.
 
-- [ ] Найти все `# noqa: C901` в `archi2likec4/` через grep
-- [ ] Для каждого: оценить сложность функции и решить — рефакторить (extract helper) или обосновать оставить
-- [ ] В `archi2likec4/parsers.py`: если есть C901 функции с явными ветками — извлечь хелперы (target: убрать хотя бы 2 из 6 suppressions)
-- [ ] В `archi2likec4/builders/`: аналогично
-- [ ] Для оставшихся C901 которые нельзя убрать без breaking change — добавить комментарий объясняющий почему (TODO или justified complexity)
-- [ ] Обновить `pyproject.toml` если нужно скорректировать лимиты
-- [ ] Закоммитить: `refactor: reduce C901 noqa suppressions, extract helpers in parsers/builders (#27)`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Найти все `# noqa: C901` в `archi2likec4/` через grep
+- [x] Для каждого: оценить сложность функции и решить — рефакторить (extract helper) или обосновать оставить
+- [x] В `archi2likec4/parsers.py`: если есть C901 функции с явными ветками — извлечь хелперы (target: убрать хотя бы 2 из 6 suppressions)
+- [x] В `archi2likec4/builders/`: аналогично
+- [x] Для оставшихся C901 которые нельзя убрать без breaking change — добавить комментарий объясняющий почему (TODO или justified complexity)
+- [x] Обновить `pyproject.toml` если нужно скорректировать лимиты
+- [x] Закоммитить: `refactor: reduce C901 noqa suppressions, extract helpers in parsers/builders (#27)`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 

@@ -84,7 +84,7 @@ def _build_comp_index(systems: list[System]) -> dict[str, tuple[System, Subsyste
     return comp_index
 
 
-def build_systems(  # noqa: C901
+def build_systems(  # noqa: C901 — 4-phase system construction (collect, promote, dot-names, attach); see #27
     components: list[AppComponent],
     promote_children: dict[str, str] | None = None,
     promote_warn_threshold: int | None = None,
@@ -254,7 +254,32 @@ def build_systems(  # noqa: C901
     return sorted(systems.values(), key=lambda s: s.name), promoted_parents
 
 
-def attach_functions(  # noqa: C901
+def _build_rel_parent_map(relationships: list[RawRelationship] | None) -> dict[str, str]:
+    """Build function_archi_id → component_archi_id from structural relationships."""
+    parent_rel_types = {'CompositionRelationship', 'AssignmentRelationship', 'RealizationRelationship'}
+    rel_parent: dict[str, str] = {}
+    if relationships:
+        for rel in relationships:
+            if rel.rel_type in parent_rel_types:
+                if rel.target_type == 'ApplicationFunction' and rel.source_type == 'ApplicationComponent':
+                    rel_parent.setdefault(rel.target_id, rel.source_id)
+                elif rel.source_type == 'ApplicationFunction' and rel.target_type == 'ApplicationComponent':
+                    rel_parent.setdefault(rel.source_id, rel.target_id)
+    return rel_parent
+
+
+def _assign_unique_fn_id(fn: AppFunction, used_ids: set[str]) -> None:
+    """Assign a unique c4_id to a function, avoiding collisions with used_ids."""
+    c4_id = make_id(fn.name)
+    if c4_id in used_ids:
+        suffix = 2
+        while f'{c4_id}_{suffix}' in used_ids:
+            suffix += 1
+        c4_id = f'{c4_id}_{suffix}'
+    fn.c4_id = c4_id
+
+
+def attach_functions(
     systems: list[System],
     functions: list[AppFunction],
     relationships: list[RawRelationship] | None = None,
@@ -268,7 +293,6 @@ def attach_functions(  # noqa: C901
     (the parent no longer exists as a single system).
     Returns the count of orphan functions (no parent found).
     """
-    # Build archi_id → System/Subsystem lookup
     archi_to_system: dict[str, System] = {}
     archi_to_subsystem: dict[str, tuple[System, Subsystem]] = {}
     for sys in systems:
@@ -280,57 +304,72 @@ def attach_functions(  # noqa: C901
             if sub.archi_id:
                 archi_to_subsystem[sub.archi_id] = (sys, sub)
 
-    # Build relationship-based parent map: function_archi_id → component_archi_id
-    parent_rel_types = {'CompositionRelationship', 'AssignmentRelationship', 'RealizationRelationship'}
-    rel_parent: dict[str, str] = {}
-    if relationships:
-        for rel in relationships:
-            if rel.rel_type in parent_rel_types:
-                if rel.target_type == 'ApplicationFunction' and rel.source_type == 'ApplicationComponent':
-                    rel_parent.setdefault(rel.target_id, rel.source_id)
-                elif rel.source_type == 'ApplicationFunction' and rel.target_type == 'ApplicationComponent':
-                    rel_parent.setdefault(rel.source_id, rel.target_id)
+    rel_parent = _build_rel_parent_map(relationships)
 
     orphans = 0
     for fn in functions:
-        # Prefer explicit relationship parent over filesystem hierarchy
         parent_id = rel_parent.get(fn.archi_id, fn.parent_archi_id)
         if not parent_id:
             orphans += 1
             continue
         if parent_id in archi_to_subsystem:
             _sys, sub = archi_to_subsystem[parent_id]
-            # Generate unique c4_id within subsystem
-            used = {f.c4_id for f in sub.functions}
-            c4_id = make_id(fn.name)
-            if c4_id in used:
-                suffix = 2
-                while f'{c4_id}_{suffix}' in used:
-                    suffix += 1
-                c4_id = f'{c4_id}_{suffix}'
-            fn.c4_id = c4_id
+            _assign_unique_fn_id(fn, {f.c4_id for f in sub.functions})
             sub.functions.append(fn)
         elif parent_id in archi_to_system:
             sys = archi_to_system[parent_id]
-            # Include subsystem c4_ids to avoid name collisions
-            used = {f.c4_id for f in sys.functions} | {s.c4_id for s in sys.subsystems}
-            c4_id = make_id(fn.name)
-            if c4_id in used:
-                suffix = 2
-                while f'{c4_id}_{suffix}' in used:
-                    suffix += 1
-                c4_id = f'{c4_id}_{suffix}'
-            fn.c4_id = c4_id
+            _assign_unique_fn_id(fn, {f.c4_id for f in sys.functions} | {s.c4_id for s in sys.subsystems})
             sys.functions.append(fn)
         elif promoted_parents and parent_id in promoted_parents:
-            # Function references a promoted parent — honest orphan
             orphans += 1
         else:
             orphans += 1
     return orphans
 
 
-def attach_interfaces(  # noqa: C901
+def _resolve_iface_owner_by_name(
+    iface_name: str,
+    name_to_sys: dict[str, System],
+    name_to_sub: dict[str, tuple[System, Subsystem]],
+) -> tuple[System, Subsystem | None] | None:
+    """Try to resolve interface ownership from its dot-delimited name."""
+    parts = iface_name.split('.')
+    if len(parts) >= 2:
+        sub_name = f'{parts[0]}.{parts[1]}'
+        if sub_name in name_to_sub:
+            sys, sub = name_to_sub[sub_name]
+            return (sys, sub)
+        if parts[0] in name_to_sys:
+            return (name_to_sys[parts[0]], None)
+        # Promoted systems have dot-names (e.g. "EFS.Card_Service")
+        if sub_name in name_to_sys:
+            return (name_to_sys[sub_name], None)
+    elif iface_name in name_to_sys:
+        return (name_to_sys[iface_name], None)
+    return None
+
+
+def _resolve_iface_owners_from_rels(
+    relationships: list[RawRelationship],
+    comp_index: dict[str, tuple[System, Subsystem | None]],
+    iface_ids: set[str],
+) -> dict[str, tuple[System, Subsystem | None]]:
+    """Resolve interface ownership from structural relationships."""
+    _ownership_rels = {'CompositionRelationship', 'RealizationRelationship', 'AssignmentRelationship'}
+    owners: dict[str, tuple[System, Subsystem | None]] = {}
+    for rel in relationships:
+        if rel.rel_type not in _ownership_rels:
+            continue
+        if rel.source_type == 'ApplicationComponent' and rel.target_type == 'ApplicationInterface':
+            if rel.source_id in comp_index and rel.target_id in iface_ids:
+                owners[rel.target_id] = comp_index[rel.source_id]
+        elif (rel.source_type == 'ApplicationInterface' and rel.target_type == 'ApplicationComponent'
+                and rel.target_id in comp_index and rel.source_id in iface_ids):
+            owners.setdefault(rel.source_id, comp_index[rel.target_id])
+    return owners
+
+
+def attach_interfaces(
     systems: list[System],
     interfaces: list[AppInterface],
     relationships: list[RawRelationship],
@@ -342,17 +381,7 @@ def attach_interfaces(  # noqa: C901
     comp_index = _build_comp_index(systems)
 
     iface_index: dict[str, AppInterface] = {i.archi_id: i for i in interfaces}
-    iface_owner: dict[str, tuple[System, Subsystem | None]] = {}
-
-    for rel in relationships:
-        if rel.rel_type in ('CompositionRelationship', 'RealizationRelationship', 'AssignmentRelationship'):
-            if rel.source_type == 'ApplicationComponent' and rel.target_type == 'ApplicationInterface':
-                if rel.source_id in comp_index and rel.target_id in iface_index:
-                    iface_owner[rel.target_id] = comp_index[rel.source_id]
-            # Reverse direction: Interface → Component
-            elif (rel.source_type == 'ApplicationInterface' and rel.target_type == 'ApplicationComponent'
-                    and rel.target_id in comp_index and rel.source_id in iface_index):
-                iface_owner.setdefault(rel.source_id, comp_index[rel.target_id])
+    iface_owner = _resolve_iface_owners_from_rels(relationships, comp_index, set(iface_index.keys()))
 
     name_to_sys: dict[str, System] = {s.name: s for s in systems}
     name_to_sub: dict[str, tuple[System, Subsystem]] = {}
@@ -364,25 +393,11 @@ def attach_interfaces(  # noqa: C901
     for iface in interfaces:
         if iface.archi_id in iface_owner:
             continue
-        parts = iface.name.split('.')
-        if len(parts) >= 2:
-            sub_name = f'{parts[0]}.{parts[1]}'
-            if sub_name in name_to_sub:
-                sys, sub = name_to_sub[sub_name]
-                iface_owner[iface.archi_id] = (sys, sub)
-                continue
-            if parts[0] in name_to_sys:
-                iface_owner[iface.archi_id] = (name_to_sys[parts[0]], None)
-                continue
-            # Promoted systems have dot-names (e.g. "EFS.Card_Service")
-            promoted_name = f'{parts[0]}.{parts[1]}'
-            if promoted_name in name_to_sys:
-                iface_owner[iface.archi_id] = (name_to_sys[promoted_name], None)
-                continue
-        elif iface.name in name_to_sys:
-            iface_owner[iface.archi_id] = (name_to_sys[iface.name], None)
-            continue
-        unresolved += 1
+        owner = _resolve_iface_owner_by_name(iface.name, name_to_sys, name_to_sub)
+        if owner:
+            iface_owner[iface.archi_id] = owner
+        else:
+            unresolved += 1
 
     if unresolved:
         logger.warning('%d ApplicationInterface(s) could not be resolved to a system', unresolved)

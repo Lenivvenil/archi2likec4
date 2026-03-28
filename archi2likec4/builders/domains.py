@@ -15,7 +15,7 @@ from ..models import (
 logger = logging.getLogger(__name__)
 
 
-def assign_domains(  # noqa: C901
+def assign_domains(  # noqa: C901 — 4-pass assignment (overrides, hits, promote, patterns) is inherently sequential
     systems: list[System],
     domains: list[DomainInfo],
     promote_children: dict[str, str] | None = None,
@@ -110,7 +110,7 @@ def assign_domains(  # noqa: C901
     return result
 
 
-def assign_subdomains(  # noqa: C901
+def assign_subdomains(  # noqa: C901 — multi-phase subdomain resolution with majority-vote fallback; see #27
     systems: list[System],
     parsed_subdomains: list[ParsedSubdomain],
     manual_overrides: dict[str, str] | None = None,
