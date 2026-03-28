@@ -64,6 +64,35 @@ _DEFAULT_SYNC_PROTECTED_PATHS: frozenset[str] = frozenset({
     'scripts/validate_domains.py',
 })
 
+# Defaults for spec.py — custom color definitions, element shapes, and tags.
+_DEFAULT_SPEC_COLORS: dict[str, str] = {
+    'archi-app': '#7EB8DA',
+    'archi-app-light': '#BDE0F0',
+    'archi-data': '#F0D68A',
+    'archi-store': '#B0B0B0',
+    'archi-tech': '#93D275',
+    'archi-tech-light': '#C5E6B8',
+}
+
+_DEFAULT_SPEC_SHAPES: dict[str, str] = {
+    'domain': 'rectangle',
+    'subdomain': 'rectangle',
+    'system': 'component',
+    'subsystem': 'component',
+    'appFunction': 'rectangle',
+    'dataEntity': 'document',
+    'dataStore': 'cylinder',
+    'infraNode': 'rectangle',
+    'infraSoftware': 'cylinder',
+    'infraZone': 'rectangle',
+    'infraLocation': 'rectangle',
+}
+
+_DEFAULT_SPEC_TAGS: list[str] = [
+    'to_review', 'external', 'entity', 'store',
+    'infrastructure', 'cluster', 'device', 'network',
+]
+
 
 @dataclass
 class ConvertConfig:
@@ -124,6 +153,14 @@ class ConvertConfig:
     sync_protected_paths: frozenset[str] = field(
         default_factory=lambda: frozenset(_DEFAULT_SYNC_PROTECTED_PATHS))
 
+    # Specification: custom colors, element shapes, tags
+    spec_colors: dict[str, str] = field(
+        default_factory=lambda: dict(_DEFAULT_SPEC_COLORS))
+    spec_shapes: dict[str, str] = field(
+        default_factory=lambda: dict(_DEFAULT_SPEC_SHAPES))
+    spec_tags: list[str] = field(
+        default_factory=lambda: list(_DEFAULT_SPEC_TAGS))
+
     # CLI flags
     strict: bool = False
     verbose: bool = False
@@ -178,6 +215,7 @@ _KNOWN_YAML_KEYS: set[str] = {
     'language', 'deployment_env', 'extra_view_patterns', 'strict', 'sync_target',
     'property_map', 'standard_keys',
     'sync_protected_top', 'sync_protected_paths',
+    'spec_colors', 'spec_shapes', 'spec_tags',
 }
 
 
@@ -455,6 +493,39 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                 raise ConfigError(
                     f"standard_keys: all items must be strings, got {type(item).__name__}: {item!r}")
         config.standard_keys = list(val)
+
+    if 'spec_colors' in data:
+        val = data['spec_colors']
+        if not isinstance(val, dict):
+            raise ConfigError(
+                f"spec_colors: expected mapping, got {type(val).__name__}")
+        for k, v in val.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                raise ConfigError(
+                    f"spec_colors: keys and values must be strings, got {k!r}: {v!r}")
+        config.spec_colors = {**config.spec_colors, **val}
+
+    if 'spec_shapes' in data:
+        val = data['spec_shapes']
+        if not isinstance(val, dict):
+            raise ConfigError(
+                f"spec_shapes: expected mapping, got {type(val).__name__}")
+        for k, v in val.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                raise ConfigError(
+                    f"spec_shapes: keys and values must be strings, got {k!r}: {v!r}")
+        config.spec_shapes = {**config.spec_shapes, **val}
+
+    if 'spec_tags' in data:
+        val = data['spec_tags']
+        if not isinstance(val, list):
+            raise ConfigError(
+                f"spec_tags: expected list, got {type(val).__name__}")
+        for item in val:
+            if not isinstance(item, str):
+                raise ConfigError(
+                    f"spec_tags: all items must be strings, got {type(item).__name__}: {item!r}")
+        config.spec_tags = list(val)
 
     if 'sync_protected_top' in data:
         val = data['sync_protected_top']

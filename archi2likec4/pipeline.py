@@ -460,7 +460,7 @@ def _generate(
     file_count = 0
 
     # Root files
-    (output_dir / 'specification.c4').write_text(generate_spec(), encoding='utf-8')
+    (output_dir / 'specification.c4').write_text(generate_spec(config), encoding='utf-8')
     file_count += 1
     (output_dir / 'relationships.c4').write_text(
         generate_relationships(built.integrations), encoding='utf-8')

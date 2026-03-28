@@ -35,6 +35,9 @@ class MockConfig:
         extra_view_patterns=None,
         sync_protected_top=None,
         sync_protected_paths=None,
+        spec_colors=None,
+        spec_shapes=None,
+        spec_tags=None,
     ):
         self.promote_children = promote_children or {}
         self.promote_warn_threshold = promote_warn_threshold
@@ -65,6 +68,23 @@ class MockConfig:
         self.sync_target = sync_target
         self.sync_protected_top = sync_protected_top if sync_protected_top is not None else frozenset()
         self.sync_protected_paths = sync_protected_paths if sync_protected_paths is not None else frozenset()
+        self.spec_colors = spec_colors if spec_colors is not None else {
+            'archi-app': '#7EB8DA', 'archi-app-light': '#BDE0F0',
+            'archi-data': '#F0D68A', 'archi-store': '#B0B0B0',
+            'archi-tech': '#93D275', 'archi-tech-light': '#C5E6B8',
+        }
+        self.spec_shapes = spec_shapes if spec_shapes is not None else {
+            'domain': 'rectangle', 'subdomain': 'rectangle',
+            'system': 'component', 'subsystem': 'component',
+            'appFunction': 'rectangle', 'dataEntity': 'document',
+            'dataStore': 'cylinder', 'infraNode': 'rectangle',
+            'infraSoftware': 'cylinder', 'infraZone': 'rectangle',
+            'infraLocation': 'rectangle',
+        }
+        self.spec_tags = spec_tags if spec_tags is not None else [
+            'to_review', 'external', 'entity', 'store',
+            'infrastructure', 'cluster', 'device', 'network',
+        ]
 
 
 class MockBuilt:

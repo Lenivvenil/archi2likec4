@@ -7,6 +7,9 @@ import pytest
 from archi2likec4.config import (
     _DEFAULT_DOMAIN_RENAMES,
     _DEFAULT_PROMOTE_CHILDREN,
+    _DEFAULT_SPEC_COLORS,
+    _DEFAULT_SPEC_SHAPES,
+    _DEFAULT_SPEC_TAGS,
     _DEFAULT_SYNC_PROTECTED_PATHS,
     _DEFAULT_SYNC_PROTECTED_TOP,
     ConvertConfig,
@@ -873,6 +876,69 @@ class TestSyncProtectedConfig:
         from archi2likec4.config import _KNOWN_YAML_KEYS
         assert 'sync_protected_top' in _KNOWN_YAML_KEYS
         assert 'sync_protected_paths' in _KNOWN_YAML_KEYS
+
+
+# ── Spec config (Issue #29) ───────────────────────────────────────────────
+
+class TestSpecConfig:
+    """spec_colors, spec_shapes, spec_tags config options."""
+
+    def test_defaults_use_builtin_spec_values(self):
+        config = ConvertConfig()
+        assert config.spec_colors == _DEFAULT_SPEC_COLORS
+        assert config.spec_shapes == _DEFAULT_SPEC_SHAPES
+        assert config.spec_tags == _DEFAULT_SPEC_TAGS
+
+    def test_spec_colors_yaml_merge(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'spec_colors': {'archi-app': '#FF0000', 'custom': '#123456'}})
+        assert config.spec_colors['archi-app'] == '#FF0000'
+        assert config.spec_colors['custom'] == '#123456'
+        # Other defaults preserved
+        assert config.spec_colors['archi-data'] == '#F0D68A'
+
+    def test_spec_shapes_yaml_merge(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'spec_shapes': {'domain': 'hexagon'}})
+        assert config.spec_shapes['domain'] == 'hexagon'
+        # Other defaults preserved
+        assert config.spec_shapes['system'] == 'component'
+
+    def test_spec_tags_yaml_override(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'spec_tags': ['custom_tag']})
+        assert config.spec_tags == ['custom_tag']
+
+    def test_spec_colors_not_dict_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_colors.*expected mapping'):
+            _apply_yaml(config, {'spec_colors': ['not', 'a', 'dict']})
+
+    def test_spec_shapes_not_dict_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_shapes.*expected mapping'):
+            _apply_yaml(config, {'spec_shapes': 'flat'})
+
+    def test_spec_tags_not_list_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_tags.*expected list'):
+            _apply_yaml(config, {'spec_tags': {'not': 'a list'}})
+
+    def test_spec_tags_non_string_item_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_tags.*must be strings'):
+            _apply_yaml(config, {'spec_tags': ['ok', 42]})
+
+    def test_spec_colors_non_string_value_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_colors.*must be strings'):
+            _apply_yaml(config, {'spec_colors': {'archi-app': 123}})
+
+    def test_known_yaml_keys_include_spec(self):
+        from archi2likec4.config import _KNOWN_YAML_KEYS
+        assert 'spec_colors' in _KNOWN_YAML_KEYS
+        assert 'spec_shapes' in _KNOWN_YAML_KEYS
+        assert 'spec_tags' in _KNOWN_YAML_KEYS
 
 
 # ── Bank-specific defaults (Issue #6) ────────────────────────────────────

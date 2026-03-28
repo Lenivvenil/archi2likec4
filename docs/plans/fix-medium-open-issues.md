@@ -48,12 +48,12 @@
 
 В `spec.py` цвета, формы и теги хардкожены — делаем конфигурируемыми.
 
-- [ ] Найти все хардкоды в `archi2likec4/generators/spec.py` — цвета `color =`, формы `shape =`, теги `#tag`
-- [ ] В `archi2likec4/config.py`: добавить опциональные поля `spec_colors: dict[str, str]`, `spec_shapes: dict[str, str]`, `spec_tags: list[str]` с дефолтами из текущих хардкодов
-- [ ] Добавить обработку в `load_config()` в `archi2likec4/config.py`
-- [ ] В `archi2likec4/generators/spec.py`: функция `generate_spec()` принимает `config: ConvertConfig` и использует `config.spec_colors`, `config.spec_shapes`, `config.spec_tags`
-- [ ] В `archi2likec4/pipeline.py`: убедиться что `config` передаётся в `generate_spec()`
-- [ ] Добавить `'spec_colors', 'spec_shapes', 'spec_tags'` в `_KNOWN_KEYS` в `config.py`
-- [ ] Закоммитить: `feat: make spec.py colors, shapes, tags configurable (#29)`
-- [ ] Add/update tests for the above changes (`tests/test_generators.py`: тест с кастомными цветами/формами; `tests/test_config.py`: тест загрузки spec настроек)
-- [ ] Mark completed
+- [x] Найти все хардкоды в `archi2likec4/generators/spec.py` — цвета `color =`, формы `shape =`, теги `#tag`
+- [x] В `archi2likec4/config.py`: добавить опциональные поля `spec_colors: dict[str, str]`, `spec_shapes: dict[str, str]`, `spec_tags: list[str]` с дефолтами из текущих хардкодов
+- [x] Добавить обработку в `load_config()` в `archi2likec4/config.py`
+- [x] В `archi2likec4/generators/spec.py`: функция `generate_spec()` принимает `config: ConvertConfig` и использует `config.spec_colors`, `config.spec_shapes`, `config.spec_tags`
+- [x] В `archi2likec4/pipeline.py`: убедиться что `config` передаётся в `generate_spec()`
+- [x] Добавить `'spec_colors', 'spec_shapes', 'spec_tags'` в `_KNOWN_KEYS` в `config.py`
+- [x] Закоммитить: `feat: make spec.py colors, shapes, tags configurable (#29)`
+- [x] Add/update tests for the above changes (`tests/test_generators.py`: тест с кастомными цветами/формами; `tests/test_config.py`: тест загрузки spec настроек)
+- [x] Mark completed

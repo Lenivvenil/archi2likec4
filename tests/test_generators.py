@@ -60,6 +60,51 @@ class TestGenerateSpec:
         spec = generate_spec()
         assert 'color archi-app' in spec
 
+    def test_custom_colors_from_config(self):
+        cfg = MockConfig(spec_colors={
+            'archi-app': '#FF0000',
+            'archi-app-light': '#BDE0F0',
+            'archi-data': '#F0D68A',
+            'archi-store': '#B0B0B0',
+            'archi-tech': '#93D275',
+            'archi-tech-light': '#C5E6B8',
+        })
+        spec = generate_spec(cfg)
+        assert 'color archi-app #FF0000' in spec
+        assert '#7EB8DA' not in spec
+
+    def test_custom_shapes_from_config(self):
+        cfg = MockConfig(spec_shapes={
+            'domain': 'hexagon',
+            'subdomain': 'rectangle',
+            'system': 'component',
+            'subsystem': 'component',
+            'appFunction': 'rectangle',
+            'dataEntity': 'document',
+            'dataStore': 'cylinder',
+            'infraNode': 'rectangle',
+            'infraSoftware': 'cylinder',
+            'infraZone': 'rectangle',
+            'infraLocation': 'rectangle',
+        })
+        spec = generate_spec(cfg)
+        # domain should use hexagon now
+        domain_idx = spec.index('element domain')
+        domain_block = spec[domain_idx:spec.index('}', spec.index('}', domain_idx) + 1) + 1]
+        assert 'shape hexagon' in domain_block
+
+    def test_custom_tags_from_config(self):
+        cfg = MockConfig(spec_tags=['custom_tag', 'another_tag'])
+        spec = generate_spec(cfg)
+        assert 'tag custom_tag' in spec
+        assert 'tag another_tag' in spec
+        assert 'tag to_review' not in spec
+
+    def test_config_none_uses_defaults(self):
+        spec_default = generate_spec()
+        spec_none = generate_spec(None)
+        assert spec_default == spec_none
+
 
 # ── generate_domain_c4 ──────────────────────────────────────────────────
 
