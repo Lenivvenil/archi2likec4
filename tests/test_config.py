@@ -454,6 +454,28 @@ class TestLanguageConfig:
             _apply_yaml(config, {'language': 'fr'})
 
 
+class TestDeploymentEnvConfig:
+    """deployment_env config option."""
+
+    def test_default_prod(self):
+        config = ConvertConfig()
+        assert config.deployment_env == 'prod'
+
+    def test_yaml_override(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'deployment_env': 'staging'})
+        assert config.deployment_env == 'staging'
+
+    def test_empty_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='deployment_env.*must not be empty'):
+            _apply_yaml(config, {'deployment_env': '  '})
+
+    def test_in_known_keys(self):
+        from archi2likec4.config import _KNOWN_YAML_KEYS
+        assert 'deployment_env' in _KNOWN_YAML_KEYS
+
+
 class TestDomainOverrides:
     """domain_overrides config option."""
 

@@ -293,7 +293,7 @@ def compute_audit_incidents(
 
     # ── QA-9: No infrastructure mapping ──────────────────────────────
     def _sys_c4_path(s: System) -> str:
-        sd = getattr(s, 'subdomain', '')
+        sd = s.subdomain
         if sd:
             return f'{s.domain}.{sd}.{s.c4_id}'
         return f'{s.domain}.{s.c4_id}'

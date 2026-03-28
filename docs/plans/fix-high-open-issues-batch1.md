@@ -16,17 +16,17 @@
 
 Незакоммиченные изменения для #5, #14, #28 уже готовы — верифицируем и коммитим.
 
-- [ ] Проверить `archi2likec4/audit_data.py`: нет `object` в сигнатуре `compute_audit_incidents()`, нет `getattr()` и `# type: ignore`, импорты через `TYPE_CHECKING`
-- [ ] Проверить `archi2likec4/config.py`: поле `deployment_env: str = 'prod'` в `ConvertConfig`, обработка в `load_config()`, добавлено в `_KNOWN_KEYS`
-- [ ] Проверить `archi2likec4/generators/views.py`: параметр `deployment_env: str = 'prod'` в `generate_solution_views()`, используется при генерации
-- [ ] Проверить `archi2likec4/pipeline.py`: `config.deployment_env` передаётся в `generate_deployment_c4()` и `generate_solution_views()`
-- [ ] Проверить `pyproject.toml`: `ignore_missing_imports = true` только в `[[tool.mypy.overrides]]` для `flask`, `yaml`, `defusedxml` — не глобально
-- [ ] Убрать мёртвый `import secrets` из `archi2likec4/web.py` (будет добавлен правильно в Task 2)
-- [ ] `ruff check` и `mypy` проходят без ошибок
-- [ ] Прогнать `pytest`; если тесты падают — исправить
-- [ ] Закоммитить: `fix: type safety in audit_data, configurable deployment_env, narrow mypy overrides (#5, #14, #28)`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Проверить `archi2likec4/audit_data.py`: нет `object` в сигнатуре `compute_audit_incidents()`, нет `getattr()` и `# type: ignore`, импорты через `TYPE_CHECKING`
+- [x] Проверить `archi2likec4/config.py`: поле `deployment_env: str = 'prod'` в `ConvertConfig`, обработка в `load_config()`, добавлено в `_KNOWN_KEYS`
+- [x] Проверить `archi2likec4/generators/views.py`: параметр `deployment_env: str = 'prod'` в `generate_solution_views()`, используется при генерации
+- [x] Проверить `archi2likec4/pipeline.py`: `config.deployment_env` передаётся в `generate_deployment_c4()` и `generate_solution_views()`
+- [x] Проверить `pyproject.toml`: `ignore_missing_imports = true` только в `[[tool.mypy.overrides]]` для `flask`, `yaml`, `defusedxml` — не глобально
+- [x] Убрать мёртвый `import secrets` из `archi2likec4/web.py` (будет добавлен правильно в Task 2)
+- [x] `ruff check` и `mypy` проходят без ошибок
+- [x] Прогнать `pytest`; если тесты падают — исправить
+- [x] Закоммитить: `fix: type safety in audit_data, configurable deployment_env, narrow mypy overrides (#5, #14, #28)`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 
