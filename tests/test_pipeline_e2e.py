@@ -156,6 +156,7 @@ class TestPipelineE2E:
 
 def _make_empty_built() -> BuildResult:
     """Create a minimal BuildResult with all-empty data for _validate() tests."""
+    from archi2likec4.builders._result import BuildDiagnostics
     return BuildResult(
         systems=[],
         integrations=[],
@@ -167,7 +168,7 @@ def _make_empty_built() -> BuildResult:
         promoted_archi_to_c4={},
         promoted_parents={},
         iface_c4_path={},
-        orphan_fns=0,
+        diagnostics=BuildDiagnostics(orphan_fns=0, intg_skipped=0, intg_total_eligible=0),
         solution_views=[],
         relationships=[],
         domains_info=[],
@@ -175,8 +176,6 @@ def _make_empty_built() -> BuildResult:
         deployment_map=[],
         tech_archi_to_c4={},
         datastore_entity_links=[],
-        intg_skipped=0,
-        intg_total_eligible=0,
         subdomains=[],
         subdomain_systems={},
     )
@@ -193,7 +192,9 @@ class TestValidate:
 
     def test_orphan_fns_above_threshold_produces_warning(self):
         """orphan_fns exceeding max_orphan_functions_warn triggers a warning."""
-        built = _make_empty_built()._replace(orphan_fns=10)
+        from archi2likec4.builders._result import BuildDiagnostics
+        built = _make_empty_built()._replace(
+            diagnostics=BuildDiagnostics(orphan_fns=10, intg_skipped=0, intg_total_eligible=0))
         config = ConvertConfig(max_orphan_functions_warn=5)
         warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
         assert warnings >= 1
@@ -201,7 +202,9 @@ class TestValidate:
 
     def test_orphan_fns_at_threshold_no_warning(self):
         """orphan_fns exactly at threshold does NOT trigger a warning."""
-        built = _make_empty_built()._replace(orphan_fns=5)
+        from archi2likec4.builders._result import BuildDiagnostics
+        built = _make_empty_built()._replace(
+            diagnostics=BuildDiagnostics(orphan_fns=5, intg_skipped=0, intg_total_eligible=0))
         config = ConvertConfig(max_orphan_functions_warn=5)
         warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
         assert warnings == 0

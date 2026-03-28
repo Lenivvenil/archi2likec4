@@ -775,7 +775,8 @@ class TestGenerateAuditMd:
         assert 'EFS' in result
 
     def test_orphan_fns_shown(self):
-        built = MockBuilt(orphan_fns=3)
+        from archi2likec4.builders._result import BuildDiagnostics
+        built = MockBuilt(diagnostics=BuildDiagnostics(orphan_fns=3, intg_skipped=0, intg_total_eligible=0))
         result = generate_audit_md(built, 0, 0, MockConfig())
         assert '[Low] Осиротевшие функции (3)' in result
 

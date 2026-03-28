@@ -3,7 +3,7 @@
 All public symbols are re-exported here for backward compatibility.
 """
 
-from ._result import BuildResult
+from ._result import BuildDiagnostics, BuildResult
 from .data import build_data_access, build_data_entities, build_datastore_entity_links
 from .deployment import (
     build_archi_to_c4_map,
@@ -18,6 +18,7 @@ from .integrations import build_integrations
 from .systems import attach_functions, attach_interfaces, build_systems
 
 __all__ = [
+    'BuildDiagnostics',
     'BuildResult',
     'apply_domain_prefix',
     'assign_domains',

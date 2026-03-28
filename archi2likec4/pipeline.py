@@ -11,6 +11,7 @@ from typing import NamedTuple
 
 from .audit_data import compute_audit_incidents
 from .builders import (
+    BuildDiagnostics,
     BuildResult,
     apply_domain_prefix,
     assign_domains,
@@ -333,7 +334,11 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
         promoted_archi_to_c4=promoted_archi_to_c4,
         promoted_parents=promoted_parents,
         iface_c4_path=iface_c4_path,
-        orphan_fns=orphan_fns,
+        diagnostics=BuildDiagnostics(
+            orphan_fns=orphan_fns,
+            intg_skipped=intg_skipped,
+            intg_total_eligible=intg_total_eligible,
+        ),
         solution_views=parsed.solution_views,
         relationships=parsed.relationships,
         domains_info=parsed.domains_info,
@@ -341,8 +346,6 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
         deployment_map=deployment_map,
         tech_archi_to_c4=tech_archi_to_c4,
         datastore_entity_links=datastore_entity_links,
-        intg_skipped=intg_skipped,
-        intg_total_eligible=intg_total_eligible,
         subdomains=subdomains,
         subdomain_systems=subdomain_systems,
     )
@@ -384,9 +387,9 @@ def _validate(built: BuildResult, config: ConvertConfig, sv_unresolved: int, sv_
                         sv_unresolved, sv_total, sv_ratio * 100)
 
     # Gate 2: Orphan functions
-    if built.orphan_fns > config.max_orphan_functions_warn:
+    if built.diagnostics.orphan_fns > config.max_orphan_functions_warn:
         logger.warning('%d orphan functions (threshold: %d)',
-                       built.orphan_fns, config.max_orphan_functions_warn)
+                       built.diagnostics.orphan_fns, config.max_orphan_functions_warn)
         warnings += 1
 
     # Gate 3: Unassigned systems

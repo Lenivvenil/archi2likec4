@@ -71,7 +71,7 @@ def _mock_load_data():
     mock_built.entities = []
     mock_built.deployment_nodes = []
     mock_built.relationships = []
-    mock_built.orphan_fns = 0
+    # diagnostics is already set by MockBuilt default
 
     return config, summary, incidents, available_domains, mock_built
 
@@ -279,7 +279,7 @@ def app_client_with_subdomains(tmp_path):
     mock_built.entities = []
     mock_built.deployment_nodes = []
     mock_built.relationships = []
-    mock_built.orphan_fns = 0
+    # diagnostics is already set by MockBuilt default
 
     model_dir = tmp_path / 'model'
     model_dir.mkdir()

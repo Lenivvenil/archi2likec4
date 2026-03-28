@@ -17,14 +17,14 @@
 Выделяем диагностические счётчики в отдельный dataclass, добавляем его как одно поле BuildResult.
 BuildResult сжимается с 22 до 20 полей.
 
-- [ ] В `archi2likec4/builders/_result.py`: добавить `@dataclass(frozen=True) class BuildDiagnostics` с полями `orphan_fns: int`, `intg_skipped: int`, `intg_total_eligible: int`
-- [ ] В `archi2likec4/builders/_result.py`: заменить три поля `orphan_fns`, `intg_skipped`, `intg_total_eligible` в `BuildResult` на одно поле `diagnostics: BuildDiagnostics`
-- [ ] В `archi2likec4/pipeline.py`: в конструкторе BuildResult (~L325-348) заменить три отдельных значения на `BuildDiagnostics(orphan_fns=..., intg_skipped=..., intg_total_eligible=...)`
-- [ ] В `archi2likec4/audit_data.py`: заменить `built.orphan_fns` → `built.diagnostics.orphan_fns`, `built.intg_skipped` → `built.diagnostics.intg_skipped`, `built.intg_total_eligible` → `built.diagnostics.intg_total_eligible`
-- [ ] В `tests/helpers.py`: обновить `MockBuilt` — убрать три поля, добавить `diagnostics=BuildDiagnostics(orphan_fns=0, intg_skipped=0, intg_total_eligible=0)`
-- [ ] Закоммитить: `refactor: extract BuildDiagnostics from BuildResult (#3)`
-- [ ] Add/update tests for the above changes (`tests/test_audit_data.py`: убедиться что тесты используют `built.diagnostics.*`)
-- [ ] Mark completed
+- [x] В `archi2likec4/builders/_result.py`: добавить `@dataclass(frozen=True) class BuildDiagnostics` с полями `orphan_fns: int`, `intg_skipped: int`, `intg_total_eligible: int`
+- [x] В `archi2likec4/builders/_result.py`: заменить три поля `orphan_fns`, `intg_skipped`, `intg_total_eligible` в `BuildResult` на одно поле `diagnostics: BuildDiagnostics`
+- [x] В `archi2likec4/pipeline.py`: в конструкторе BuildResult (~L325-348) заменить три отдельных значения на `BuildDiagnostics(orphan_fns=..., intg_skipped=..., intg_total_eligible=...)`
+- [x] В `archi2likec4/audit_data.py`: заменить `built.orphan_fns` → `built.diagnostics.orphan_fns`, `built.intg_skipped` → `built.diagnostics.intg_skipped`, `built.intg_total_eligible` → `built.diagnostics.intg_total_eligible`
+- [x] В `tests/helpers.py`: обновить `MockBuilt` — убрать три поля, добавить `diagnostics=BuildDiagnostics(orphan_fns=0, intg_skipped=0, intg_total_eligible=0)`
+- [x] Закоммитить: `refactor: extract BuildDiagnostics from BuildResult (#3)`
+- [x] Add/update tests for the above changes (`tests/test_audit_data.py`: убедиться что тесты используют `built.diagnostics.*`)
+- [x] Mark completed
 
 ---
 

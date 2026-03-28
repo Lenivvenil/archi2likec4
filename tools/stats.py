@@ -189,9 +189,9 @@ def main():
     # ═══════════════════════════════════════════════════════════════════════
     section('3. INTEGRATIONS (dead integration analysis)')
 
-    kv('Total eligible relationships (non-structural)', built.intg_total_eligible)
+    kv('Total eligible relationships (non-structural)', built.diagnostics.intg_total_eligible)
     kv('Successfully resolved integrations', len(built.integrations))
-    kv('Skipped/unresolvable', f'{built.intg_skipped} ({pct(built.intg_skipped, built.intg_total_eligible)})')
+    kv('Skipped/unresolvable', f'{built.diagnostics.intg_skipped} ({pct(built.diagnostics.intg_skipped, built.diagnostics.intg_total_eligible)})')
 
     # Deeper analysis: WHY were relationships skipped?
     # Re-run resolution logic to categorize skip reasons
@@ -494,8 +494,8 @@ def main():
     kv('Subsystems', total_sub)
     kv('Domains', len([d for d, sl in built.domain_systems.items() if sl]))
     kv('Integrations (resolved)', len(built.integrations))
-    kv('Integrations (skipped)', built.intg_skipped)
-    kv('Integration loss rate', pct(built.intg_skipped, built.intg_total_eligible))
+    kv('Integrations (skipped)', built.diagnostics.intg_skipped)
+    kv('Integration loss rate', pct(built.diagnostics.intg_skipped, built.diagnostics.intg_total_eligible))
     kv('Data entities', len(built.entities))
     kv('Orphan entities', len(orphan_entities))
     kv('Solution views', len(solution_views))

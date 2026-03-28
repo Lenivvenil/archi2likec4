@@ -2,6 +2,7 @@
 
 from pathlib import Path
 
+from archi2likec4.builders._result import BuildDiagnostics
 from archi2likec4.models import DEFAULT_PROP_MAP, DEFAULT_STANDARD_KEYS
 
 
@@ -69,12 +70,10 @@ class MockBuilt:
         integrations=None,
         entities=None,
         deployment_map=None,
-        orphan_fns=0,
+        diagnostics=None,
         relationships=None,
         deployment_nodes=None,
         datastore_entity_links=None,
-        intg_skipped=0,
-        intg_total_eligible=0,
         subdomains=None,
         subdomain_systems=None,
         # Additional BuildResult fields
@@ -93,12 +92,10 @@ class MockBuilt:
         self.integrations = integrations or []
         self.entities = entities or []
         self.deployment_map = deployment_map or []
-        self.orphan_fns = orphan_fns
+        self.diagnostics = diagnostics or BuildDiagnostics(orphan_fns=0, intg_skipped=0, intg_total_eligible=0)
         self.relationships = relationships or []
         self.deployment_nodes = deployment_nodes or []
         self.datastore_entity_links = datastore_entity_links or []
-        self.intg_skipped = intg_skipped
-        self.intg_total_eligible = intg_total_eligible
         self.subdomains = subdomains or []
         self.subdomain_systems = subdomain_systems or {}
         self.data_access = data_access or []

@@ -29,11 +29,14 @@ class TestValidateNoSideEffects:
 
     def test_validate_does_not_mutate_built(self) -> None:
         import copy
-        built = MockBuilt(orphan_fns=10, domain_systems={'unassigned': ['a', 'b']})
-        orphan_before = built.orphan_fns
+
+        from archi2likec4.builders._result import BuildDiagnostics
+        diag = BuildDiagnostics(orphan_fns=10, intg_skipped=0, intg_total_eligible=0)
+        built = MockBuilt(diagnostics=diag, domain_systems={'unassigned': ['a', 'b']})
+        orphan_before = built.diagnostics.orphan_fns
         ds_before = copy.deepcopy(built.domain_systems)
         _validate(built, MockConfig(), sv_unresolved=0, sv_total=10)
-        assert built.orphan_fns == orphan_before
+        assert built.diagnostics.orphan_fns == orphan_before
         assert built.domain_systems == ds_before
 
     def test_validate_zero_counts_on_clean_data(self) -> None:

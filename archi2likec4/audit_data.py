@@ -245,7 +245,7 @@ def compute_audit_incidents(
         ))
 
     # ── QA-6: Orphan functions ───────────────────────────────────────
-    orphan_fns: int = built.orphan_fns
+    orphan_fns: int = built.diagnostics.orphan_fns
     if orphan_fns > 0:
         incidents.append(AuditIncident(
             qa_id='QA-6',
@@ -259,8 +259,8 @@ def compute_audit_incidents(
         ))
 
     # ── QA-7: Lost integrations ──────────────────────────────────────
-    skipped_intg: int = built.intg_skipped
-    total_eligible: int = built.intg_total_eligible
+    skipped_intg: int = built.diagnostics.intg_skipped
+    total_eligible: int = built.diagnostics.intg_total_eligible
     if skipped_intg > 0 and total_eligible > 0:
         pct = round(skipped_intg / total_eligible * 100)
         incidents.append(AuditIncident(

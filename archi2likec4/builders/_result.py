@@ -1,5 +1,6 @@
 """BuildResult NamedTuple — the output of the build phase."""
 
+from dataclasses import dataclass
 from typing import NamedTuple
 
 from ..models import (
@@ -15,6 +16,15 @@ from ..models import (
 )
 
 
+@dataclass(frozen=True)
+class BuildDiagnostics:
+    """Diagnostic counters produced by the build phase."""
+
+    orphan_fns: int
+    intg_skipped: int
+    intg_total_eligible: int
+
+
 class BuildResult(NamedTuple):
     """Complete output of the build phase — passed to generators."""
 
@@ -28,7 +38,7 @@ class BuildResult(NamedTuple):
     promoted_archi_to_c4: dict[str, list[str]]
     promoted_parents: dict[str, list[str]]
     iface_c4_path: dict[str, str]
-    orphan_fns: int
+    diagnostics: BuildDiagnostics
     solution_views: list[SolutionView]
     relationships: list[RawRelationship]
     domains_info: list[DomainInfo]
@@ -36,7 +46,5 @@ class BuildResult(NamedTuple):
     deployment_map: list[tuple[str, str]]
     tech_archi_to_c4: dict[str, str]
     datastore_entity_links: list[tuple[str, str]]
-    intg_skipped: int
-    intg_total_eligible: int
     subdomains: list[Subdomain]
     subdomain_systems: dict[tuple[str, str], list[str]]

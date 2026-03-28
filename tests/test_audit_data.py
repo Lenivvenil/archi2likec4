@@ -70,12 +70,12 @@ class TestComputeAuditIncidents:
                             name='flow', source_type='AC', source_id='src',
                             target_type='AC', target_id='tgt'),
         ]
+        from archi2likec4.builders._result import BuildDiagnostics
         built = MockBuilt(
             systems=[s1],
             integrations=[],
             relationships=rels,
-            intg_skipped=1,
-            intg_total_eligible=1,
+            diagnostics=BuildDiagnostics(orphan_fns=0, intg_skipped=1, intg_total_eligible=1),
         )
         _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
         qa7 = next((i for i in incidents if i.qa_id == 'QA-7'), None)
@@ -242,7 +242,8 @@ class TestQA6OrphanFunctions:
     """Tests for QA-6: orphan functions."""
 
     def test_orphans_trigger_qa6(self):
-        built = MockBuilt(orphan_fns=5)
+        from archi2likec4.builders._result import BuildDiagnostics
+        built = MockBuilt(diagnostics=BuildDiagnostics(orphan_fns=5, intg_skipped=0, intg_total_eligible=0))
         _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
         qa6 = next((i for i in incidents if i.qa_id == 'QA-6'), None)
         assert qa6 is not None
@@ -250,7 +251,7 @@ class TestQA6OrphanFunctions:
         assert qa6.count == 5
 
     def test_no_orphans_no_qa6(self):
-        built = MockBuilt(orphan_fns=0)
+        built = MockBuilt()
         _, incidents = compute_audit_incidents(built, 0, 0, MockConfig())
         qa6 = next((i for i in incidents if i.qa_id == 'QA-6'), None)
         assert qa6 is None
