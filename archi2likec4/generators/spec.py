@@ -56,7 +56,7 @@ def generate_spec(config: ConvertConfig | None = None) -> str:
     if config is not None:
         colors = {**_DEFAULT_SPEC_COLORS, **config.spec_colors}
         shapes = {**_DEFAULT_SPEC_SHAPES, **config.spec_shapes}
-        tags = config.spec_tags
+        tags = list(dict.fromkeys(list(_DEFAULT_SPEC_TAGS) + list(config.spec_tags)))
     else:
         colors = _DEFAULT_SPEC_COLORS
         shapes = _DEFAULT_SPEC_SHAPES

@@ -106,7 +106,21 @@ class TestGenerateSpec:
         spec = generate_spec(cfg)
         assert 'tag custom_tag' in spec
         assert 'tag another_tag' in spec
-        assert 'tag to_review' not in spec
+        # Built-in tags are always present (generators emit them)
+        assert 'tag to_review' in spec
+        assert 'tag external' in spec
+        assert 'tag entity' in spec
+
+    def test_custom_tags_from_real_config(self):
+        """ConvertConfig (not MockConfig) preserves built-in tags when spec_tags are set."""
+        from archi2likec4.config import ConvertConfig
+        cfg = ConvertConfig(spec_tags=['custom_tag', 'another_tag'])
+        spec = generate_spec(cfg)
+        assert 'tag custom_tag' in spec
+        assert 'tag another_tag' in spec
+        assert 'tag to_review' in spec
+        assert 'tag external' in spec
+        assert 'tag entity' in spec
 
     def test_config_none_uses_defaults(self):
         spec_default = generate_spec()
@@ -790,6 +804,24 @@ class TestGenerateIntegrationView:
         content = '\n'.join(lines)
         assert '15 data entities excluded' in content
         assert 'de_entity0' not in content
+
+    def test_entity_only_overcap_returns_empty(self):
+        """View with only entities exceeding cap and no systems/rels returns []."""
+        lines = _generate_integration_view(
+            view_id='integration_entity_only_overcap',
+            title='EntityOnlyOvercap',
+            unique_paths=[],
+            entity_paths=[f'de_entity{i}' for i in range(15)],
+            relationship_archi_ids=[],
+            rel_lookup={},
+            archi_to_c4={},
+            promoted_archi_to_c4=None,
+            sys_subdomain=None,
+            sys_ids=set(),
+            sys_domain={},
+            max_integration_entities=10,
+        )
+        assert lines == []
 
     def test_entity_cap_includes_within_limit(self):
         """Entities within cap are included."""

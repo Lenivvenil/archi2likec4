@@ -478,7 +478,8 @@ def _generate_integration_view(
                          view_id, len(resolved_entities), max_integration_entities)
 
     # Nothing to include — skip this view
-    if not system_paths and not rel_pairs and not resolved_entities:
+    has_includable = system_paths or rel_pairs or (resolved_entities and include_entities)
+    if not has_includable:
         return []
 
     lines: list[str] = []
