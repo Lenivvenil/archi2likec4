@@ -563,7 +563,7 @@ def _generate(
                 encoding='utf-8')
             file_count += 1
         (views_dir / 'deployment-architecture.c4').write_text(
-            generate_deployment_overview_view(), encoding='utf-8')
+            generate_deployment_overview_view(env=config.deployment_env), encoding='utf-8')
         file_count += 1
         view_count += 1
         logger.info('  deployment/ (topology + view)')
