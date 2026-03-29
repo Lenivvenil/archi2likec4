@@ -18,14 +18,14 @@
 
 Полный прогон всех статических анализаторов — собираем результаты.
 
-- [ ] Прогнать `mypy archi2likec4/ --ignore-missing-imports --strict` — зафиксировать все новые ошибки типов
-- [ ] Прогнать `ruff check archi2likec4/ tests/ --select=ALL --ignore=D,ANN,ERA,FBT,S101` — расширенный набор правил для выявления скрытых проблем
-- [ ] Прогнать `bandit -r archi2likec4/ -ll -f json > /tmp/bandit_report.json` — security issues
-- [ ] Прогнать `pip-audit` — известные CVE в зависимостях
-- [ ] Прогнать `vulture archi2likec4/` (если установлен) — dead code
-- [ ] Записать все findings в `docs/plans/quality-audit-findings.md` (временный файл для анализа)
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Прогнать `mypy archi2likec4/ --ignore-missing-imports --strict` — зафиксировать все новые ошибки типов
+- [x] Прогнать `ruff check archi2likec4/ tests/ --select=ALL --ignore=D,ANN,ERA,FBT,S101` — расширенный набор правил для выявления скрытых проблем
+- [x] Прогнать `bandit -r archi2likec4/ -ll -f json > /tmp/bandit_report.json` — security issues
+- [x] Прогнать `pip-audit` — известные CVE в зависимостях
+- [x] Прогнать `vulture archi2likec4/` (если установлен) — dead code
+- [x] Записать все findings в `docs/plans/quality-audit-findings.md` (временный файл для анализа)
+- [x] Add/update tests for the above changes (audit-only task, no code changes)
+- [x] Mark completed
 
 ---
 
