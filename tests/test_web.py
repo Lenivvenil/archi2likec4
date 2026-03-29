@@ -399,7 +399,7 @@ class TestXSSPrevention:
             'domain': 'valid-domain',
         })
         # Should redirect (302), not bad request
-        assert resp.status_code in (302, 200)
+        assert resp.status_code == 302
 
 
 # ── CSRF protection (Issue #8) ───────────────────────────────────────

@@ -3,6 +3,7 @@
 from pathlib import Path
 
 from archi2likec4.builders._result import BuildDiagnostics
+from archi2likec4.config import _DEFAULT_SPEC_COLORS, _DEFAULT_SPEC_SHAPES, _DEFAULT_SPEC_TAGS
 from archi2likec4.models import DEFAULT_PROP_MAP, DEFAULT_STANDARD_KEYS
 
 
@@ -68,23 +69,9 @@ class MockConfig:
         self.sync_target = sync_target
         self.sync_protected_top = sync_protected_top if sync_protected_top is not None else frozenset()
         self.sync_protected_paths = sync_protected_paths if sync_protected_paths is not None else frozenset()
-        self.spec_colors = spec_colors if spec_colors is not None else {
-            'archi-app': '#7EB8DA', 'archi-app-light': '#BDE0F0',
-            'archi-data': '#F0D68A', 'archi-store': '#B0B0B0',
-            'archi-tech': '#93D275', 'archi-tech-light': '#C5E6B8',
-        }
-        self.spec_shapes = spec_shapes if spec_shapes is not None else {
-            'domain': 'rectangle', 'subdomain': 'rectangle',
-            'system': 'component', 'subsystem': 'component',
-            'appFunction': 'rectangle', 'dataEntity': 'document',
-            'dataStore': 'cylinder', 'infraNode': 'rectangle',
-            'infraSoftware': 'cylinder', 'infraZone': 'rectangle',
-            'infraLocation': 'rectangle',
-        }
-        self.spec_tags = spec_tags if spec_tags is not None else [
-            'to_review', 'external', 'entity', 'store',
-            'infrastructure', 'cluster', 'device', 'network',
-        ]
+        self.spec_colors = spec_colors if spec_colors is not None else dict(_DEFAULT_SPEC_COLORS)
+        self.spec_shapes = spec_shapes if spec_shapes is not None else dict(_DEFAULT_SPEC_SHAPES)
+        self.spec_tags = spec_tags if spec_tags is not None else list(_DEFAULT_SPEC_TAGS)
 
 
 class MockBuilt:

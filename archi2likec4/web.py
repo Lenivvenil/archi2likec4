@@ -287,12 +287,13 @@ def create_app(
     @app.route('/suppress/incident', methods=['POST'])
     def suppress_incident():
         qa_id = request.form.get('qa_id', '').strip()
+        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
         if qa_id:
             config = _load_config_safe()
             ids = list(set(config.audit_suppress_incidents + [qa_id]))
             save_suppress(resolved_config_path, config.audit_suppress, ids)
             logger.info('Suppressed incident: %s', qa_id)
-        return redirect('/')
+        return redirect(redirect_to)
 
     @app.route('/unsuppress/incident', methods=['POST'])
     def unsuppress_incident():
