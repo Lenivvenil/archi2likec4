@@ -30,6 +30,11 @@ from archi2likec4.builders.domains import (
     _build_subdomain_lookup,
     _promote_children_domains,
 )
+from archi2likec4.builders.systems import (
+    _collect_systems,
+    _promote_subsystems,
+    _resolve_dot_names,
+)
 from archi2likec4.models import (
     AppComponent,
     AppFunction,
@@ -122,6 +127,122 @@ class TestBuildSystems:
         systems, _ = build_systems(comps, promote_children={})
         assert len(systems) == 1
         assert len(systems[0].subsystems) == 2
+
+
+# ── _collect_systems ─────────────────────────────────────────────────────
+
+class TestCollectSystems:
+    def test_separates_dot_free_and_dotted(self):
+        comps = [
+            AppComponent(archi_id='id-1', name='CRM'),
+            AppComponent(archi_id='id-2', name='CRM.Core'),
+        ]
+        system_acs, extra_ids, dot_acs = _collect_systems(comps)
+        assert 'CRM' in system_acs
+        assert len(dot_acs) == 1
+        assert dot_acs[0].name == 'CRM.Core'
+
+    def test_deduplicates_keeping_richer(self):
+        comps = [
+            AppComponent(archi_id='id-1', name='CRM', properties={}),
+            AppComponent(archi_id='id-2', name='CRM', properties={'CI': '123'}),
+        ]
+        system_acs, extra_ids, _ = _collect_systems(comps)
+        assert system_acs['CRM'].archi_id == 'id-2'
+        assert 'id-1' in extra_ids['CRM']
+
+    def test_trailing_dot_treated_as_dot_free(self):
+        comps = [AppComponent(archi_id='id-1', name='CRM.')]
+        system_acs, _, dot_acs = _collect_systems(comps)
+        assert 'CRM' in system_acs
+        assert len(dot_acs) == 0
+
+
+# ── _promote_subsystems ─────────────────────────────────────────────────
+
+class TestPromoteSubsystems:
+    def test_two_segment_becomes_system(self):
+        system_acs: dict[str, AppComponent] = {
+            'EFS': AppComponent(archi_id='efs-1', name='EFS'),
+        }
+        extra_ids: dict[str, list[str]] = {}
+        dot_acs = [AppComponent(archi_id='id-2', name='EFS.Card')]
+        promoted_sub, regular, parent_remap = _promote_subsystems(
+            dot_acs, system_acs, extra_ids, {'EFS': 'EFS'},
+        )
+        assert 'EFS.Card' in system_acs
+        assert 'EFS' not in system_acs  # parent removed
+        assert len(regular) == 0
+        assert len(promoted_sub) == 0
+
+    def test_three_segment_becomes_promoted_subsystem(self):
+        system_acs: dict[str, AppComponent] = {
+            'EFS': AppComponent(archi_id='efs-1', name='EFS'),
+        }
+        extra_ids: dict[str, list[str]] = {}
+        dot_acs = [
+            AppComponent(archi_id='id-2', name='EFS.Card'),
+            AppComponent(archi_id='id-3', name='EFS.Card.ODS'),
+        ]
+        promoted_sub, regular, parent_remap = _promote_subsystems(
+            dot_acs, system_acs, extra_ids, {'EFS': 'EFS'},
+        )
+        assert len(promoted_sub) == 1
+        assert promoted_sub[0].name == 'EFS.Card.ODS'
+
+    def test_non_promoted_goes_to_regular(self):
+        system_acs: dict[str, AppComponent] = {}
+        extra_ids: dict[str, list[str]] = {}
+        dot_acs = [AppComponent(archi_id='id-1', name='CRM.Core')]
+        promoted_sub, regular, _ = _promote_subsystems(
+            dot_acs, system_acs, extra_ids, {},
+        )
+        assert len(regular) == 1
+        assert len(promoted_sub) == 0
+
+    def test_parent_remap_captures_archi_id(self):
+        system_acs: dict[str, AppComponent] = {
+            'EFS': AppComponent(archi_id='efs-1', name='EFS'),
+        }
+        extra_ids: dict[str, list[str]] = {}
+        dot_acs = [AppComponent(archi_id='id-2', name='EFS.Card')]
+        _, _, parent_remap = _promote_subsystems(
+            dot_acs, system_acs, extra_ids, {'EFS': 'EFS'},
+        )
+        assert parent_remap == {'EFS': 'efs-1'}
+
+
+# ── _resolve_dot_names ──────────────────────────────────────────────────
+
+class TestResolveDotNames:
+    def test_dot_with_parent_becomes_subsystem(self):
+        system_acs: dict[str, AppComponent] = {
+            'CRM': AppComponent(archi_id='id-1', name='CRM'),
+        }
+        extra_ids: dict[str, list[str]] = {}
+        regular_dot_acs = [AppComponent(archi_id='id-2', name='CRM.Core')]
+        subsystem_acs = _resolve_dot_names(regular_dot_acs, system_acs, extra_ids)
+        assert len(subsystem_acs) == 1
+        assert subsystem_acs[0].name == 'CRM.Core'
+
+    def test_dot_without_parent_becomes_standalone(self):
+        system_acs: dict[str, AppComponent] = {}
+        extra_ids: dict[str, list[str]] = {}
+        regular_dot_acs = [AppComponent(archi_id='id-1', name='Unknown.Module')]
+        subsystem_acs = _resolve_dot_names(regular_dot_acs, system_acs, extra_ids)
+        assert len(subsystem_acs) == 0
+        assert 'Unknown.Module' in system_acs
+
+    def test_standalone_deduplication(self):
+        system_acs: dict[str, AppComponent] = {}
+        extra_ids: dict[str, list[str]] = {}
+        regular_dot_acs = [
+            AppComponent(archi_id='id-1', name='X.Y', properties={}),
+            AppComponent(archi_id='id-2', name='X.Y', properties={'key': 'val'}),
+        ]
+        _resolve_dot_names(regular_dot_acs, system_acs, extra_ids)
+        assert system_acs['X.Y'].archi_id == 'id-2'
+        assert 'id-1' in extra_ids['X.Y']
 
 
 # ── attach_functions ─────────────────────────────────────────────────────

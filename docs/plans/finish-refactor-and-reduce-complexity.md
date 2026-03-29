@@ -62,12 +62,12 @@ resolution с majority-vote fallback. Разбить на фазы.
 `build_systems()` в `archi2likec4/builders/systems.py:87` (~160 строк) выполняет 4-фазную конструкцию систем:
 collect, promote, dot-names, attach. Разбить на фазы.
 
-- [ ] В `archi2likec4/builders/systems.py`: извлечь `_collect_systems(components, filter_fn)` — фаза 1 (сбор и фильтрация)
-- [ ] Извлечь `_promote_subsystems(systems, promote_children)` — фаза 2 (продвижение)
-- [ ] Извлечь `_resolve_dot_names(systems)` — фаза 3 (парсинг `Parent.Child` нотации)
-- [ ] Убрать `# noqa: C901` из `build_systems`
-- [ ] Add/update tests for each extracted function in `tests/test_builders.py`
-- [ ] Mark completed
+- [x] В `archi2likec4/builders/systems.py`: извлечь `_collect_systems(components, filter_fn)` — фаза 1 (сбор и фильтрация)
+- [x] Извлечь `_promote_subsystems(systems, promote_children)` — фаза 2 (продвижение)
+- [x] Извлечь `_resolve_dot_names(systems)` — фаза 3 (парсинг `Parent.Child` нотации)
+- [x] Убрать `# noqa: C901` из `build_systems`
+- [x] Add/update tests for each extracted function in `tests/test_builders.py`
+- [x] Mark completed
 
 ---
 

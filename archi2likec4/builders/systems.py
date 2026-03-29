@@ -84,7 +84,116 @@ def _build_comp_index(systems: list[System]) -> dict[str, tuple[System, Subsyste
     return comp_index
 
 
-def build_systems(  # noqa: C901 — 4-phase system construction (collect, promote, dot-names, attach); see #27
+def _collect_systems(
+    components: list[AppComponent],
+) -> tuple[dict[str, AppComponent], dict[str, list[str]], list[AppComponent]]:
+    """Phase 1: separate dot-free names as potential systems from dotted names.
+
+    Returns (system_acs, extra_ids, dot_acs) where:
+    - system_acs: name → best AppComponent (most properties wins)
+    - extra_ids: name → [archi_ids from discarded duplicates]
+    - dot_acs: components with dots in name (for later phases)
+    """
+    system_acs: dict[str, AppComponent] = {}
+    extra_ids: dict[str, list[str]] = {}
+    dot_acs: list[AppComponent] = []
+    for ac in components:
+        if '.' in ac.name.rstrip('.'):
+            dot_acs.append(ac)
+        else:
+            clean_name = ac.name.rstrip('.')
+            existing = system_acs.get(clean_name)
+            if existing is None or len(ac.properties) > len(existing.properties):
+                if existing is not None and existing.archi_id:
+                    extra_ids.setdefault(clean_name, []).append(existing.archi_id)
+                system_acs[clean_name] = ac
+            elif ac.archi_id:
+                extra_ids.setdefault(clean_name, []).append(ac.archi_id)
+    return system_acs, extra_ids, dot_acs
+
+
+def _upsert_system_ac(
+    system_acs: dict[str, AppComponent],
+    extra_ids: dict[str, list[str]],
+    name: str,
+    ac: AppComponent,
+) -> None:
+    """Insert or replace a system AC, tracking displaced archi_ids in extra_ids."""
+    existing = system_acs.get(name)
+    if existing is None or len(ac.properties) > len(existing.properties):
+        if existing is not None and existing.archi_id:
+            extra_ids.setdefault(name, []).append(existing.archi_id)
+        system_acs[name] = ac
+    elif ac.archi_id:
+        extra_ids.setdefault(name, []).append(ac.archi_id)
+
+
+def _promote_subsystems(
+    dot_acs: list[AppComponent],
+    system_acs: dict[str, AppComponent],
+    extra_ids: dict[str, list[str]],
+    promote_children: dict[str, str],
+) -> tuple[list[AppComponent], list[AppComponent], dict[str, str]]:
+    """Phase 2: separate dot_acs into promoted systems vs regular subsystems.
+
+    Returns (promoted_subsystem_acs, regular_dot_acs, parent_remap) where:
+    - promoted_subsystem_acs: 3+-segment ACs under promoted parents
+    - regular_dot_acs: non-promoted dotted ACs
+    - parent_remap: parent_name → parent_archi_id for fan-out mapping
+    """
+    promoted_subsystem_acs: list[AppComponent] = []
+    regular_dot_acs: list[AppComponent] = []
+    for ac in dot_acs:
+        parent_name = ac.name.split('.', 1)[0]
+        if parent_name in promote_children:
+            parts = ac.name.split('.', 2)
+            if len(parts) == 2:
+                _upsert_system_ac(system_acs, extra_ids, ac.name, ac)
+            else:
+                promoted_subsystem_acs.append(ac)
+        else:
+            regular_dot_acs.append(ac)
+
+    # Remove promoted parents from system_acs (only if they have promoted children)
+    promoted_parent_names: set[str] = {
+        ac.name.split('.', 1)[0]
+        for ac in dot_acs
+        if ac.name.split('.', 1)[0] in promote_children
+    }
+    parent_remap: dict[str, str] = {}
+    for parent_name in promoted_parent_names:
+        removed = system_acs.pop(parent_name, None)
+        if removed:
+            child_count = sum(1 for a in dot_acs if a.name.split('.', 1)[0] == parent_name)
+            if removed.archi_id:
+                parent_remap[parent_name] = removed.archi_id
+            logger.info('Promoted parent "%s" removed — %d children promoted',
+                        parent_name, child_count)
+
+    return promoted_subsystem_acs, regular_dot_acs, parent_remap
+
+
+def _resolve_dot_names(
+    regular_dot_acs: list[AppComponent],
+    system_acs: dict[str, AppComponent],
+    extra_ids: dict[str, list[str]],
+) -> list[AppComponent]:
+    """Phase 3: resolve regular dotted names into subsystems or standalone systems.
+
+    Returns subsystem_acs — components whose parent exists in system_acs.
+    Components without a matching parent become standalone systems in system_acs.
+    """
+    subsystem_acs: list[AppComponent] = []
+    for ac in regular_dot_acs:
+        parent_name = ac.name.split('.', 1)[0]
+        if parent_name in system_acs:
+            subsystem_acs.append(ac)
+        else:
+            _upsert_system_ac(system_acs, extra_ids, ac.name.rstrip('.'), ac)
+    return subsystem_acs
+
+
+def build_systems(
     components: list[AppComponent],
     promote_children: dict[str, str] | None = None,
     promote_warn_threshold: int | None = None,
@@ -102,78 +211,11 @@ def build_systems(  # noqa: C901 — 4-phase system construction (collect, promo
     if promote_warn_threshold is None:
         promote_warn_threshold = PROMOTE_WARN_THRESHOLD
 
-    # ── Phase 1: collect dot-free names as potential systems ──────────────
-    system_acs: dict[str, AppComponent] = {}
-    extra_ids: dict[str, list[str]] = {}  # name → [archi_ids from discarded duplicates]
-    dot_acs: list[AppComponent] = []
-    for ac in components:
-        if '.' in ac.name.rstrip('.'):
-            dot_acs.append(ac)
-        else:
-            clean_name = ac.name.rstrip('.')
-            existing = system_acs.get(clean_name)
-            if existing is None or len(ac.properties) > len(existing.properties):
-                if existing is not None and existing.archi_id:
-                    extra_ids.setdefault(clean_name, []).append(existing.archi_id)
-                system_acs[clean_name] = ac
-            elif ac.archi_id:
-                extra_ids.setdefault(clean_name, []).append(ac.archi_id)
-
-    # ── Phase 2: separate dot_acs into promoted vs regular ───────────────
-    promoted_subsystem_acs: list[AppComponent] = []
-    regular_dot_acs: list[AppComponent] = []
-    for ac in dot_acs:
-        parent_name = ac.name.split('.', 1)[0]
-        if parent_name in promote_children:
-            parts = ac.name.split('.', 2)
-            if len(parts) == 2:
-                # 2-segment: "EFS.Card_Service" → promoted system
-                clean_name = ac.name
-                existing = system_acs.get(clean_name)
-                if existing is None or len(ac.properties) > len(existing.properties):
-                    if existing is not None and existing.archi_id:
-                        extra_ids.setdefault(clean_name, []).append(existing.archi_id)
-                    system_acs[clean_name] = ac
-                elif ac.archi_id:
-                    extra_ids.setdefault(clean_name, []).append(ac.archi_id)
-            else:
-                # 3+ segment: "EFS.Collection_Service.ODS" → subsystem of promoted
-                promoted_subsystem_acs.append(ac)
-        else:
-            regular_dot_acs.append(ac)
-
-    # Remove promoted parents from system_acs (only if they have promoted children)
-    promoted_parent_names: set[str] = {
-        ac.name.split('.', 1)[0]
-        for ac in dot_acs
-        if ac.name.split('.', 1)[0] in promote_children
-    }
-    # Save parent archi_ids for remapping to representative child
-    parent_remap: dict[str, str] = {}  # parent_name → parent_archi_id
-    for parent_name in promoted_parent_names:
-        removed = system_acs.pop(parent_name, None)
-        if removed:
-            child_count = sum(1 for a in dot_acs if a.name.split('.', 1)[0] == parent_name)
-            if removed.archi_id:
-                parent_remap[parent_name] = removed.archi_id
-            logger.info('Promoted parent "%s" removed — %d children promoted',
-                        parent_name, child_count)
-
-    # ── Phase 3: regular dot_acs — old subsystem-or-standalone logic ─────
-    subsystem_acs: list[AppComponent] = []
-    for ac in regular_dot_acs:
-        parent_name = ac.name.split('.', 1)[0]
-        if parent_name in system_acs:
-            subsystem_acs.append(ac)
-        else:
-            clean_name = ac.name.rstrip('.')
-            existing = system_acs.get(clean_name)
-            if existing is None or len(ac.properties) > len(existing.properties):
-                if existing is not None and existing.archi_id:
-                    extra_ids.setdefault(clean_name, []).append(existing.archi_id)
-                system_acs[clean_name] = ac
-            elif ac.archi_id:
-                extra_ids.setdefault(clean_name, []).append(ac.archi_id)
+    system_acs, extra_ids, dot_acs = _collect_systems(components)
+    promoted_subsystem_acs, regular_dot_acs, parent_remap = _promote_subsystems(
+        dot_acs, system_acs, extra_ids, promote_children,
+    )
+    subsystem_acs = _resolve_dot_names(regular_dot_acs, system_acs, extra_ids)
 
     # ── Build System objects ─────────────────────────────────────────────
     systems: dict[str, System] = {}
