@@ -20,6 +20,8 @@ from archi2likec4.generators.views import (
     _generate_deployment_view,
     _generate_functional_view,
     _generate_integration_view,
+    _group_by_solution,
+    _prepare_view_context,
     _resolve_elements,
     _system_path_from_c4,
 )
@@ -887,6 +889,54 @@ class TestGenerateIntegrationView:
         )
         content = '\n'.join(lines)
         assert 'exclude * where kind is dataStore' in content
+
+
+# ── _prepare_view_context / _group_by_solution ──────────────────────────
+
+class TestGroupBySolution:
+    def test_groups_by_solution_slug(self):
+        sv1 = SolutionView(name='f.A', view_type='functional', solution='sol_a', element_archi_ids=['e1'])
+        sv2 = SolutionView(name='f.B', view_type='functional', solution='sol_b', element_archi_ids=['e2'])
+        sv3 = SolutionView(name='i.A', view_type='integration', solution='sol_a', element_archi_ids=['e3'])
+        result = _group_by_solution([sv1, sv2, sv3])
+        assert set(result.keys()) == {'sol_a', 'sol_b'}
+        assert len(result['sol_a']) == 2
+        assert len(result['sol_b']) == 1
+
+    def test_empty_list(self):
+        assert _group_by_solution([]) == {}
+
+
+class TestPrepareViewContext:
+    def test_builds_lookups(self):
+        sv = SolutionView(name='f.X', view_type='functional', solution='sol_x', element_archi_ids=['e1'])
+        rel = RawRelationship(
+            rel_id='r1', rel_type='FlowRelationship', name='',
+            source_type='ApplicationComponent', source_id='s1',
+            target_type='ApplicationComponent', target_id='t1',
+        )
+        ctx = _prepare_view_context(
+            solution_views=[sv],
+            sys_domain={'sys1': 'dom1'},
+            relationships=[rel],
+            entity_archi_ids=None,
+            deployment_map=[('dom1.sys1', 'loc.node1')],
+        )
+        assert ctx.entity_archi_ids == set()
+        assert ctx.sys_ids == {'sys1'}
+        assert 'r1' in ctx.rel_lookup
+        assert 'dom1.sys1' in ctx.deploy_targets
+        assert 'sol_x' in ctx.by_solution
+
+    def test_preserves_entity_archi_ids(self):
+        ctx = _prepare_view_context(
+            solution_views=[],
+            sys_domain={},
+            relationships=None,
+            entity_archi_ids={'ent1', 'ent2'},
+            deployment_map=None,
+        )
+        assert ctx.entity_archi_ids == {'ent1', 'ent2'}
 
 
 # ── generate_solution_views ──────────────────────────────────────────────

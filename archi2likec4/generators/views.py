@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+from typing import NamedTuple
 
 from ..models import RawRelationship, SolutionView
 from ..utils import escape_str
@@ -609,6 +610,41 @@ def _dispatch_view(
     return lines, unresolved, non_entity_count
 
 
+class _ViewContext(NamedTuple):
+    """Precomputed lookup tables for solution view generation."""
+
+    entity_archi_ids: set[str]
+    deploy_targets: dict[str, set[str]]
+    sys_ids: set[str]
+    rel_lookup: dict[str, tuple[str, str, str]]
+    by_solution: dict[str, list[SolutionView]]
+
+
+def _prepare_view_context(
+    solution_views: list[SolutionView],
+    sys_domain: dict[str, str],
+    relationships: list[RawRelationship] | None,
+    entity_archi_ids: set[str] | None,
+    deployment_map: list[tuple[str, str]] | None,
+) -> _ViewContext:
+    """Build lookup tables and group solution views by solution slug."""
+    return _ViewContext(
+        entity_archi_ids=entity_archi_ids if entity_archi_ids is not None else set(),
+        deploy_targets=_build_deploy_targets(deployment_map),
+        sys_ids=set(sys_domain.keys()),
+        rel_lookup=_build_rel_lookup(relationships),
+        by_solution=_group_by_solution(solution_views),
+    )
+
+
+def _group_by_solution(solution_views: list[SolutionView]) -> dict[str, list[SolutionView]]:
+    """Group solution views by their solution slug."""
+    by_solution: dict[str, list[SolutionView]] = {}
+    for sv in solution_views:
+        by_solution.setdefault(sv.solution, []).append(sv)
+    return by_solution
+
+
 def generate_solution_views(
     solution_views: list[SolutionView],
     archi_to_c4: dict[str, str],
@@ -626,29 +662,21 @@ def generate_solution_views(
     Returns (files, total_unresolved, total_elements).
     Dispatches to per-type generators via ``_dispatch_view``.
     """
-    if entity_archi_ids is None:
-        entity_archi_ids = set()
-    deploy_targets = _build_deploy_targets(deployment_map)
-    sys_ids: set[str] = set(sys_domain.keys())
-    rel_lookup = _build_rel_lookup(relationships)
-
-    by_solution: dict[str, list[SolutionView]] = {}
-    for sv in solution_views:
-        by_solution.setdefault(sv.solution, []).append(sv)
+    ctx = _prepare_view_context(solution_views, sys_domain, relationships, entity_archi_ids, deployment_map)
 
     files: dict[str, str] = {}
     used_view_ids: set[str] = set()
     total_unresolved = 0
     total_elements = 0
-    for solution_slug, views in sorted(by_solution.items()):
+    for solution_slug, views in sorted(ctx.by_solution.items()):
         sol_name = views[0].name.split('.', 1)[-1] if '.' in views[0].name else views[0].name
         lines = [f'// ── Solution: {sol_name} ──', '', 'views {', '']
 
         for sv in sorted(views, key=lambda v: v.view_type):
             view_lines, unresolved, count = _dispatch_view(
                 sv, solution_slug, used_view_ids, archi_to_c4, promoted_archi_to_c4,
-                tech_archi_to_c4, entity_archi_ids, rel_lookup, deploy_targets,
-                sys_domain, sys_subdomain, sys_ids, deployment_env,
+                tech_archi_to_c4, ctx.entity_archi_ids, ctx.rel_lookup, ctx.deploy_targets,
+                sys_domain, sys_subdomain, ctx.sys_ids, deployment_env,
             )
             total_elements += count
             total_unresolved += unresolved
