@@ -233,6 +233,14 @@ class TestValidate:
         warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
         assert warnings == 0
 
+    def test_deployment_env_passed_through(self):
+        """deployment_env from config should not cause errors during validation."""
+        built = _make_empty_built()
+        config = ConvertConfig(deployment_env='staging')
+        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
+        assert warnings == 0
+        assert errors == 0
+
     def test_strict_mode_no_criticals_no_extra_warnings(self):
         """strict=True with no critical incidents does not add warnings."""
         built = _make_empty_built()

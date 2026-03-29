@@ -486,3 +486,71 @@ class TestCSRFProtection:
                 output_dir=tmp_path / 'output',
             )
             assert app.secret_key == 'stable-test-key'
+
+
+# ── POST route coverage ─────────────────────────────────────────────────
+
+class TestSuppressRoutes:
+    """Cover suppress/unsuppress POST routes for systems and incidents."""
+
+    def test_unsuppress_system_redirects(self, app_client):
+        resp = _csrf_post(app_client, '/unsuppress/system', data={'name': 'TestSys'})
+        assert resp.status_code == 302
+
+    def test_suppress_incident_redirects(self, app_client):
+        resp = _csrf_post(app_client, '/suppress/incident', data={'qa_id': 'QA-1'})
+        assert resp.status_code == 302
+
+    def test_unsuppress_incident_redirects(self, app_client):
+        resp = _csrf_post(app_client, '/unsuppress/incident', data={'qa_id': 'QA-1'})
+        assert resp.status_code == 302
+
+    def test_suppress_system_empty_name_redirects(self, app_client):
+        """Empty name should still redirect (no-op)."""
+        resp = _csrf_post(app_client, '/suppress/system', data={'name': ''})
+        assert resp.status_code == 302
+
+    def test_suppress_incident_empty_qa_id_redirects(self, app_client):
+        """Empty qa_id should still redirect (no-op)."""
+        resp = _csrf_post(app_client, '/suppress/incident', data={'qa_id': ''})
+        assert resp.status_code == 302
+
+
+class TestRemediationRoutes:
+    """Cover undo-assign-domain, mark-reviewed, undo-mark-reviewed, undo-promote POST routes."""
+
+    def test_undo_assign_domain_redirects(self, app_client):
+        resp = _csrf_post(app_client, '/undo-assign-domain', data={'name': 'TestSys'})
+        assert resp.status_code == 302
+
+    def test_mark_reviewed_redirects(self, app_client):
+        resp = _csrf_post(app_client, '/mark-reviewed', data={'name': 'TestSys'})
+        assert resp.status_code == 302
+
+    def test_undo_mark_reviewed_redirects(self, app_client):
+        resp = _csrf_post(app_client, '/undo-mark-reviewed', data={'name': 'TestSys'})
+        assert resp.status_code == 302
+
+    def test_undo_promote_redirects(self, app_client):
+        resp = _csrf_post(app_client, '/undo-promote', data={'name': 'TestSys'})
+        assert resp.status_code == 302
+
+    def test_undo_assign_domain_empty_name_redirects(self, app_client):
+        """Empty name should still redirect (no-op)."""
+        resp = _csrf_post(app_client, '/undo-assign-domain', data={'name': ''})
+        assert resp.status_code == 302
+
+    def test_mark_reviewed_empty_name_redirects(self, app_client):
+        """Empty name should still redirect (no-op)."""
+        resp = _csrf_post(app_client, '/mark-reviewed', data={'name': ''})
+        assert resp.status_code == 302
+
+    def test_assign_domain_empty_fields_redirects(self, app_client):
+        """Missing name or domain should redirect (no-op), not error."""
+        resp = _csrf_post(app_client, '/assign-domain', data={'name': '', 'domain': 'x'})
+        assert resp.status_code == 302
+
+    def test_promote_system_empty_fields_redirects(self, app_client):
+        """Missing name or domain should redirect (no-op), not error."""
+        resp = _csrf_post(app_client, '/promote-system', data={'name': '', 'domain': 'x'})
+        assert resp.status_code == 302

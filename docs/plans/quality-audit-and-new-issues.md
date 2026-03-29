@@ -33,14 +33,14 @@
 
 Смотрим что не покрыто тестами и где тесты ненадёжны.
 
-- [ ] Прогнать `pytest --cov=archi2likec4 --cov-report=html` — открыть отчёт, найти модули с coverage < 80%
-- [ ] Проверить `tests/test_web.py` — покрыты ли все 10 POST routes, edge cases (missing form data, invalid redirect)
-- [ ] Проверить `tests/test_config.py` — покрыты ли все новые поля добавленные в ходе рефакторинга
-- [ ] Проверить `tests/test_pipeline_e2e.py` — есть ли тест с конфигом `deployment_env`
-- [ ] Найти `# type: ignore` и `# noqa` в тестах — каждый такой случай потенциальная проблема
-- [ ] Записать gaps в `docs/plans/quality-audit-findings.md`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Прогнать `pytest --cov=archi2likec4 --cov-report=html` — открыть отчёт, найти модули с coverage < 80%
+- [x] Проверить `tests/test_web.py` — покрыты ли все 10 POST routes, edge cases (missing form data, invalid redirect)
+- [x] Проверить `tests/test_config.py` — покрыты ли все новые поля добавленные в ходе рефакторинга
+- [x] Проверить `tests/test_pipeline_e2e.py` — есть ли тест с конфигом `deployment_env`
+- [x] Найти `# type: ignore` и `# noqa` в тестах — каждый такой случай потенциальная проблема
+- [x] Записать gaps в `docs/plans/quality-audit-findings.md`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 

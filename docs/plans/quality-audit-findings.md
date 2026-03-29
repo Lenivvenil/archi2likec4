@@ -86,3 +86,55 @@ No real dead code found.
 8. TRY003/EM102: f-strings in exceptions — project style choice
 9. RUF001: Cyrillic chars in i18n.py — expected
 10. TID252: relative imports — project convention
+
+---
+
+## 6. Test quality and coverage gaps (Task 2)
+
+### Coverage report (797 tests, 89.70% total)
+
+Modules below 80% coverage:
+- `__main__.py`: 0% (2 lines — trivial entry point, no logic to test)
+- `web.py`: 71% (89 uncovered lines — POST route handlers, error handler, cache invalidation)
+
+All other modules >= 81%.
+
+### web.py POST route coverage
+
+10 POST routes exist in web.py:
+1. `/suppress/system` — covered (CSRF, open redirect tests)
+2. `/unsuppress/system` — NOT covered -> ADDED
+3. `/suppress/incident` — NOT covered -> ADDED
+4. `/unsuppress/incident` — NOT covered -> ADDED
+5. `/assign-domain` — covered (XSS validation tests)
+6. `/undo-assign-domain` — NOT covered -> ADDED
+7. `/mark-reviewed` — NOT covered -> ADDED
+8. `/undo-mark-reviewed` — NOT covered -> ADDED
+9. `/promote-system` — covered (XSS validation test)
+10. `/undo-promote` — NOT covered -> ADDED
+
+Edge cases added: empty name/qa_id fields, missing form data.
+
+### test_config.py coverage
+
+All new fields from refactoring are covered:
+- `deployment_env`: TestDeploymentEnv class (default, override, empty validation)
+- `spec_colors`, `spec_shapes`, `spec_tags`: TestSpecCustomization class
+- `sync_target`, `sync_protected_paths`, `sync_protected_top`: TestSyncConfig class
+- `language`: tested in TestLanguageConfig
+- `reviewed_systems`: tested in TestReviewedSystems
+
+No gaps found.
+
+### test_pipeline_e2e.py coverage
+
+- No test with `deployment_env` config -> ADDED (test_deployment_env_passed_through)
+- Existing tests cover: basic pipeline, domain_overrides, dry_run, validation thresholds
+
+### `# type: ignore` and `# noqa` in tests
+
+Found 10 occurrences:
+- `tests/test_config.py` (9x): `import yaml  # noqa: F401` — used in pytest.importorskip pattern to check yaml availability. Legitimate use.
+- `tests/test_cli.py` (1x): `import tomli as tomllib  # type: ignore[no-redef]` — conditional import for Python <3.11 compat. Legitimate use.
+
+No problematic suppressions found.
