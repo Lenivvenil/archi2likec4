@@ -48,12 +48,12 @@ overrides, hit-based, promote_children, extra_patterns. Каждый прохо�
 `assign_subdomains()` в `archi2likec4/builders/domains.py:113` (~180 строк) выполняет multi-phase subdomain
 resolution с majority-vote fallback. Разбить на фазы.
 
-- [ ] В `archi2likec4/builders/domains.py`: извлечь `_build_subdomain_lookup(parsed_subdomains, domain_systems)` — построение lookup-таблиц
-- [ ] Извлечь `_assign_subdomain_by_folder(systems, subdomain_lookup)` — прямое назначение по принадлежности к папке
-- [ ] Извлечь `_assign_subdomain_by_majority_vote(unassigned, integrations, subdomain_lookup)` — majority-vote fallback
-- [ ] Убрать `# noqa: C901` из `assign_subdomains`
-- [ ] Add/update tests for each extracted function in `tests/test_builders.py`
-- [ ] Mark completed
+- [x] В `archi2likec4/builders/domains.py`: извлечь `_build_subdomain_lookup(parsed_subdomains, domain_systems)` — построение lookup-таблиц
+- [x] Извлечь `_assign_subdomain_by_folder(systems, subdomain_lookup)` — прямое назначение по принадлежности к папке
+- [x] Извлечь `_assign_subdomain_by_majority_vote(unassigned, integrations, subdomain_lookup)` — majority-vote fallback
+- [x] Убрать `# noqa: C901` из `assign_subdomains`
+- [x] Add/update tests for each extracted function in `tests/test_builders.py`
+- [x] Mark completed
 
 ---
 

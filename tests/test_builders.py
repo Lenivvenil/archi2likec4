@@ -21,9 +21,13 @@ from archi2likec4.builders import (
 )
 from archi2likec4.builders.deployment import enrich_deployment_from_visual_nesting
 from archi2likec4.builders.domains import (
+    _apply_collision_guard,
     _apply_domain_overrides,
     _apply_extra_patterns,
     _assign_by_view_membership,
+    _assign_subdomain_by_folder,
+    _assign_subdomain_by_majority_vote,
+    _build_subdomain_lookup,
     _promote_children_domains,
 )
 from archi2likec4.models import (
@@ -38,6 +42,7 @@ from archi2likec4.models import (
     Integration,
     ParsedSubdomain,
     RawRelationship,
+    Subdomain,
     Subsystem,
     System,
     TechElement,
@@ -1762,6 +1767,159 @@ class TestAssignSubdomains:
             'on equal vote counts, alphabetically earlier subdomain archi_id must win'
         )
         assert 'efs' in subdomain_systems.get(('channels', 'alpha'), [])
+
+
+# ── _build_subdomain_lookup ────────────────────────────────────────────
+
+class TestBuildSubdomainLookup:
+    def test_builds_archi_to_psds_index(self):
+        """Component IDs are indexed to their ParsedSubdomain."""
+        psd = ParsedSubdomain(archi_id='banking', name='Banking', domain_folder='channels', component_ids=['c1', 'c2'])
+        archi_to_psds, _ = _build_subdomain_lookup([psd])
+        assert 'c1' in archi_to_psds
+        assert 'c2' in archi_to_psds
+        assert archi_to_psds['c1'] == [psd]
+
+    def test_builds_sd_id_to_psd_index(self):
+        """Domain-scoped (domain_folder, archi_id) index is built."""
+        psd = ParsedSubdomain(archi_id='core', name='Core', domain_folder='channels', component_ids=[])
+        _, sd_id_to_psd = _build_subdomain_lookup([psd])
+        assert ('channels', 'core') in sd_id_to_psd
+        assert sd_id_to_psd[('channels', 'core')] is psd
+
+    def test_empty_input(self):
+        """No parsed subdomains → empty lookups."""
+        archi_to_psds, sd_id_to_psd = _build_subdomain_lookup([])
+        assert archi_to_psds == {}
+        assert sd_id_to_psd == {}
+
+    def test_duplicate_component_keeps_all_candidates(self):
+        """Component appearing in multiple subdomains keeps all candidates."""
+        psd1 = ParsedSubdomain(archi_id='a', name='A', domain_folder='d1', component_ids=['c1'])
+        psd2 = ParsedSubdomain(archi_id='b', name='B', domain_folder='d2', component_ids=['c1'])
+        archi_to_psds, _ = _build_subdomain_lookup([psd1, psd2])
+        assert len(archi_to_psds['c1']) == 2
+
+
+# ── _assign_subdomain_by_folder ───────────────────────────────────────
+
+class TestAssignSubdomainByFolder:
+    def test_match_by_primary_archi_id(self):
+        """System matched by its own archi_id in the same domain."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='channels')
+        psd = ParsedSubdomain(archi_id='banking', name='Banking', domain_folder='channels', component_ids=['sys-1'])
+        archi_to_psds, _ = _build_subdomain_lookup([psd])
+        result = _assign_subdomain_by_folder(sys, archi_to_psds)
+        assert result is psd
+
+    def test_match_by_extra_archi_id(self):
+        """System matched by extra_archi_ids when primary doesn't match."""
+        sys = System(c4_id='efs', name='EFS', archi_id='no-match', extra_archi_ids=['sys-dup'], domain='channels')
+        psd = ParsedSubdomain(archi_id='payments', name='Payments', domain_folder='channels', component_ids=['sys-dup'])
+        archi_to_psds, _ = _build_subdomain_lookup([psd])
+        result = _assign_subdomain_by_folder(sys, archi_to_psds)
+        assert result is psd
+
+    def test_no_match_returns_none(self):
+        """No matching archi_id → returns None."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='channels')
+        psd = ParsedSubdomain(archi_id='banking', name='Banking', domain_folder='channels', component_ids=['other'])
+        archi_to_psds, _ = _build_subdomain_lookup([psd])
+        result = _assign_subdomain_by_folder(sys, archi_to_psds)
+        assert result is None
+
+    def test_foreign_domain_not_matched(self):
+        """Candidate in a different domain is skipped."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1', domain='products')
+        psd = ParsedSubdomain(archi_id='retail', name='Retail', domain_folder='channels', component_ids=['sys-1'])
+        archi_to_psds, _ = _build_subdomain_lookup([psd])
+        result = _assign_subdomain_by_folder(sys, archi_to_psds)
+        assert result is None
+
+
+# ── _assign_subdomain_by_majority_vote ─────────────────────────────────
+
+class TestAssignSubdomainByMajorityVote:
+    def test_majority_vote_picks_most_hits(self):
+        """Subdomain with more subsystem hits wins."""
+        subs = [
+            Subsystem(c4_id='s1', name='S1', archi_id='sa1'),
+            Subsystem(c4_id='s2', name='S2', archi_id='sa2'),
+            Subsystem(c4_id='s3', name='S3', archi_id='sa3'),
+        ]
+        sys = System(c4_id='efs', name='EFS', archi_id='no-match', domain='channels', subsystems=subs)
+        psd_pay = ParsedSubdomain(
+            archi_id='payments', name='Payments', domain_folder='channels', component_ids=['sa1', 'sa2'],
+        )
+        psd_ret = ParsedSubdomain(archi_id='retail', name='Retail', domain_folder='channels', component_ids=['sa3'])
+        archi_to_psds, _ = _build_subdomain_lookup([psd_pay, psd_ret])
+        result = _assign_subdomain_by_majority_vote(sys, archi_to_psds)
+        assert result is psd_pay
+
+    def test_tie_break_alphabetical(self):
+        """Equal vote counts → alphabetically earlier archi_id wins."""
+        subs = [
+            Subsystem(c4_id='s1', name='S1', archi_id='sa1'),
+            Subsystem(c4_id='s2', name='S2', archi_id='sa2'),
+        ]
+        sys = System(c4_id='efs', name='EFS', archi_id='no-match', domain='channels', subsystems=subs)
+        psd_b = ParsedSubdomain(archi_id='beta', name='Beta', domain_folder='channels', component_ids=['sa1'])
+        psd_a = ParsedSubdomain(archi_id='alpha', name='Alpha', domain_folder='channels', component_ids=['sa2'])
+        archi_to_psds, _ = _build_subdomain_lookup([psd_b, psd_a])
+        result = _assign_subdomain_by_majority_vote(sys, archi_to_psds)
+        assert result is psd_a
+
+    def test_no_subsystems_returns_none(self):
+        """System without subsystems → returns None."""
+        sys = System(c4_id='efs', name='EFS', archi_id='no-match', domain='channels')
+        result = _assign_subdomain_by_majority_vote(sys, {})
+        assert result is None
+
+    def test_foreign_domain_subsystems_ignored(self):
+        """Subsystem hits in a foreign domain are not counted."""
+        subs = [Subsystem(c4_id='s1', name='S1', archi_id='sa1')]
+        sys = System(c4_id='efs', name='EFS', archi_id='no-match', domain='products', subsystems=subs)
+        psd = ParsedSubdomain(archi_id='banking', name='Banking', domain_folder='channels', component_ids=['sa1'])
+        archi_to_psds, _ = _build_subdomain_lookup([psd])
+        result = _assign_subdomain_by_majority_vote(sys, archi_to_psds)
+        assert result is None
+
+
+# ── _apply_collision_guard ─────────────────────────────────────────────
+
+class TestApplyCollisionGuard:
+    def test_collision_guard_assigns_matching_system(self):
+        """System whose c4_id equals a subdomain c4_id gets auto-assigned."""
+        sys = System(c4_id='aim', name='AIM', archi_id='sys-aim', domain='channels')
+        psd = ParsedSubdomain(archi_id='aim', name='AIM', domain_folder='channels', component_ids=[])
+        _, sd_id_to_psd = _build_subdomain_lookup([psd])
+        subdomains_by_key: dict[tuple[str, str], Subdomain] = {}
+        subdomain_systems: dict[tuple[str, str], list[str]] = {}
+        _apply_collision_guard([sys], [psd], sd_id_to_psd, subdomains_by_key, subdomain_systems)
+        assert sys.subdomain == 'aim'
+        assert ('channels', 'aim') in subdomains_by_key
+        assert 'aim' in subdomain_systems[('channels', 'aim')]
+
+    def test_collision_guard_skips_already_assigned(self):
+        """System that already has a subdomain is not re-assigned."""
+        sys = System(c4_id='aim', name='AIM', archi_id='sys-aim', domain='channels')
+        sys.subdomain = 'banking'
+        psd = ParsedSubdomain(archi_id='aim', name='AIM', domain_folder='channels', component_ids=[])
+        _, sd_id_to_psd = _build_subdomain_lookup([psd])
+        subdomains_by_key: dict[tuple[str, str], Subdomain] = {}
+        subdomain_systems: dict[tuple[str, str], list[str]] = {}
+        _apply_collision_guard([sys], [psd], sd_id_to_psd, subdomains_by_key, subdomain_systems)
+        assert sys.subdomain == 'banking'
+
+    def test_collision_guard_cross_domain_no_match(self):
+        """Collision guard does not fire across different domains."""
+        sys = System(c4_id='loan', name='Loan', archi_id='sys-loan', domain='products')
+        psd = ParsedSubdomain(archi_id='loan', name='Loan', domain_folder='channels', component_ids=[])
+        _, sd_id_to_psd = _build_subdomain_lookup([psd])
+        subdomains_by_key: dict[tuple[str, str], Subdomain] = {}
+        subdomain_systems: dict[tuple[str, str], list[str]] = {}
+        _apply_collision_guard([sys], [psd], sd_id_to_psd, subdomains_by_key, subdomain_systems)
+        assert sys.subdomain == ''
 
 
 # ── apply_domain_prefix with subdomain ──────────────────────────────────
