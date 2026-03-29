@@ -75,10 +75,10 @@ collect, promote, dot-names, attach. Разбить на фазы.
 
 Финальная проверка: ни одного `# noqa: C901` во всём проекте.
 
-- [ ] Выполнить `grep -r 'noqa: C901' archi2likec4/` — должен вернуть 0 результатов
-- [ ] `ruff check archi2likec4/` — 0 предупреждений
-- [ ] Убедиться что покрытие ≥ 85%
-- [ ] Обновить `docs/plans/refactor-solution-views.md` — отметить все задачи как выполненные, переместить в `docs/plans/completed/`
-- [ ] Закоммитить: `refactor: eliminate all C901 suppressions in builders and generators (#2)`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Выполнить `grep -r 'noqa: C901' archi2likec4/` — должен вернуть 0 результатов
+- [x] `ruff check archi2likec4/` — 0 предупреждений
+- [x] Убедиться что покрытие ≥ 85%
+- [x] Обновить `docs/plans/refactor-solution-views.md` — отметить все задачи как выполненные, переместить в `docs/plans/completed/`
+- [x] Закоммитить: `refactor: eliminate all C901 suppressions in builders and generators (#2)`
+- [x] Add/update tests for the above changes (verification-only task, no new tests needed)
+- [x] Mark completed
