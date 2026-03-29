@@ -525,7 +525,7 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             if not isinstance(item, str):
                 raise ConfigError(
                     f"spec_tags: all items must be strings, got {type(item).__name__}: {item!r}")
-        config.spec_tags = list(val)
+        config.spec_tags = list(dict.fromkeys(config.spec_tags + list(val)))
 
     if 'sync_protected_top' in data:
         val = data['sync_protected_top']

@@ -904,10 +904,13 @@ class TestSpecConfig:
         # Other defaults preserved
         assert config.spec_shapes['system'] == 'component'
 
-    def test_spec_tags_yaml_override(self):
+    def test_spec_tags_yaml_merge(self):
         config = ConvertConfig()
         _apply_yaml(config, {'spec_tags': ['custom_tag']})
-        assert config.spec_tags == ['custom_tag']
+        # Merges with defaults (like colors/shapes), not replaces
+        for tag in _DEFAULT_SPEC_TAGS:
+            assert tag in config.spec_tags
+        assert 'custom_tag' in config.spec_tags
 
     def test_spec_colors_not_dict_raises(self):
         config = ConvertConfig()
