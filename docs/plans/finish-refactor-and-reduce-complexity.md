@@ -33,13 +33,13 @@
 `assign_domains()` в `archi2likec4/builders/domains.py:18` (~130 строк) содержит 4 последовательных прохода:
 overrides, hit-based, promote_children, extra_patterns. Каждый проход — отдельная функция.
 
-- [ ] В `archi2likec4/builders/domains.py`: извлечь `_apply_domain_overrides(systems, domain_overrides, id_to_domains)` — проход 1
-- [ ] Извлечь `_assign_by_view_membership(systems, id_to_domains)` — проход 2 (hit counting)
-- [ ] Извлечь `_promote_children_domains(domain_systems, promote_children)` — проход 3
-- [ ] Извлечь `_apply_extra_patterns(domain_systems, unassigned, extra_domain_patterns)` — проход 4
-- [ ] Убрать `# noqa: C901` из `assign_domains`
-- [ ] Add/update tests for each extracted function in `tests/test_builders.py`
-- [ ] Mark completed
+- [x] В `archi2likec4/builders/domains.py`: извлечь `_apply_domain_overrides(systems, domain_overrides, id_to_domains)` — проход 1
+- [x] Извлечь `_assign_by_view_membership(systems, id_to_domains)` — проход 2 (hit counting)
+- [x] Извлечь `_promote_children_domains(domain_systems, promote_children)` — проход 3
+- [x] Извлечь `_apply_extra_patterns(domain_systems, unassigned, extra_domain_patterns)` — проход 4
+- [x] Убрать `# noqa: C901` из `assign_domains`
+- [x] Add/update tests for each extracted function in `tests/test_builders.py`
+- [x] Mark completed
 
 ---
 

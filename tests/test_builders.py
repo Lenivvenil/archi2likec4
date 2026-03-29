@@ -20,6 +20,12 @@ from archi2likec4.builders import (
     validate_deployment_tree,
 )
 from archi2likec4.builders.deployment import enrich_deployment_from_visual_nesting
+from archi2likec4.builders.domains import (
+    _apply_domain_overrides,
+    _apply_extra_patterns,
+    _assign_by_view_membership,
+    _promote_children_domains,
+)
 from archi2likec4.models import (
     AppComponent,
     AppFunction,
@@ -235,6 +241,121 @@ class TestAssignDomains:
         sys = System(c4_id='efs', name='EFS', archi_id='sys-1', subsystems=[sub])
         assign_domains([sys], [d1, d2])
         assert sys.domain == 'd2'  # 2 hits vs 1
+
+
+# ── _apply_domain_overrides ──────────────────────────────────────────────
+
+class TestApplyDomainOverrides:
+    def test_override_assigns_and_returns_remaining(self):
+        s1 = System(c4_id='efs', name='EFS', archi_id='sys-1')
+        s2 = System(c4_id='crm', name='CRM', archi_id='sys-2')
+        result: dict[str, list[System]] = {'channels': [], 'unassigned': []}
+        remaining = _apply_domain_overrides([s1, s2], {'EFS': 'channels'}, result)
+        assert s1.domain == 'channels'
+        assert result['channels'] == [s1]
+        assert remaining == [s2]
+
+    def test_override_creates_new_domain_key(self):
+        s1 = System(c4_id='efs', name='EFS', archi_id='sys-1')
+        result: dict[str, list[System]] = {'unassigned': []}
+        _apply_domain_overrides([s1], {'EFS': 'new_domain'}, result)
+        assert 'new_domain' in result
+        assert s1.domain == 'new_domain'
+
+    def test_no_match_returns_all(self):
+        s1 = System(c4_id='efs', name='EFS', archi_id='sys-1')
+        result: dict[str, list[System]] = {'unassigned': []}
+        remaining = _apply_domain_overrides([s1], {'OTHER': 'channels'}, result)
+        assert remaining == [s1]
+
+
+# ── _assign_by_view_membership ──────────────────────────────────────────
+
+class TestAssignByViewMembership:
+    def test_assigns_by_hit_count(self):
+        sub = Subsystem(c4_id='sub', name='EFS.Core', archi_id='sub-1')
+        s1 = System(c4_id='efs', name='EFS', archi_id='sys-1', subsystems=[sub])
+        id_to_domains = {'sys-1': ['d1', 'd2'], 'sub-1': ['d2']}
+        result: dict[str, list[System]] = {'d1': [], 'd2': [], 'unassigned': []}
+        _assign_by_view_membership([s1], id_to_domains, result)
+        assert s1.domain == 'd2'  # 2 hits vs 1
+
+    def test_unmatched_goes_to_unassigned(self):
+        s1 = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        result: dict[str, list[System]] = {'unassigned': []}
+        _assign_by_view_membership([s1], {}, result)
+        assert s1.domain == 'unassigned'
+        assert result['unassigned'] == [s1]
+
+    def test_tie_broken_alphabetically(self):
+        s1 = System(c4_id='efs', name='EFS', archi_id='sys-1')
+        id_to_domains = {'sys-1': ['beta', 'alpha']}
+        result: dict[str, list[System]] = {'alpha': [], 'beta': [], 'unassigned': []}
+        _assign_by_view_membership([s1], id_to_domains, result)
+        assert s1.domain == 'alpha'
+
+
+# ── _promote_children_domains ───────────────────────────────────────────
+
+class TestPromoteChildrenDomains:
+    def test_promotes_child_to_parent_domain(self):
+        s1 = System(c4_id='efs_core', name='EFS.Core', archi_id='sys-1', domain='unassigned')
+        result: dict[str, list[System]] = {'channels': [], 'unassigned': [s1]}
+        _promote_children_domains(result, {'EFS': 'channels'})
+        assert s1.domain == 'channels'
+        assert result['channels'] == [s1]
+        assert result['unassigned'] == []
+
+    def test_no_match_stays_unassigned(self):
+        s1 = System(c4_id='crm', name='CRM', archi_id='sys-1', domain='unassigned')
+        result: dict[str, list[System]] = {'unassigned': [s1]}
+        _promote_children_domains(result, {'EFS': 'channels'})
+        assert s1.domain == 'unassigned'
+        assert result['unassigned'] == [s1]
+
+    def test_creates_domain_key_if_missing(self):
+        s1 = System(c4_id='efs_core', name='EFS.Core', archi_id='sys-1', domain='unassigned')
+        result: dict[str, list[System]] = {'unassigned': [s1]}
+        _promote_children_domains(result, {'EFS': 'new_domain'})
+        assert 'new_domain' in result
+        assert s1.domain == 'new_domain'
+
+
+# ── _apply_extra_patterns ───────────────────────────────────────────────
+
+class TestApplyExtraPatterns:
+    def test_pattern_matches_case_insensitive(self):
+        s1 = System(c4_id='elk', name='ELK', archi_id='sys-1', domain='unassigned')
+        result: dict[str, list[System]] = {'unassigned': [s1]}
+        patterns = [{'c4_id': 'platform', 'patterns': ['elk', 'grafana']}]
+        _apply_extra_patterns(result, patterns)
+        assert s1.domain == 'platform'
+        assert result['platform'] == [s1]
+        assert result['unassigned'] == []
+
+    def test_no_match_stays_unassigned(self):
+        s1 = System(c4_id='crm', name='CRM', archi_id='sys-1', domain='unassigned')
+        result: dict[str, list[System]] = {'unassigned': [s1]}
+        patterns = [{'c4_id': 'platform', 'patterns': ['elk']}]
+        _apply_extra_patterns(result, patterns)
+        assert s1.domain == 'unassigned'
+        assert result['unassigned'] == [s1]
+
+    def test_empty_patterns_no_change(self):
+        s1 = System(c4_id='crm', name='CRM', archi_id='sys-1', domain='unassigned')
+        result: dict[str, list[System]] = {'unassigned': [s1]}
+        _apply_extra_patterns(result, [])
+        assert result['unassigned'] == [s1]
+
+    def test_multiple_patterns_first_match_wins(self):
+        s1 = System(c4_id='elk', name='ELK', archi_id='sys-1', domain='unassigned')
+        result: dict[str, list[System]] = {'unassigned': [s1]}
+        patterns = [
+            {'c4_id': 'infra', 'patterns': ['elk']},
+            {'c4_id': 'platform', 'patterns': ['elk']},
+        ]
+        _apply_extra_patterns(result, patterns)
+        assert s1.domain == 'infra'
 
 
 # ── apply_domain_prefix ──────────────────────────────────────────────────

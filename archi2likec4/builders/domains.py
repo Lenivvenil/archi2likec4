@@ -15,39 +15,34 @@ from ..models import (
 logger = logging.getLogger(__name__)
 
 
-def assign_domains(  # noqa: C901 — 4-pass assignment (overrides, hits, promote, patterns) is inherently sequential
+def _apply_domain_overrides(
     systems: list[System],
-    domains: list[DomainInfo],
-    promote_children: dict[str, str] | None = None,
-    extra_domain_patterns: list[dict[str, Any]] | None = None,
-    domain_overrides: dict[str, str] | None = None,
-) -> dict[str, list[System]]:
-    """Assign each system to a primary domain based on view membership."""
-    # Reverse map: archi_id → [(domain_c4_id, ...)]
-    id_to_domains: dict[str, list[str]] = {}
-    for domain in domains:
-        for aid in domain.archi_ids:
-            id_to_domains.setdefault(aid, []).append(domain.c4_id)
+    domain_overrides: dict[str, str],
+    result: dict[str, list[System]],
+) -> list[System]:
+    """Pass 0: apply explicit domain overrides (highest priority).
 
-    result: dict[str, list[System]] = {d.c4_id: [] for d in domains}
-    result['unassigned'] = []
+    Returns the list of systems that were NOT overridden (remaining).
+    """
+    override_ids: set[int] = set()
+    for sys in systems:
+        if sys.name in domain_overrides:
+            target = domain_overrides[sys.name]
+            if target not in result:
+                result[target] = []
+            sys.domain = target
+            result[target].append(sys)
+            override_ids.add(id(sys))
+    return [s for s in systems if id(s) not in override_ids]
 
-    # Pass 0: explicit domain overrides (highest priority)
-    remaining = list(systems)
-    if domain_overrides:
-        override_ids: set[int] = set()
-        for sys in systems:
-            if sys.name in domain_overrides:
-                target = domain_overrides[sys.name]
-                if target not in result:
-                    result[target] = []
-                sys.domain = target
-                result[target].append(sys)
-                override_ids.add(id(sys))
-        remaining = [s for s in systems if id(s) not in override_ids]
 
-    for sys in remaining:
-        # Collect archi IDs for this system (system + duplicates + all subsystems)
+def _assign_by_view_membership(
+    systems: list[System],
+    id_to_domains: dict[str, list[str]],
+    result: dict[str, list[System]],
+) -> None:
+    """Pass 1: assign domains by hit counting across view membership."""
+    for sys in systems:
         all_ids: set[str] = set()
         if sys.archi_id:
             all_ids.add(sys.archi_id)
@@ -56,14 +51,12 @@ def assign_domains(  # noqa: C901 — 4-pass assignment (overrides, hits, promot
             if sub.archi_id:
                 all_ids.add(sub.archi_id)
 
-        # Count hits per domain
         hits: dict[str, int] = {}
         for aid in all_ids:
             for domain_id in id_to_domains.get(aid, []):
                 hits[domain_id] = hits.get(domain_id, 0) + 1
 
         if hits:
-            # Primary = domain with most hits; ties broken alphabetically (smallest id first)
             primary = min(hits.items(), key=lambda x: (-x[1], x[0]))[0]
             sys.domain = primary
             result[primary].append(sys)
@@ -71,9 +64,12 @@ def assign_domains(  # noqa: C901 — 4-pass assignment (overrides, hits, promot
             sys.domain = 'unassigned'
             result['unassigned'].append(sys)
 
-    # Second pass: fallback domain for promoted children
-    if promote_children is None:
-        promote_children = {}
+
+def _promote_children_domains(
+    result: dict[str, list[System]],
+    promote_children: dict[str, str],
+) -> None:
+    """Pass 2: fallback domain for promoted children."""
     still_unassigned: list[System] = []
     for sys in result['unassigned']:
         parent_prefix = sys.name.split('.', 1)[0]
@@ -87,16 +83,19 @@ def assign_domains(  # noqa: C901 — 4-pass assignment (overrides, hits, promot
             still_unassigned.append(sys)
     result['unassigned'] = still_unassigned
 
-    # Third pass: assign unassigned systems to extra domains via pattern matching
-    if extra_domain_patterns is None:
-        extra_domain_patterns = []
+
+def _apply_extra_patterns(
+    result: dict[str, list[System]],
+    extra_domain_patterns: list[dict[str, Any]],
+) -> None:
+    """Pass 3: assign unassigned systems to extra domains via pattern matching."""
     for extra in extra_domain_patterns:
         extra_id = extra['c4_id']
         patterns_lower = [p.lower() for p in extra['patterns']]
         if extra_id not in result:
             result[extra_id] = []
 
-        still_unassigned = []
+        still_unassigned: list[System] = []
         for sys in result['unassigned']:
             name_lower = sys.name.lower()
             matched = any(p in name_lower for p in patterns_lower)
@@ -106,6 +105,31 @@ def assign_domains(  # noqa: C901 — 4-pass assignment (overrides, hits, promot
             else:
                 still_unassigned.append(sys)
         result['unassigned'] = still_unassigned
+
+
+def assign_domains(
+    systems: list[System],
+    domains: list[DomainInfo],
+    promote_children: dict[str, str] | None = None,
+    extra_domain_patterns: list[dict[str, Any]] | None = None,
+    domain_overrides: dict[str, str] | None = None,
+) -> dict[str, list[System]]:
+    """Assign each system to a primary domain based on view membership."""
+    id_to_domains: dict[str, list[str]] = {}
+    for domain in domains:
+        for aid in domain.archi_ids:
+            id_to_domains.setdefault(aid, []).append(domain.c4_id)
+
+    result: dict[str, list[System]] = {d.c4_id: [] for d in domains}
+    result['unassigned'] = []
+
+    remaining = list(systems)
+    if domain_overrides:
+        remaining = _apply_domain_overrides(systems, domain_overrides, result)
+
+    _assign_by_view_membership(remaining, id_to_domains, result)
+    _promote_children_domains(result, promote_children or {})
+    _apply_extra_patterns(result, extra_domain_patterns or [])
 
     return result
 
