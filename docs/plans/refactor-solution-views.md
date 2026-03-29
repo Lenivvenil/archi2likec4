@@ -28,12 +28,12 @@
 
 Выносим deployment view generation в отдельную функцию.
 
-- [ ] В `archi2likec4/generators/views.py`: создать `_generate_deployment_view(view, resolved_elements, deployment_map, tech_archi_to_c4, deployment_env) -> tuple[str, int, int]` — возвращает (file_content, unresolved_count, total_elements)
-- [ ] Перенести логику из `generate_solution_views` для `view_type == 'deployment'` (~lines 444-502) в эту функцию
-- [ ] Использовать `_resolve_elements()` из Task 1 для резолвинга
-- [ ] Убедиться что ancestor dedup для infra paths и `{deployment_env}.{ip}.**` логика перенесена корректно
-- [ ] Add/update tests for the above changes (unit-тест `_generate_deployment_view` в `tests/test_generators.py`)
-- [ ] Mark completed
+- [x] В `archi2likec4/generators/views.py`: создать `_generate_deployment_view(view, resolved_elements, deployment_map, tech_archi_to_c4, deployment_env) -> tuple[str, int, int]` — возвращает (file_content, unresolved_count, total_elements)
+- [x] Перенести логику из `generate_solution_views` для `view_type == 'deployment'` (~lines 444-502) в эту функцию
+- [x] Использовать `_resolve_elements()` из Task 1 для резолвинга
+- [x] Убедиться что ancestor dedup для infra paths и `{deployment_env}.{ip}.**` логика перенесена корректно
+- [x] Add/update tests for the above changes (unit-тест `_generate_deployment_view` в `tests/test_generators.py`)
+- [x] Mark completed
 
 ---
 

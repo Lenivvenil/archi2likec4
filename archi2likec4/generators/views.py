@@ -201,6 +201,101 @@ def _resolve_elements(
     return c4_paths, entity_paths, unresolved, non_entity_count
 
 
+def _enrich_infra_paths(
+    app_paths: list[str],
+    infra_paths: list[str],
+    deploy_targets: dict[str, set[str]],
+) -> None:
+    """Enrich infra_paths in-place from deploy_targets for the given app_paths.
+
+    Adds infra targets via exact match and prefix match (system path picks up
+    subsystem mappings).
+    """
+    seen_infra: set[str] = set(infra_paths)
+    for ap in app_paths:
+        for target in deploy_targets.get(ap, set()):
+            if target not in seen_infra:
+                seen_infra.add(target)
+                infra_paths.append(target)
+        ap_prefix = ap + '.'
+        for map_key, targets in deploy_targets.items():
+            if map_key.startswith(ap_prefix):
+                for target in targets:
+                    if target not in seen_infra:
+                        seen_infra.add(target)
+                        infra_paths.append(target)
+
+
+def _generate_deployment_view(
+    view_id: str,
+    title: str,
+    c4_paths: list[str],
+    deploy_targets: dict[str, set[str]],
+    tech_archi_to_c4: dict[str, str] | None,
+    deployment_env: str,
+    max_deployment: int = 40,
+) -> list[str]:
+    """Generate deployment view lines for a single solution view.
+
+    Returns list of .c4 lines for the deployment view block (empty if nothing to render).
+
+    The deployment view shows infrastructure nodes that host application components.
+    App paths are NOT included directly — they are placed inside infra nodes via
+    ``instanceOf`` in deployment/topology.c4.
+
+    Steps:
+      1. Split resolved paths into app vs infra (using tech_archi_to_c4 values).
+      2. Enrich infra paths from deployment_map for app paths without diagram infra.
+      3. Ancestor dedup: if both 'loc' and 'loc.cluster.node' are present, keep ancestor.
+      4. Emit ``deployment view`` block with ``<env>.<ip>.**`` includes.
+    """
+    resolved_unique = list(dict.fromkeys(c4_paths))
+    if not resolved_unique:
+        return []
+
+    tech_c4_values = set((tech_archi_to_c4 or {}).values())
+    app_paths = [rp for rp in resolved_unique if rp not in tech_c4_values]
+    infra_paths = [rp for rp in resolved_unique if rp in tech_c4_values]
+
+    # Enrich: pull mapped infra targets from deployment_map
+    if app_paths and deploy_targets:
+        _enrich_infra_paths(app_paths, infra_paths, deploy_targets)
+
+    # Ancestor dedup for infra: if both 'loc' and 'loc.cluster.node' are present,
+    # keep only the ancestor (with .**) to avoid redundant includes.
+    deduped_infra: list[str] = []
+    infra_set = set(infra_paths)
+    for ip in infra_paths:
+        # Keep ip only if no other path is a proper ancestor of ip
+        has_ancestor = any(
+            other != ip and ip.startswith(other + '.')
+            for other in infra_set
+        )
+        if not has_ancestor:
+            deduped_infra.append(ip)
+    infra_paths = deduped_infra
+
+    if not infra_paths:
+        return []
+
+    lines: list[str] = []
+    lines.append(f"  deployment view {view_id} {{")
+    lines.append(f"    title '{escape_str(title)}'")
+    lines.append("    include")
+    # Infra paths: <env>.<path>.** to include all nested deployment nodes
+    for ip in infra_paths:
+        lines.append(f"      {deployment_env}.{ip}.**,")
+    if lines[-1].endswith(','):
+        lines[-1] = lines[-1][:-1]
+    lines.append("  }")
+    # QA-11: warn on element count
+    est = len(infra_paths)
+    if est > max_deployment:
+        logger.warning('QA-11: deployment view %s has ~%d elements '
+                        '(threshold: %d)', view_id, est, max_deployment)
+    return lines
+
+
 def generate_solution_views(  # noqa: C901 — 3 view-type branches with distinct rendering logic; tracked as #2
     solution_views: list[SolutionView],
     archi_to_c4: dict[str, str],
@@ -460,64 +555,16 @@ def generate_solution_views(  # noqa: C901 — 3 view-type branches with distinc
                                     '(threshold: %d)', view_id, est, _MAX_INTEGRATION)
 
             elif sv.view_type == 'deployment':
-                # Deployment view: collect infra paths from diagram and deployment_map.
-                # App paths are NOT included in the view — they are placed inside infra
-                # nodes via ``instanceOf`` in deployment/topology.c4.
-                resolved_unique = list(dict.fromkeys(c4_paths))
-                if resolved_unique:
-                    tech_c4_values = set((tech_archi_to_c4 or {}).values())
-                    app_paths = [rp for rp in resolved_unique if rp not in tech_c4_values]
-                    infra_paths = [rp for rp in resolved_unique if rp in tech_c4_values]
-
-                    # Enrich: pull mapped infra targets from deployment_map
-                    # for app paths that don't already have infra in the diagram.
-                    # Also check prefix matches (system path picks up subsystem mappings).
-                    if app_paths and _deploy_targets:
-                        seen_infra: set[str] = set(infra_paths)
-                        for ap in app_paths:
-                            # Exact match
-                            for target in _deploy_targets.get(ap, set()):
-                                if target not in seen_infra:
-                                    seen_infra.add(target)
-                                    infra_paths.append(target)
-                            # Prefix match: system path picks up subsystem mappings
-                            ap_prefix = ap + '.'
-                            for map_key, targets in _deploy_targets.items():
-                                if map_key.startswith(ap_prefix):
-                                    for target in targets:
-                                        if target not in seen_infra:
-                                            seen_infra.add(target)
-                                            infra_paths.append(target)
-
-                    # Ancestor dedup for infra: if both 'loc' and 'loc.cluster.node' are present,
-                    # keep only the ancestor (with .**) to avoid redundant includes.
-                    deduped_infra: list[str] = []
-                    infra_set = set(infra_paths)
-                    for ip in infra_paths:
-                        # Keep ip only if no other path is a proper ancestor of ip
-                        has_ancestor = any(
-                            other != ip and ip.startswith(other + '.')
-                            for other in infra_set
-                        )
-                        if not has_ancestor:
-                            deduped_infra.append(ip)
-                    infra_paths = deduped_infra
-
-                    if infra_paths:
-                        lines.append(f"  deployment view {view_id} {{")
-                        lines.append(f"    title '{escape_str(title)}'")
-                        lines.append("    include")
-                        # Infra paths: <env>.<path>.** to include all nested deployment nodes
-                        for ip in infra_paths:
-                            lines.append(f"      {deployment_env}.{ip}.**,")
-                        if lines[-1].endswith(','):
-                            lines[-1] = lines[-1][:-1]
-                        lines.append("  }")
-                        # QA-11: warn on element count
-                        est = len(infra_paths)
-                        if est > _MAX_DEPLOYMENT:
-                            logger.warning('QA-11: deployment view %s has ~%d elements '
-                                            '(threshold: %d)', view_id, est, _MAX_DEPLOYMENT)
+                deploy_lines = _generate_deployment_view(
+                    view_id=view_id,
+                    title=title,
+                    c4_paths=c4_paths,
+                    deploy_targets=_deploy_targets,
+                    tech_archi_to_c4=tech_archi_to_c4,
+                    deployment_env=deployment_env,
+                    max_deployment=_MAX_DEPLOYMENT,
+                )
+                lines.extend(deploy_lines)
 
             lines.append('')
 

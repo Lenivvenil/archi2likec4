@@ -16,7 +16,7 @@ from archi2likec4.generators import (
     generate_spec,
     generate_system_detail_c4,
 )
-from archi2likec4.generators.views import _resolve_elements, _system_path_from_c4
+from archi2likec4.generators.views import _generate_deployment_view, _resolve_elements, _system_path_from_c4
 from archi2likec4.models import (
     AppFunction,
     DataAccess,
@@ -490,6 +490,119 @@ class TestResolveElements:
         assert entity_paths == []
         assert unresolved == 0
         assert total == 0
+
+
+# ── _generate_deployment_view ────────────────────────────────────────────
+
+class TestGenerateDeploymentView:
+    def test_basic_infra_paths(self):
+        """Infra paths are emitted with env prefix and .** suffix."""
+        lines = _generate_deployment_view(
+            view_id='deployment_myapp',
+            title='Deployment Architecture: MyApp',
+            c4_paths=['loc.cluster.node1'],
+            deploy_targets={},
+            tech_archi_to_c4={'infra-1': 'loc.cluster.node1'},
+            deployment_env='prod',
+        )
+        content = '\n'.join(lines)
+        assert 'deployment view deployment_myapp' in content
+        assert 'prod.loc.cluster.node1.**' in content
+
+    def test_empty_paths_returns_empty(self):
+        """No c4_paths → no lines."""
+        lines = _generate_deployment_view(
+            view_id='deployment_empty',
+            title='Empty',
+            c4_paths=[],
+            deploy_targets={},
+            tech_archi_to_c4=None,
+            deployment_env='prod',
+        )
+        assert lines == []
+
+    def test_app_only_no_infra_returns_empty(self):
+        """App paths without infra mapping → no lines (app paths excluded from deployment views)."""
+        lines = _generate_deployment_view(
+            view_id='deployment_apponly',
+            title='App Only',
+            c4_paths=['channels.efs'],
+            deploy_targets={},
+            tech_archi_to_c4={'infra-1': 'loc.cluster.node1'},
+            deployment_env='prod',
+        )
+        assert lines == []
+
+    def test_enrichment_from_deploy_targets(self):
+        """Infra paths enriched from deploy_targets for app paths."""
+        lines = _generate_deployment_view(
+            view_id='deployment_enrich',
+            title='Enriched',
+            c4_paths=['channels.efs'],
+            deploy_targets={'channels.efs': {'loc.server1'}},
+            tech_archi_to_c4={},
+            deployment_env='prod',
+        )
+        content = '\n'.join(lines)
+        assert 'prod.loc.server1.**' in content
+
+    def test_prefix_match_enrichment(self):
+        """Subsystem deploy mappings picked up via prefix match on system path."""
+        lines = _generate_deployment_view(
+            view_id='deployment_prefix',
+            title='Prefix',
+            c4_paths=['channels.efs'],
+            deploy_targets={'channels.efs.subsys': {'loc.node2'}},
+            tech_archi_to_c4={},
+            deployment_env='staging',
+        )
+        content = '\n'.join(lines)
+        assert 'staging.loc.node2.**' in content
+
+    def test_ancestor_dedup(self):
+        """Ancestor dedup: 'loc' subsumes 'loc.cluster.node1'."""
+        lines = _generate_deployment_view(
+            view_id='deployment_dedup',
+            title='Dedup',
+            c4_paths=['loc', 'loc.cluster.node1'],
+            deploy_targets={},
+            tech_archi_to_c4={'i1': 'loc', 'i2': 'loc.cluster.node1'},
+            deployment_env='prod',
+        )
+        content = '\n'.join(lines)
+        assert 'prod.loc.**' in content
+        assert 'prod.loc.cluster.node1.**' not in content
+
+    def test_qa11_warning(self, caplog):
+        """QA-11 warning emitted when element count exceeds threshold."""
+        import logging
+        many_infra = [f'loc.node{i}' for i in range(45)]
+        tech_map = {f'i{i}': f'loc.node{i}' for i in range(45)}
+        with caplog.at_level(logging.WARNING):
+            lines = _generate_deployment_view(
+                view_id='deployment_big',
+                title='Big',
+                c4_paths=many_infra,
+                deploy_targets={},
+                tech_archi_to_c4=tech_map,
+                deployment_env='prod',
+                max_deployment=40,
+            )
+        assert lines  # should produce output
+        assert 'QA-11' in caplog.text
+
+    def test_no_trailing_comma(self):
+        """Last include line should not have trailing comma."""
+        lines = _generate_deployment_view(
+            view_id='deployment_comma',
+            title='Comma',
+            c4_paths=['loc.node1', 'loc.node2'],
+            deploy_targets={},
+            tech_archi_to_c4={'i1': 'loc.node1', 'i2': 'loc.node2'},
+            deployment_env='prod',
+        )
+        include_lines = [ln for ln in lines if ln.strip().startswith('prod.')]
+        assert not include_lines[-1].endswith(',')
 
 
 # ── generate_solution_views ──────────────────────────────────────────────
