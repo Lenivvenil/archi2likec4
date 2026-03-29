@@ -46,6 +46,7 @@ parse  →  build  →  validate  →  generate
 | `archi2likec4/exceptions.py` | Domain exceptions — `Archi2LikeC4Error`, `ConfigError`, `ParseError`, `ValidationError` |
 | `archi2likec4/audit_data.py` | QA incident computation |
 | `archi2likec4/web.py` | Flask audit dashboard (optional) |
+| `archi2likec4/utils.py` | Shared utilities — `make_id()`, `transliterate()`, `escape_str()` |
 | `archi2likec4/i18n.py` | ru/en message catalog |
 | `tests/helpers.py` | Shared test mocks — `MockConfig`, `MockBuilt` |
 

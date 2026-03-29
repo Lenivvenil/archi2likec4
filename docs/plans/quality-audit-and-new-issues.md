@@ -77,10 +77,10 @@
 
 Синхронизируем состояние проекта с документацией.
 
-- [ ] Обновить `/Users/ivankuzmin/.claude/projects/-Users-ivankuzmin-Projects-archi2likec4/memory/MEMORY.md` — раздел "GitHub Issues — Open" актуальным списком
-- [ ] Обновить раздел "Current State" в MEMORY.md — новое количество тестов и coverage
-- [ ] Если `CLAUDE.md` устарел (новые файлы, изменённые сигнатуры) — обновить таблицу Key Files
-- [ ] Прогнать финальный `pytest --cov-fail-under=85` — убедиться что coverage gate проходит
-- [ ] Закоммитить все pending изменения документации: `docs: update project state and issue backlog`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Обновить `/Users/ivankuzmin/.claude/projects/-Users-ivankuzmin-Projects-archi2likec4/memory/MEMORY.md` — раздел "GitHub Issues — Open" актуальным списком
+- [x] Обновить раздел "Current State" в MEMORY.md — новое количество тестов и coverage
+- [x] Если `CLAUDE.md` устарел (новые файлы, изменённые сигнатуры) — обновить таблицу Key Files
+- [x] Прогнать финальный `pytest --cov-fail-under=85` — убедиться что coverage gate проходит
+- [x] Закоммитить все pending изменения документации: `docs: update project state and issue backlog`
+- [x] Add/update tests for the above changes (docs-only task, no code changes)
+- [x] Mark completed
