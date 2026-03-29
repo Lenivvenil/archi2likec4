@@ -85,16 +85,25 @@ class TestConfigCopy:
             promote_children={},
             domain_renames={},
             extra_domain_patterns=[],
+            domain_overrides={'TestSys': 'some_domain'},
+            audit_suppress=['SomeSystem'],
         )
         dry_run_before = original.dry_run
         model_root_before = original.model_root
         output_dir_before = original.output_dir
+        overrides_id_before = id(original.domain_overrides)
+        suppress_id_before = id(original.audit_suppress)
 
         convert(model, tmp_path / 'out', config=original, dry_run=True)
 
         assert original.dry_run is dry_run_before
         assert original.model_root == model_root_before
         assert original.output_dir == output_dir_before
+        # Nested mutable fields must not share identity with the copy
+        assert original.domain_overrides == {'TestSys': 'some_domain'}
+        assert original.audit_suppress == ['SomeSystem']
+        assert id(original.domain_overrides) == overrides_id_before
+        assert id(original.audit_suppress) == suppress_id_before
 
 
 # --- Issue #11: BuildError and GenerateError exist ---

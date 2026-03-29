@@ -702,7 +702,7 @@ def convert(
     if config is None:
         config = load_config(Path(config_path) if config_path else None)
 
-    config = copy.copy(config)
+    config = copy.deepcopy(config)
     config.model_root = model_root_path
     config.output_dir = output_dir_path
     config.dry_run = dry_run
