@@ -16,11 +16,11 @@
 
 Дублированная логика резолвинга archi_id → c4_path используется в трёх ветках — выносим в хелпер.
 
-- [ ] В `archi2likec4/generators/views.py`: создать функцию `_resolve_elements(element_archi_ids, archi_to_c4, promoted_archi_to_c4, tech_archi_to_c4, entity_archi_ids, view_type) -> tuple[list[str], list[str]]` — первый список resolved c4_paths, второй unresolved archi_ids
-- [ ] Функция должна заменить дублированный resolution-блок (~lines 211-261) из трёх веток `if view_type ==`
-- [ ] Сигнатура должна быть полностью типизирована (`dict[str, str]`, `dict[str, list[str]] | None`, `set[str] | None`)
-- [ ] Add/update tests for the above changes (unit-тест `_resolve_elements` в `tests/test_generators.py`)
-- [ ] Mark completed
+- [x] В `archi2likec4/generators/views.py`: создать функцию `_resolve_elements(element_archi_ids, archi_to_c4, promoted_archi_to_c4, tech_archi_to_c4, entity_archi_ids, view_type) -> tuple[list[str], list[str]]` — первый список resolved c4_paths, второй unresolved archi_ids
+- [x] Функция должна заменить дублированный resolution-блок (~lines 211-261) из трёх веток `if view_type ==`
+- [x] Сигнатура должна быть полностью типизирована (`dict[str, str]`, `dict[str, list[str]] | None`, `set[str] | None`)
+- [x] Add/update tests for the above changes (unit-тест `_resolve_elements` в `tests/test_generators.py`)
+- [x] Mark completed
 
 ---
 

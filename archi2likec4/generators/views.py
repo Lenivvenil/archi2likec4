@@ -133,6 +133,74 @@ def _system_path_from_c4(
     return path
 
 
+def _resolve_elements(
+    element_archi_ids: list[str],
+    archi_to_c4: dict[str, str],
+    promoted_archi_to_c4: dict[str, list[str]] | None,
+    tech_archi_to_c4: dict[str, str] | None,
+    entity_archi_ids: set[str],
+    view_type: str,
+) -> tuple[list[str], list[str], int, int]:
+    """Resolve element archi_ids to c4 paths.
+
+    Returns (c4_paths, entity_paths, unresolved_count, total_counted_elements).
+
+    Resolution strategy per view_type:
+      - deployment: skip entities; prefer tech_archi_to_c4, fallback archi_to_c4, then promoted
+      - functional: skip entities; use archi_to_c4, then promoted
+      - integration: separate entities into entity_paths; app elements via archi_to_c4 then promoted
+    """
+    c4_paths: list[str] = []
+    entity_paths: list[str] = []
+    unresolved = 0
+
+    # Count non-entity elements for total
+    non_entity_count = sum(1 for a in element_archi_ids if a not in entity_archi_ids)
+
+    if view_type == 'deployment':
+        for aid in element_archi_ids:
+            if aid in entity_archi_ids:
+                continue
+            if tech_archi_to_c4 and aid in tech_archi_to_c4:
+                c4_paths.append(tech_archi_to_c4[aid])
+            elif aid in archi_to_c4:
+                c4_paths.append(archi_to_c4[aid])
+            elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
+                for child_path in promoted_archi_to_c4[aid]:
+                    c4_paths.append(child_path)
+            else:
+                unresolved += 1
+    elif view_type == 'functional':
+        for aid in element_archi_ids:
+            if aid in entity_archi_ids:
+                continue
+            c4_path = archi_to_c4.get(aid)
+            if c4_path:
+                c4_paths.append(c4_path)
+            elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
+                for child_path in promoted_archi_to_c4[aid]:
+                    c4_paths.append(child_path)
+            else:
+                unresolved += 1
+    elif view_type == 'integration':
+        for aid in element_archi_ids:
+            if aid in entity_archi_ids:
+                entity_path = archi_to_c4.get(aid)
+                if entity_path:
+                    entity_paths.append(entity_path)
+                continue
+            c4_path = archi_to_c4.get(aid)
+            if c4_path:
+                c4_paths.append(c4_path)
+            elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
+                for child_path in promoted_archi_to_c4[aid]:
+                    c4_paths.append(child_path)
+            else:
+                unresolved += 1
+
+    return c4_paths, entity_paths, unresolved, non_entity_count
+
+
 def generate_solution_views(  # noqa: C901 — 3 view-type branches with distinct rendering logic; tracked as #2
     solution_views: list[SolutionView],
     archi_to_c4: dict[str, str],
@@ -204,61 +272,11 @@ def generate_solution_views(  # noqa: C901 — 3 view-type branches with distinc
 
         for sv in sorted(views, key=lambda v: v.view_type):
             # Resolve element archi_ids to c4 paths
-            c4_paths: list[str] = []
-            entity_paths: list[str] = []
-            unresolved = 0
-
-            if sv.view_type == 'deployment':
-                # Deployment views resolve via tech_archi_to_c4, not archi_to_c4
-                # Only count non-entity elements (entities are filtered out)
-                non_entity_count = sum(1 for a in sv.element_archi_ids if a not in entity_archi_ids)
-                total_elements += non_entity_count
-                for aid in sv.element_archi_ids:
-                    if aid in entity_archi_ids:
-                        continue  # skip data entities on deployment views
-                    if tech_archi_to_c4 and aid in tech_archi_to_c4:
-                        c4_paths.append(tech_archi_to_c4[aid])
-                    elif aid in archi_to_c4:
-                        c4_paths.append(archi_to_c4[aid])
-                    elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
-                        for child_path in promoted_archi_to_c4[aid]:
-                            c4_paths.append(child_path)
-                    else:
-                        unresolved += 1
-            elif sv.view_type == 'functional':
-                # Functional views: skip data entities entirely
-                non_entity_count = sum(1 for a in sv.element_archi_ids if a not in entity_archi_ids)
-                total_elements += non_entity_count
-                for aid in sv.element_archi_ids:
-                    if aid in entity_archi_ids:
-                        continue  # skip data entities
-                    c4_path = archi_to_c4.get(aid)
-                    if c4_path:
-                        c4_paths.append(c4_path)
-                    elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
-                        for child_path in promoted_archi_to_c4[aid]:
-                            c4_paths.append(child_path)
-                    else:
-                        unresolved += 1
-            elif sv.view_type == 'integration':
-                # Integration views: separate app elements from data entities
-                non_entity_count = sum(1 for a in sv.element_archi_ids if a not in entity_archi_ids)
-                total_elements += non_entity_count
-                for aid in sv.element_archi_ids:
-                    if aid in entity_archi_ids:
-                        # Resolve entity to its c4_id (stored in archi_to_c4 for entities)
-                        entity_path = archi_to_c4.get(aid)
-                        if entity_path:
-                            entity_paths.append(entity_path)
-                        continue
-                    c4_path = archi_to_c4.get(aid)
-                    if c4_path:
-                        c4_paths.append(c4_path)
-                    elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
-                        for child_path in promoted_archi_to_c4[aid]:
-                            c4_paths.append(child_path)
-                    else:
-                        unresolved += 1
+            c4_paths, entity_paths, unresolved, non_entity_count = _resolve_elements(
+                sv.element_archi_ids, archi_to_c4, promoted_archi_to_c4,
+                tech_archi_to_c4, entity_archi_ids, sv.view_type,
+            )
+            total_elements += non_entity_count
             total_unresolved += unresolved
 
             if not c4_paths and not entity_paths and sv.view_type != 'deployment':

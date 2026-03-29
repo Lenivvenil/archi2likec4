@@ -16,7 +16,7 @@ from archi2likec4.generators import (
     generate_spec,
     generate_system_detail_c4,
 )
-from archi2likec4.generators.views import _system_path_from_c4
+from archi2likec4.generators.views import _resolve_elements, _system_path_from_c4
 from archi2likec4.models import (
     AppFunction,
     DataAccess,
@@ -414,6 +414,82 @@ class TestGeneratePersistenceMap:
         result = generate_persistence_map()
         assert 'view persistence_map' in result
         assert 'element.kind = dataEntity' in result
+
+
+# ── _resolve_elements ───────────────────────────────────────────────────
+
+class TestResolveElements:
+    def test_functional_skips_entities(self):
+        archi_to_c4 = {'a1': 'dom.sys1', 'e1': 'entities.ent1'}
+        c4_paths, entity_paths, unresolved, total = _resolve_elements(
+            ['a1', 'e1'], archi_to_c4, None, None, {'e1'}, 'functional',
+        )
+        assert c4_paths == ['dom.sys1']
+        assert entity_paths == []
+        assert unresolved == 0
+        assert total == 1
+
+    def test_integration_separates_entities(self):
+        archi_to_c4 = {'a1': 'dom.sys1', 'e1': 'entities.ent1'}
+        c4_paths, entity_paths, unresolved, total = _resolve_elements(
+            ['a1', 'e1'], archi_to_c4, None, None, {'e1'}, 'integration',
+        )
+        assert c4_paths == ['dom.sys1']
+        assert entity_paths == ['entities.ent1']
+        assert unresolved == 0
+        assert total == 1
+
+    def test_deployment_prefers_tech_map(self):
+        archi_to_c4 = {'a1': 'dom.sys1'}
+        tech_map = {'a1': 'infra.node1'}
+        c4_paths, entity_paths, unresolved, total = _resolve_elements(
+            ['a1'], archi_to_c4, None, tech_map, set(), 'deployment',
+        )
+        assert c4_paths == ['infra.node1']
+        assert total == 1
+
+    def test_deployment_falls_back_to_archi(self):
+        archi_to_c4 = {'a1': 'dom.sys1'}
+        c4_paths, _, unresolved, _ = _resolve_elements(
+            ['a1'], archi_to_c4, None, {}, set(), 'deployment',
+        )
+        assert c4_paths == ['dom.sys1']
+        assert unresolved == 0
+
+    def test_promoted_fanout(self):
+        promoted = {'parent1': ['dom.child1', 'dom.child2']}
+        c4_paths, _, unresolved, total = _resolve_elements(
+            ['parent1'], {}, promoted, None, set(), 'functional',
+        )
+        assert c4_paths == ['dom.child1', 'dom.child2']
+        assert unresolved == 0
+        assert total == 1
+
+    def test_unresolved_counted(self):
+        c4_paths, _, unresolved, total = _resolve_elements(
+            ['unknown1', 'unknown2'], {}, None, None, set(), 'functional',
+        )
+        assert c4_paths == []
+        assert unresolved == 2
+        assert total == 2
+
+    def test_deployment_skips_entities(self):
+        archi_to_c4 = {'e1': 'entities.ent1'}
+        c4_paths, entity_paths, unresolved, total = _resolve_elements(
+            ['e1'], archi_to_c4, None, None, {'e1'}, 'deployment',
+        )
+        assert c4_paths == []
+        assert entity_paths == []
+        assert total == 0
+
+    def test_integration_unresolved_entity_not_counted(self):
+        """Entities that can't be resolved are silently dropped, not counted as unresolved."""
+        c4_paths, entity_paths, unresolved, total = _resolve_elements(
+            ['e_unknown'], {}, None, None, {'e_unknown'}, 'integration',
+        )
+        assert entity_paths == []
+        assert unresolved == 0
+        assert total == 0
 
 
 # ── generate_solution_views ──────────────────────────────────────────────
