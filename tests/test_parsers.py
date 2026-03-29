@@ -703,7 +703,8 @@ class TestParseSolutionViewsExtraPatterns:
         result = parse_solution_views(tmp_path, extra_view_patterns=[])
         assert len(result) == 0
 
-    def test_none_extra_patterns_skips_russian(self, tmp_path):
+    def test_none_extra_patterns_uses_defaults(self, tmp_path):
+        """None means 'use built-in defaults' — Russian patterns are included."""
         diagrams_dir = tmp_path / 'diagrams' / 'sub'
         _write_diagram(
             diagrams_dir / 'ArchimateDiagramModel_r1.xml',
@@ -711,7 +712,8 @@ class TestParseSolutionViewsExtraPatterns:
             elements=['sys-1'],
         )
         result = parse_solution_views(tmp_path)
-        assert len(result) == 0
+        assert len(result) == 1
+        assert result[0].view_type == 'functional'
 
 
 # ── parse_subdomains ─────────────────────────────────────────────────────

@@ -690,8 +690,10 @@ def parse_solution_views(
     attribute matches known view type patterns.
 
     *extra_view_patterns* is a list of ``{"pattern": <regex>, "view_type": <type>}``
-    dicts for locale-specific patterns (e.g. Russian).  When ``None``, no extra
-    patterns are used (caller should pass ``config.extra_view_patterns``).
+    dicts for locale-specific patterns (e.g. Russian).  When ``None``, built-in
+    defaults from ``config._DEFAULT_EXTRA_VIEW_PATTERNS`` are used so that
+    direct callers retain backwards-compatible behaviour.  Pass an empty list
+    to explicitly disable extra patterns.
     """
     diagrams_dir = model_root / 'diagrams'
     if not diagrams_dir.is_dir():
@@ -702,9 +704,12 @@ def parse_solution_views(
     integ_pat = re.compile(r'^integration_architecture\.(.+)$', re.IGNORECASE)
     deploy_pat = re.compile(r'^(?:deployment_architecture|deployment_target)\.(.+)$', re.IGNORECASE)
 
-    # Extra (locale-specific) patterns from config
+    # Extra (locale-specific) patterns from config; None → built-in defaults
+    if extra_view_patterns is None:
+        from archi2likec4.config import _DEFAULT_EXTRA_VIEW_PATTERNS
+        extra_view_patterns = _DEFAULT_EXTRA_VIEW_PATTERNS
     extra_compiled: list[tuple[re.Pattern[str], str]] = []
-    for entry in extra_view_patterns or []:
+    for entry in extra_view_patterns:
         extra_compiled.append((re.compile(entry['pattern'], re.IGNORECASE), entry['view_type']))
 
     results: list[SolutionView] = []

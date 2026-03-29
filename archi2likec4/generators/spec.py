@@ -48,16 +48,16 @@ def generate_spec(config: ConvertConfig | None = None) -> str:
     When *config* is supplied, ``spec_colors``, ``spec_shapes``, and
     ``spec_tags`` are read from it; otherwise built-in defaults are used.
     """
+    from archi2likec4.config import (
+        _DEFAULT_SPEC_COLORS,
+        _DEFAULT_SPEC_SHAPES,
+        _DEFAULT_SPEC_TAGS,
+    )
     if config is not None:
-        colors = config.spec_colors
-        shapes = config.spec_shapes
+        colors = {**_DEFAULT_SPEC_COLORS, **config.spec_colors}
+        shapes = {**_DEFAULT_SPEC_SHAPES, **config.spec_shapes}
         tags = config.spec_tags
     else:
-        from archi2likec4.config import (
-            _DEFAULT_SPEC_COLORS,
-            _DEFAULT_SPEC_SHAPES,
-            _DEFAULT_SPEC_TAGS,
-        )
         colors = _DEFAULT_SPEC_COLORS
         shapes = _DEFAULT_SPEC_SHAPES
         tags = _DEFAULT_SPEC_TAGS
