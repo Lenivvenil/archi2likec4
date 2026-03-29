@@ -63,13 +63,13 @@
 
 Фиксируем новые проблемы как GitHub issues с правильными метками и приоритетами.
 
-- [ ] Прочитать `docs/plans/quality-audit-findings.md`
-- [ ] Для каждого finding: определить приоритет (CRITICAL/HIGH/MEDIUM/LOW) и категорию (security, architecture, code-quality, tech-debt, test-quality)
-- [ ] Создать GitHub issue через `gh issue create` для каждого finding с полями: title `[PRIORITY] краткое название`, body с разделами `## Проблема`, `## Решение`, `## Файлы`, `## Трудозатраты`, соответствующие labels
-- [ ] Убедиться что нет дублей с уже открытыми issues
-- [ ] Закрыть или обновить устаревшие issues если картина изменилась
-- [ ] Удалить временный файл `docs/plans/quality-audit-findings.md`
-- [ ] Mark completed
+- [x] Прочитать `docs/plans/quality-audit-findings.md`
+- [x] Для каждого finding: определить приоритет (CRITICAL/HIGH/MEDIUM/LOW) и категорию (security, architecture, code-quality, tech-debt, test-quality)
+- [x] Создать GitHub issue через `gh issue create` для каждого finding с полями: title `[PRIORITY] краткое название`, body с разделами `## Проблема`, `## Решение`, `## Файлы`, `## Трудозатраты`, соответствующие labels
+- [x] Убедиться что нет дублей с уже открытыми issues
+- [x] Закрыть или обновить устаревшие issues если картина изменилась
+- [x] Удалить временный файл `docs/plans/quality-audit-findings.md`
+- [x] Mark completed
 
 ---
 
