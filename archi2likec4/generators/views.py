@@ -332,10 +332,7 @@ def _generate_functional_view(
                             '(threshold: %d)', view_id, est, max_functional)
     else:
         # Multi-system: determine primary system (most elements)
-        primary_sys = (
-            max(system_paths, key=lambda sp: sys_element_count.get(sp, 0))
-            if system_paths else None
-        )
+        primary_sys = max(system_paths, key=lambda sp: sys_element_count.get(sp, 0))
         lines.append(f"  view {view_id} {{")
         lines.append(f"    title '{escape_str(title)}'")
         lines.append("    include")
@@ -479,6 +476,10 @@ def _generate_integration_view(
             logger.info('Integration view %s: %d data entities exceed cap (%d), excluding',
                          view_id, len(resolved_entities), max_integration_entities)
 
+    # Nothing to include — skip this view
+    if not system_paths and not rel_pairs and not resolved_entities:
+        return []
+
     lines: list[str] = []
     lines.append(f"  view {view_id} {{")
     lines.append(f"    title '{escape_str(title)}'")
@@ -565,6 +566,10 @@ def _dispatch_view(
 
     Returns (view_lines, unresolved_count, non_entity_count).
     """
+    # Skip unsupported view types before resolution to avoid inflating metrics
+    if sv.view_type not in _VIEW_TYPE_LABELS:
+        return [], 0, 0
+
     c4_paths, entity_paths, unresolved, non_entity_count = _resolve_elements(
         sv.element_archi_ids, archi_to_c4, promoted_archi_to_c4,
         tech_archi_to_c4, entity_archi_ids, sv.view_type,
@@ -575,7 +580,7 @@ def _dispatch_view(
 
     unique_paths = list(dict.fromkeys(c4_paths))
     view_id = _make_unique_view_id(sv.view_type, solution_slug, used_view_ids)
-    label = _VIEW_TYPE_LABELS.get(sv.view_type, sv.view_type.title())
+    label = _VIEW_TYPE_LABELS[sv.view_type]
     solution_label = sv.name.split('.', 1)[-1] if '.' in sv.name else sv.name
     title = f'{label} Architecture: {solution_label}'
 
@@ -594,14 +599,12 @@ def _dispatch_view(
             sys_ids=sys_ids, sys_domain=sys_domain,
             max_integration=_MAX_INTEGRATION, max_integration_entities=_MAX_INTEGRATION_ENTITIES,
         )
-    elif sv.view_type == 'deployment':
+    else:  # deployment
         lines = _generate_deployment_view(
             view_id=view_id, title=title, c4_paths=c4_paths,
             deploy_targets=deploy_targets, tech_archi_to_c4=tech_archi_to_c4,
             deployment_env=deployment_env, max_deployment=_MAX_DEPLOYMENT,
         )
-    else:
-        lines = []
 
     return lines, unresolved, non_entity_count
 
@@ -637,7 +640,6 @@ def generate_solution_views(
     used_view_ids: set[str] = set()
     total_unresolved = 0
     total_elements = 0
-
     for solution_slug, views in sorted(by_solution.items()):
         sol_name = views[0].name.split('.', 1)[-1] if '.' in views[0].name else views[0].name
         lines = [f'// ── Solution: {sol_name} ──', '', 'views {', '']
