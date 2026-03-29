@@ -135,3 +135,44 @@ strict: false
 # sync_protected_paths:
 #   - scripts/.gitkeep
 #   - scripts/validate_domains.py
+
+# ── Extra view-name patterns ──────────────────────────────────────────
+# Additional regex patterns for solution-view name matching.
+# Useful for locale-specific view naming (e.g., Russian).
+# Format: pattern: <regex>, view_type: functional|integration|deployment
+#
+# These extend the built-in English patterns.
+# extra_view_patterns:
+#   - pattern: '^Функциональная архитектура[.\s]+(.+)$'
+#     view_type: functional
+#   - pattern: '^Интеграционная архитектура[.\s]+(.+)$'
+#     view_type: integration
+#   - pattern: '^Схема разв[её]ртывания[.\s]+(.+)$'
+#     view_type: deployment
+
+# ── Specification: colors, shapes, tags ───────────────────────────────
+# Customize appearance of LikeC4 elements in the generated spec.
+# All keys are optional — unset keys fall back to built-in defaults.
+#
+# spec_colors:
+#   archi-app: '#7EB8DA'
+#   archi-app-light: '#BDE0F0'
+#   archi-data: '#F0D68A'
+#   archi-store: '#B0B0B0'
+#   archi-tech: '#93D275'
+#   archi-tech-light: '#C5E6B8'
+#
+# spec_shapes:
+#   domain: rectangle
+#   system: component
+#   appFunction: rectangle
+#   dataEntity: document
+#   dataStore: cylinder
+#   infraNode: rectangle
+#   infraSoftware: cylinder
+#
+# spec_tags:
+#   - to_review
+#   - external
+#   - entity
+#   - infrastructure
