@@ -48,14 +48,14 @@
 
 Ручной ревью ключевых модулей для обнаружения архитектурных проблем.
 
-- [ ] `archi2likec4/pipeline.py`: проверить что все публичные функции имеют полные type annotations; нет глобального state; все параметры `convert()` задокументированы
-- [ ] `archi2likec4/parsers.py`: проверить обработку всех edge cases XML (пустые теги, отсутствующие атрибуты, unicode в name)
-- [ ] `archi2likec4/web.py`: проверить все HTTP ответы — правильные status codes; нет утечки путей файловой системы в ошибках
-- [ ] `archi2likec4/builders/`: проверить что все builder функции детерминированы (один и тот же input → одинаковый output)
-- [ ] `archi2likec4/models.py`: проверить что все dataclass поля имеют типы; нет мутабельных дефолтов
-- [ ] Записать findings в `docs/plans/quality-audit-findings.md`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] `archi2likec4/pipeline.py`: проверить что все публичные функции имеют полные type annotations; нет глобального state; все параметры `convert()` задокументированы
+- [x] `archi2likec4/parsers.py`: проверить обработку всех edge cases XML (пустые теги, отсутствующие атрибуты, unicode в name)
+- [x] `archi2likec4/web.py`: проверить все HTTP ответы — правильные status codes; нет утечки путей файловой системы в ошибках
+- [x] `archi2likec4/builders/`: проверить что все builder функции детерминированы (один и тот же input → одинаковый output)
+- [x] `archi2likec4/models.py`: проверить что все dataclass поля имеют типы; нет мутабельных дефолтов
+- [x] Записать findings в `docs/plans/quality-audit-findings.md`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 

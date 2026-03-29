@@ -554,3 +554,51 @@ class TestRemediationRoutes:
         """Missing name or domain should redirect (no-op), not error."""
         resp = _csrf_post(app_client, '/promote-system', data={'name': '', 'domain': 'x'})
         assert resp.status_code == 302
+
+
+# ── Error handler tests ─────────────────────────────────────────────────
+
+class TestErrorHandler:
+    """Verify error handler escapes HTML and returns correct status codes."""
+
+    def test_error_handler_escapes_html(self, tmp_path):
+        """Error messages are HTML-escaped in the response to prevent XSS."""
+        from archi2likec4 import web
+        from archi2likec4.exceptions import Archi2LikeC4Error
+
+        model_dir = tmp_path / 'model'
+        model_dir.mkdir()
+
+        with patch('archi2likec4.config.load_config',
+                   side_effect=Archi2LikeC4Error('<script>alert(1)</script>')):
+            app = web.create_app(
+                config_path=None,
+                model_root=model_dir,
+                output_dir=tmp_path / 'output',
+            )
+            client = app.test_client()
+            resp = client.get('/')
+            assert resp.status_code == 500
+            body = resp.data.decode()
+            assert '<script>' not in body
+            assert '&lt;script&gt;' in body
+
+    def test_error_handler_returns_500(self, tmp_path):
+        """Archi2LikeC4Error triggers 500 response."""
+        from archi2likec4 import web
+        from archi2likec4.exceptions import ConfigError
+
+        model_dir = tmp_path / 'model'
+        model_dir.mkdir()
+
+        with patch('archi2likec4.config.load_config',
+                   side_effect=ConfigError('bad config')):
+            app = web.create_app(
+                config_path=None,
+                model_root=model_dir,
+                output_dir=tmp_path / 'output',
+            )
+            client = app.test_client()
+            resp = client.get('/')
+            assert resp.status_code == 500
+            assert b'bad config' in resp.data

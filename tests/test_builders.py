@@ -2558,3 +2558,75 @@ class TestBuilderEncapsulation:
                                     f'archi2likec4/builders/{name}.py imports private '
                                     f'{alias.name!r} from {node.module}'
                                 )
+
+
+# ── Determinism tests ───────────────────────────────────────────────────
+
+class TestBuilderDeterminism:
+    """Verify that builder functions produce identical output for identical input."""
+
+    def _make_components(self):
+        return [
+            AppComponent(archi_id='id-a', name='Alpha', properties={'CI': 'A1'}),
+            AppComponent(archi_id='id-b', name='Beta', properties={'CI': 'B1'}),
+            AppComponent(archi_id='id-c', name='Alpha.Sub1'),
+            AppComponent(archi_id='id-d', name='Alpha.Sub2'),
+            AppComponent(archi_id='id-e', name='Gamma', properties={'CI': 'G1'}),
+        ]
+
+    def test_build_systems_deterministic(self):
+        """build_systems returns identical output on repeated calls with same input."""
+        for _ in range(3):
+            systems, promoted = build_systems(self._make_components())
+        systems_a, _ = build_systems(self._make_components())
+        systems_b, _ = build_systems(self._make_components())
+        assert [s.c4_id for s in systems_a] == [s.c4_id for s in systems_b]
+        assert [s.name for s in systems_a] == [s.name for s in systems_b]
+        for sa, sb in zip(systems_a, systems_b, strict=True):
+            assert [sub.c4_id for sub in sa.subsystems] == [sub.c4_id for sub in sb.subsystems]
+
+    def test_assign_domains_deterministic(self):
+        """assign_domains returns identical assignments on repeated calls."""
+        components = self._make_components()
+        systems, _ = build_systems(components)
+        domains = [
+            DomainInfo(c4_id='core', name='Core', archi_ids={'id-a', 'id-c', 'id-d'}),
+            DomainInfo(c4_id='infra', name='Infra', archi_ids={'id-b'}),
+        ]
+        import copy
+        result_a = assign_domains(copy.deepcopy(systems), domains)
+        result_b = assign_domains(copy.deepcopy(systems), domains)
+        for domain_id in result_a:
+            names_a = sorted(s.name for s in result_a.get(domain_id, []))
+            names_b = sorted(s.name for s in result_b.get(domain_id, []))
+            assert names_a == names_b, f'Domain {domain_id} differs'
+
+    def test_build_integrations_deterministic(self):
+        """build_integrations returns identical output on repeated calls."""
+        systems = [
+            System(c4_id='alpha', name='Alpha', archi_id='id-a'),
+            System(c4_id='beta', name='Beta', archi_id='id-b'),
+        ]
+        rels = [
+            RawRelationship(rel_id='r1', rel_type='FlowRelationship', name='flow1',
+                            source_type='ApplicationComponent', source_id='id-a',
+                            target_type='ApplicationComponent', target_id='id-b'),
+            RawRelationship(rel_id='r2', rel_type='FlowRelationship', name='flow2',
+                            source_type='ApplicationComponent', source_id='id-b',
+                            target_type='ApplicationComponent', target_id='id-a'),
+        ]
+        intg_a, _, _ = build_integrations(systems, rels, {})
+        intg_b, _, _ = build_integrations(systems, rels, {})
+        assert [(i.source_path, i.target_path, i.name) for i in intg_a] == \
+               [(i.source_path, i.target_path, i.name) for i in intg_b]
+
+    def test_build_data_entities_deterministic(self):
+        """build_data_entities returns same IDs and order for same input."""
+        data_objects = [
+            DataObject(archi_id='do-1', name='Orders'),
+            DataObject(archi_id='do-2', name='Customers'),
+            DataObject(archi_id='do-3', name='Products'),
+        ]
+        entities_a = build_data_entities(data_objects, set())
+        entities_b = build_data_entities(data_objects, set())
+        assert [(e.c4_id, e.name) for e in entities_a] == [(e.c4_id, e.name) for e in entities_b]

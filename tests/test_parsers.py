@@ -1123,3 +1123,54 @@ class TestPipelineParseErrorPropagation:
         with patch('archi2likec4.pipeline._parse', side_effect=PE('all XMLs bad')), \
                 pytest.raises(PE, match='all XMLs bad'):
             convert(tmp_path, tmp_path / 'out', config=cfg)
+
+
+# ── Parser edge cases: unicode, empty attrs, whitespace-only ───────────
+
+class TestParserEdgeCases:
+    """Validate parser robustness for edge case XML inputs."""
+
+    def test_unicode_name_parsed(self, tmp_path):
+        """ApplicationComponent with Cyrillic name is parsed correctly."""
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        xml = app_dir / 'ApplicationComponent_uni.xml'
+        xml.write_text(
+            '<element id="id-uni" name="Платёжный шлюз"/>',
+            encoding='utf-8',
+        )
+        results = parse_application_components(tmp_path)
+        assert len(results) == 1
+        assert results[0].name == 'Платёжный шлюз'
+        assert results[0].archi_id == 'id-uni'
+
+    def test_whitespace_only_name_skipped(self, tmp_path):
+        """Component with whitespace-only name is skipped."""
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        xml = app_dir / 'ApplicationComponent_ws.xml'
+        xml.write_text('<element id="id-ws" name="   "/>', encoding='utf-8')
+        results = parse_application_components(tmp_path)
+        assert len(results) == 0
+
+    def test_missing_id_skipped(self, tmp_path):
+        """Component with no id attribute is skipped."""
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        xml = app_dir / 'ApplicationComponent_noid.xml'
+        xml.write_text('<element name="NoId"/>', encoding='utf-8')
+        results = parse_application_components(tmp_path)
+        assert len(results) == 0
+
+    def test_special_chars_in_name(self, tmp_path):
+        """Component with special characters in name is parsed."""
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        xml = app_dir / 'ApplicationComponent_sp.xml'
+        xml.write_text(
+            '<element id="id-sp" name="System (v2.0) &amp; API"/>',
+            encoding='utf-8',
+        )
+        results = parse_application_components(tmp_path)
+        assert len(results) == 1
+        assert results[0].name == 'System (v2.0) & API'

@@ -138,3 +138,65 @@ Found 10 occurrences:
 - `tests/test_cli.py` (1x): `import tomli as tomllib  # type: ignore[no-redef]` — conditional import for Python <3.11 compat. Legitimate use.
 
 No problematic suppressions found.
+
+---
+
+## 7. Manual code review — architecture and API surface (Task 3)
+
+### pipeline.py
+
+- All public functions (`convert`, `main`) and private phase functions (`_parse`, `_build`, `_validate`, `_generate`) have full type annotations with return types.
+- `ParseResult` is a NamedTuple with all 9 fields typed. `ConvertResult` is a dataclass with all 6 fields typed.
+- No global mutable state — only module-level `logger` and imports.
+- `convert()` has complete docstring with Parameters, Returns, Raises sections.
+- No issues found.
+
+### parsers.py
+
+- Uses `defusedxml.ElementTree` for safe XML parsing (no XXE attacks).
+- Every parser catches `ET.ParseError` gracefully with warning and continues.
+- Empty/missing attributes handled via `.get('name', '').strip()` + `if not name: continue`.
+- Empty archi_id: logged as warning, element skipped.
+- Unicode in names: no issues — Python handles natively.
+- Recursive XML traversal functions (`_extract_app_component_refs`, `_extract_all_element_refs`, `_extract_visual_nesting`) have no depth limit. Theoretical stack overflow on deeply nested XML, but ArchiMate diagrams are shallow in practice. Low risk.
+- No issues requiring code changes.
+
+### web.py
+
+- CSRF token protection on all 10 POST routes via `_csrf_check` before_request hook.
+- Open redirect prevention via `_safe_redirect` (rejects empty, non-`/` prefix, `//` prefix).
+- Error handler (line 196): returns 500 with `html.escape(str(error))`. Properly escapes HTML but `ConfigError`/`ParseError` messages may contain filesystem paths (e.g. `/Users/.../model/`). Acceptable for internal tool, but noted as low-priority finding.
+- POST routes return redirect (302) on success. Invalid domain returns 400 with `html.escape(domain)`.
+- Secret key: uses `FLASK_SECRET_KEY` env var or `secrets.token_hex(32)`.
+- Cache uses `time.monotonic()` — correct for elapsed time measurement.
+- All HTTP status codes correct: 200 (GET), 302 (POST success), 400 (validation), 403 (CSRF), 500 (server error).
+
+### builders/
+
+All builder functions are deterministic (same input → same output):
+
+- `build_systems()`: iterates `sorted(system_acs.items())`, returns `sorted(systems.values(), key=name)`.
+- `assign_domains()`: uses `min()` with tie-breaking `(-count, name)` for consistent domain selection.
+- `assign_subdomains()`: majority vote uses `min()` with deterministic tie-breaking.
+- `build_integrations()`: `_dedup_integrations` uses `sorted(pair_flows.items())`.
+- `build_data_entities()`: returns `sorted(entities, key=name)`.
+- `build_data_access()`: returns `sorted(results, key=...)`.
+- `build_deployment_topology()`: `roots.sort(key=name)`.
+- `build_deployment_map()`: `result.sort()`.
+
+No non-deterministic patterns (no `set()` iteration without sorting, no `dict()` iteration without sorting).
+
+### models.py
+
+- All 14 dataclasses have fully typed fields.
+- All mutable defaults use `field(default_factory=...)`: `dict`, `list`, `set` — no bare mutable defaults.
+- `DomainInfo.archi_ids` correctly uses `field(default_factory=set)`.
+- No issues found.
+
+### Summary of Task 3 findings
+
+No critical or high-priority issues found. The codebase is well-structured:
+
+1. **LOW**: web.py error handler may expose filesystem paths in 500 responses. Internal tool — acceptable risk.
+2. **LOW**: Recursive XML traversal in parsers.py has no depth guard. ArchiMate XML is shallow — negligible risk.
+3. **POSITIVE**: All builders are deterministic. All dataclass fields typed. No mutable default bugs. Full type annotations on pipeline API. defusedxml for safe parsing. CSRF + open redirect protection in web UI.
