@@ -41,12 +41,12 @@
 
 Выносим functional и integration view generation.
 
-- [ ] В `archi2likec4/generators/views.py`: создать `_generate_functional_view(view, resolved_elements, sys_domain, sys_subdomain) -> tuple[str, int, int]`
-- [ ] Перенести логику functional view (~lines 282-337) используя `_resolve_elements()` из Task 1
-- [ ] В `archi2likec4/generators/views.py`: создать `_generate_integration_view(view, resolved_elements, entity_archi_ids, relationships, archi_to_c4, promoted_archi_to_c4, sys_domain, sys_subdomain) -> tuple[str, int, int]`
-- [ ] Перенести логику integration view (~lines 339-442) включая orphan removal и entity cap логику
-- [ ] Add/update tests for the above changes (unit-тесты обоих функций в `tests/test_generators.py`)
-- [ ] Mark completed
+- [x] В `archi2likec4/generators/views.py`: создать `_generate_functional_view(view, resolved_elements, sys_domain, sys_subdomain) -> tuple[str, int, int]`
+- [x] Перенести логику functional view (~lines 282-337) используя `_resolve_elements()` из Task 1
+- [x] В `archi2likec4/generators/views.py`: создать `_generate_integration_view(view, resolved_elements, entity_archi_ids, relationships, archi_to_c4, promoted_archi_to_c4, sys_domain, sys_subdomain) -> tuple[str, int, int]`
+- [x] Перенести логику integration view (~lines 339-442) включая orphan removal и entity cap логику
+- [x] Add/update tests for the above changes (unit-тесты обоих функций в `tests/test_generators.py`)
+- [x] Mark completed
 
 ---
 

@@ -296,6 +296,242 @@ def _generate_deployment_view(
     return lines
 
 
+def _collect_system_paths(
+    unique_paths: list[str],
+    sys_subdomain: dict[str, str] | None,
+    sys_ids: set[str],
+    sys_domain: dict[str, str],
+) -> tuple[list[str], dict[str, int]]:
+    """Collect unique system-level paths from resolved c4 element paths.
+
+    Returns (system_paths, element_count_per_system).
+    """
+    system_paths: list[str] = []
+    seen: set[str] = set()
+    counts: dict[str, int] = {}
+    for p in unique_paths:
+        if len(p.split('.')) >= 2:
+            sp = _system_path_from_c4(p, sys_subdomain, sys_ids, sys_domain)
+            counts[sp] = counts.get(sp, 0) + 1
+            if sp not in seen:
+                seen.add(sp)
+                system_paths.append(sp)
+    return system_paths, counts
+
+
+def _generate_functional_view(
+    view_id: str,
+    title: str,
+    unique_paths: list[str],
+    sys_subdomain: dict[str, str] | None,
+    sys_ids: set[str],
+    sys_domain: dict[str, str],
+    max_functional: int = 25,
+) -> list[str]:
+    """Generate functional view lines for a single solution view.
+
+    Returns list of .c4 lines for the functional view block.
+    """
+    system_paths, sys_element_count = _collect_system_paths(
+        unique_paths, sys_subdomain, sys_ids, sys_domain,
+    )
+
+    if not system_paths:
+        return []
+
+    lines: list[str] = []
+    if len(system_paths) == 1:
+        # Scoped view for a single system
+        lines.append(f"  view {view_id} of {system_paths[0]} {{")
+        lines.append(f"    title '{escape_str(title)}'")
+        lines.append("    include *")
+        lines.append("    exclude * where kind is dataEntity")
+        lines.append("    exclude * where kind is dataStore")
+        lines.append("  }")
+        # QA-11: warn on element count (estimate)
+        est = sys_element_count.get(system_paths[0], 0)
+        if est > max_functional:
+            logger.warning('QA-11: functional view %s has ~%d elements '
+                            '(threshold: %d)', view_id, est, max_functional)
+    else:
+        # Multi-system: determine primary system (most elements)
+        primary_sys = (
+            max(system_paths, key=lambda sp: sys_element_count.get(sp, 0))
+            if system_paths else None
+        )
+        lines.append(f"  view {view_id} {{")
+        lines.append(f"    title '{escape_str(title)}'")
+        lines.append("    include")
+        for sp in system_paths:
+            if sp == primary_sys:
+                lines.append(f"      {sp},")
+                lines.append(f"      {sp}.*,")
+            else:
+                lines.append(f"      {sp},")
+        # Remove trailing comma from last line
+        if lines[-1].endswith(','):
+            lines[-1] = lines[-1][:-1]
+        lines.append("    exclude * where kind is dataEntity")
+        lines.append("    exclude * where kind is dataStore")
+        lines.append("  }")
+        # QA-11: warn on element count
+        est = (
+            len(system_paths) + sys_element_count.get(primary_sys, 0)
+            if primary_sys else len(system_paths)
+        )
+        if est > max_functional:
+            logger.warning('QA-11: functional view %s has ~%d elements '
+                            '(threshold: %d)', view_id, est, max_functional)
+
+    return lines
+
+
+def _resolve_endpoint_to_systems(
+    archi_id: str,
+    archi_to_c4: dict[str, str],
+    promoted_archi_to_c4: dict[str, list[str]] | None,
+    sys_subdomain: dict[str, str] | None,
+    sys_ids: set[str],
+    sys_domain: dict[str, str],
+) -> set[str]:
+    """Resolve a single relationship endpoint archi_id to system-level c4 paths."""
+    result: set[str] = set()
+    if archi_id in archi_to_c4:
+        path = archi_to_c4[archi_id]
+        result.add(
+            _system_path_from_c4(path, sys_subdomain, sys_ids, sys_domain)
+            if len(path.split('.')) >= 2 else path)
+    elif promoted_archi_to_c4 and archi_id in promoted_archi_to_c4:
+        for child_path in promoted_archi_to_c4[archi_id]:
+            result.add(
+                _system_path_from_c4(child_path, sys_subdomain, sys_ids, sys_domain)
+                if len(child_path.split('.')) >= 2 else child_path)
+    return result
+
+
+# Structural rel types excluded from integration views (consistent with build_integrations)
+_STRUCTURAL_TYPES = frozenset({'CompositionRelationship', 'RealizationRelationship', 'AssignmentRelationship'})
+
+
+def _resolve_rel_pairs(
+    relationship_archi_ids: list[str],
+    rel_lookup: dict[str, tuple[str, str, str]],
+    archi_to_c4: dict[str, str],
+    promoted_archi_to_c4: dict[str, list[str]] | None,
+    sys_subdomain: dict[str, str] | None,
+    sys_ids: set[str],
+    sys_domain: dict[str, str],
+) -> list[tuple[str, str]]:
+    """Resolve diagram relationship archi_ids to unique system-level (src, tgt) pairs."""
+    rel_pairs: list[tuple[str, str]] = []
+    seen_pairs: set[tuple[str, str]] = set()
+    for rel_id in relationship_archi_ids:
+        if rel_id not in rel_lookup:
+            continue
+        src_aid, tgt_aid, rtype = rel_lookup[rel_id]
+        if rtype in _STRUCTURAL_TYPES or rtype == 'AccessRelationship':
+            continue
+        src_sys_set = _resolve_endpoint_to_systems(
+            src_aid, archi_to_c4, promoted_archi_to_c4, sys_subdomain, sys_ids, sys_domain)
+        tgt_sys_set = _resolve_endpoint_to_systems(
+            tgt_aid, archi_to_c4, promoted_archi_to_c4, sys_subdomain, sys_ids, sys_domain)
+        if not src_sys_set or not tgt_sys_set:
+            continue
+        for src_sys in src_sys_set:
+            for tgt_sys in tgt_sys_set:
+                if src_sys == tgt_sys:
+                    continue
+                pair = (src_sys, tgt_sys)
+                if pair not in seen_pairs:
+                    seen_pairs.add(pair)
+                    rel_pairs.append(pair)
+    return rel_pairs
+
+
+def _generate_integration_view(
+    view_id: str,
+    title: str,
+    unique_paths: list[str],
+    entity_paths: list[str],
+    relationship_archi_ids: list[str],
+    rel_lookup: dict[str, tuple[str, str, str]],
+    archi_to_c4: dict[str, str],
+    promoted_archi_to_c4: dict[str, list[str]] | None,
+    sys_subdomain: dict[str, str] | None,
+    sys_ids: set[str],
+    sys_domain: dict[str, str],
+    max_integration: int = 50,
+    max_integration_entities: int = 10,
+) -> list[str]:
+    """Generate integration view lines for a single solution view.
+
+    Returns list of .c4 lines for the integration view block.
+
+    Steps:
+      1. Lift resolved paths to system-level.
+      2. Resolve diagram relationships to system-level pairs.
+      3. Orphan removal: keep only systems that participate in relationships.
+      4. Entity cap: include entities only if within threshold.
+    """
+    system_paths, _ = _collect_system_paths(
+        unique_paths, sys_subdomain, sys_ids, sys_domain,
+    )
+
+    # Resolve diagram relationships to system-level pairs
+    rel_pairs = _resolve_rel_pairs(
+        relationship_archi_ids, rel_lookup, archi_to_c4,
+        promoted_archi_to_c4, sys_subdomain, sys_ids, sys_domain,
+    )
+
+    # Orphan removal: keep only systems that participate in relationships
+    if rel_pairs:
+        connected_systems: set[str] = set()
+        for src, tgt in rel_pairs:
+            connected_systems.add(src)
+            connected_systems.add(tgt)
+        system_paths = [sp for sp in system_paths if sp in connected_systems]
+
+    # Entity cap: include entities only if ≤ threshold
+    include_entities = False
+    resolved_entities: list[str] = []
+    if entity_paths:
+        resolved_entities = list(dict.fromkeys(entity_paths))
+        if len(resolved_entities) <= max_integration_entities:
+            include_entities = True
+        else:
+            logger.info('Integration view %s: %d data entities exceed cap (%d), excluding',
+                         view_id, len(resolved_entities), max_integration_entities)
+
+    lines: list[str] = []
+    lines.append(f"  view {view_id} {{")
+    lines.append(f"    title '{escape_str(title)}'")
+    if not include_entities and resolved_entities:
+        cap = max_integration_entities
+        lines.append(f"    // {len(resolved_entities)} data entities excluded (>{cap} cap)")
+    lines.append("    include")
+    for sp in system_paths:
+        lines.append(f"      {sp},")
+    if include_entities:
+        for ep in resolved_entities:
+            lines.append(f"      {ep},")
+    if rel_pairs:
+        # Use specific relationship pairs from diagram
+        for src, tgt in rel_pairs:
+            lines.append(f"      {src} -> {tgt},")
+    # Remove trailing comma
+    if lines[-1].endswith(','):
+        lines[-1] = lines[-1][:-1]
+    lines.append("    exclude * where kind is dataStore")
+    lines.append("  }")
+    # QA-11: warn on element count
+    est = len(system_paths) + len(rel_pairs) + (len(resolved_entities) if include_entities else 0)
+    if est > max_integration:
+        logger.warning('QA-11: integration view %s has ~%d elements '
+                        '(threshold: %d)', view_id, est, max_integration)
+
+    return lines
+
+
 def generate_solution_views(  # noqa: C901 — 3 view-type branches with distinct rendering logic; tracked as #2
     solution_views: list[SolutionView],
     archi_to_c4: dict[str, str],
@@ -343,8 +579,6 @@ def generate_solution_views(  # noqa: C901 — 3 view-type branches with distinc
 
     # Build relationship lookup: rel_archi_id → (source_archi_id, target_archi_id, rel_type)
     rel_lookup: dict[str, tuple[str, str, str]] = {}
-    # Structural rel types excluded from integration views (consistent with build_integrations)
-    _structural_types = {'CompositionRelationship', 'RealizationRelationship', 'AssignmentRelationship'}
     if relationships:
         for rel in relationships:
             rel_lookup[rel.rel_id] = (rel.source_id, rel.target_id, rel.rel_type)
@@ -393,166 +627,34 @@ def generate_solution_views(  # noqa: C901 — 3 view-type branches with distinc
             title = f'{view_type_label} Architecture: {solution_label}'
 
             if sv.view_type == 'functional':
-                # Functional view: include specific elements (systems + children)
-                # Find unique system-level paths (domain.system) and count elements per system
-                system_paths: list[str] = []
-                seen_sys: set[str] = set()
-                sys_element_count: dict[str, int] = {}
-                for p in unique_paths:
-                    if len(p.split('.')) >= 2:
-                        sys_path = _system_path_from_c4(p, sys_subdomain, _sys_ids, sys_domain)
-                        sys_element_count[sys_path] = sys_element_count.get(sys_path, 0) + 1
-                        if sys_path not in seen_sys:
-                            seen_sys.add(sys_path)
-                            system_paths.append(sys_path)
-
-                if len(system_paths) == 1:
-                    # Scoped view for a single system
-                    lines.append(f"  view {view_id} of {system_paths[0]} {{")
-                    lines.append(f"    title '{escape_str(title)}'")
-                    lines.append("    include *")
-                    lines.append("    exclude * where kind is dataEntity")
-                    lines.append("    exclude * where kind is dataStore")
-                    lines.append("  }")
-                    # QA-11: warn on element count (estimate)
-                    est = sys_element_count.get(system_paths[0], 0)
-                    if est > _MAX_FUNCTIONAL:
-                        logger.warning('QA-11: functional view %s has ~%d elements '
-                                        '(threshold: %d)', view_id, est, _MAX_FUNCTIONAL)
-                else:
-                    # Multi-system: determine primary system (most elements)
-                    primary_sys = (
-                        max(system_paths, key=lambda sp: sys_element_count.get(sp, 0))
-                        if system_paths else None
-                    )
-                    lines.append(f"  view {view_id} {{")
-                    lines.append(f"    title '{escape_str(title)}'")
-                    lines.append("    include")
-                    for sp in system_paths:
-                        if sp == primary_sys:
-                            lines.append(f"      {sp},")
-                            lines.append(f"      {sp}.*,")
-                        else:
-                            lines.append(f"      {sp},")
-                    # Remove trailing comma from last line
-                    if lines[-1].endswith(','):
-                        lines[-1] = lines[-1][:-1]
-                    lines.append("    exclude * where kind is dataEntity")
-                    lines.append("    exclude * where kind is dataStore")
-                    lines.append("  }")
-                    # QA-11: warn on element count
-                    est = (
-                        len(system_paths) + sys_element_count.get(primary_sys, 0)
-                        if primary_sys else len(system_paths)
-                    )
-                    if est > _MAX_FUNCTIONAL:
-                        logger.warning('QA-11: functional view %s has ~%d elements '
-                                        '(threshold: %d)', view_id, est, _MAX_FUNCTIONAL)
+                func_lines = _generate_functional_view(
+                    view_id=view_id,
+                    title=title,
+                    unique_paths=unique_paths,
+                    sys_subdomain=sys_subdomain,
+                    sys_ids=_sys_ids,
+                    sys_domain=sys_domain,
+                    max_functional=_MAX_FUNCTIONAL,
+                )
+                lines.extend(func_lines)
 
             elif sv.view_type == 'integration':
-                # Integration view: system-level with specific relationships from diagram
-                system_paths = []
-                seen_sys = set()
-                for p in unique_paths:
-                    if len(p.split('.')) >= 2:
-                        sys_path = _system_path_from_c4(p, sys_subdomain, _sys_ids, sys_domain)
-                        if sys_path not in seen_sys:
-                            seen_sys.add(sys_path)
-                            system_paths.append(sys_path)
-
-                # Resolve diagram relationships to system-level pairs
-                rel_pairs: list[tuple[str, str]] = []
-                seen_pairs: set[tuple[str, str]] = set()
-                for rel_id in sv.relationship_archi_ids:
-                    if rel_id not in rel_lookup:
-                        continue
-                    src_aid, tgt_aid, rtype = rel_lookup[rel_id]
-                    # Skip structural relationships (same filter as build_integrations)
-                    if rtype in _structural_types or rtype == 'AccessRelationship':
-                        continue
-                    # Resolve endpoints — lift BOTH sides to system level BEFORE iteration
-                    # This prevents N×M fan-out for promoted parents
-                    src_sys_set: set[str] = set()
-                    if src_aid in archi_to_c4:
-                        src_path = archi_to_c4[src_aid]
-                        src_sys_set.add(
-                            _system_path_from_c4(src_path, sys_subdomain, _sys_ids, sys_domain)
-                            if len(src_path.split('.')) >= 2 else src_path)
-                    elif promoted_archi_to_c4 and src_aid in promoted_archi_to_c4:
-                        for child_path in promoted_archi_to_c4[src_aid]:
-                            src_sys_set.add(
-                                _system_path_from_c4(child_path, sys_subdomain, _sys_ids, sys_domain)
-                                if len(child_path.split('.')) >= 2 else child_path)
-
-                    tgt_sys_set: set[str] = set()
-                    if tgt_aid in archi_to_c4:
-                        tgt_path = archi_to_c4[tgt_aid]
-                        tgt_sys_set.add(
-                            _system_path_from_c4(tgt_path, sys_subdomain, _sys_ids, sys_domain)
-                            if len(tgt_path.split('.')) >= 2 else tgt_path)
-                    elif promoted_archi_to_c4 and tgt_aid in promoted_archi_to_c4:
-                        for child_path in promoted_archi_to_c4[tgt_aid]:
-                            tgt_sys_set.add(
-                                _system_path_from_c4(child_path, sys_subdomain, _sys_ids, sys_domain)
-                                if len(child_path.split('.')) >= 2 else child_path)
-
-                    if not src_sys_set or not tgt_sys_set:
-                        continue
-
-                    # One pair per unique (src_sys, tgt_sys) — no cross-product explosion
-                    for src_sys in src_sys_set:
-                        for tgt_sys in tgt_sys_set:
-                            if src_sys == tgt_sys:
-                                continue
-                            pair = (src_sys, tgt_sys)
-                            if pair not in seen_pairs:
-                                seen_pairs.add(pair)
-                                rel_pairs.append(pair)
-
-                # Orphan removal: keep only systems that participate in relationships
-                if rel_pairs:
-                    connected_systems: set[str] = set()
-                    for src, tgt in rel_pairs:
-                        connected_systems.add(src)
-                        connected_systems.add(tgt)
-                    system_paths = [sp for sp in system_paths if sp in connected_systems]
-
-                # Entity cap: include entities only if ≤ threshold
-                include_entities = False
-                resolved_entities: list[str] = []
-                if sv.view_type == 'integration' and entity_paths:
-                    resolved_entities = list(dict.fromkeys(entity_paths))
-                    if len(resolved_entities) <= _MAX_INTEGRATION_ENTITIES:
-                        include_entities = True
-                    else:
-                        logger.info('Integration view %s: %d data entities exceed cap (%d), excluding',
-                                     view_id, len(resolved_entities), _MAX_INTEGRATION_ENTITIES)
-
-                lines.append(f"  view {view_id} {{")
-                lines.append(f"    title '{escape_str(title)}'")
-                if not include_entities and resolved_entities:
-                    cap = _MAX_INTEGRATION_ENTITIES
-                    lines.append(f"    // {len(resolved_entities)} data entities excluded (>{cap} cap)")
-                lines.append("    include")
-                for sp in system_paths:
-                    lines.append(f"      {sp},")
-                if include_entities:
-                    for ep in resolved_entities:
-                        lines.append(f"      {ep},")
-                if rel_pairs:
-                    # Use specific relationship pairs from diagram
-                    for src, tgt in rel_pairs:
-                        lines.append(f"      {src} -> {tgt},")
-                # Remove trailing comma
-                if lines[-1].endswith(','):
-                    lines[-1] = lines[-1][:-1]
-                lines.append("    exclude * where kind is dataStore")
-                lines.append("  }")
-                # QA-11: warn on element count
-                est = len(system_paths) + len(rel_pairs) + (len(resolved_entities) if include_entities else 0)
-                if est > _MAX_INTEGRATION:
-                    logger.warning('QA-11: integration view %s has ~%d elements '
-                                    '(threshold: %d)', view_id, est, _MAX_INTEGRATION)
+                int_lines = _generate_integration_view(
+                    view_id=view_id,
+                    title=title,
+                    unique_paths=unique_paths,
+                    entity_paths=entity_paths,
+                    relationship_archi_ids=sv.relationship_archi_ids,
+                    rel_lookup=rel_lookup,
+                    archi_to_c4=archi_to_c4,
+                    promoted_archi_to_c4=promoted_archi_to_c4,
+                    sys_subdomain=sys_subdomain,
+                    sys_ids=_sys_ids,
+                    sys_domain=sys_domain,
+                    max_integration=_MAX_INTEGRATION,
+                    max_integration_entities=_MAX_INTEGRATION_ENTITIES,
+                )
+                lines.extend(int_lines)
 
             elif sv.view_type == 'deployment':
                 deploy_lines = _generate_deployment_view(
