@@ -153,50 +153,27 @@ def _resolve_elements(
     c4_paths: list[str] = []
     entity_paths: list[str] = []
     unresolved = 0
-
-    # Count non-entity elements for total
     non_entity_count = sum(1 for a in element_archi_ids if a not in entity_archi_ids)
+    use_tech = view_type == 'deployment'
+    collect_entities = view_type == 'integration'
 
-    if view_type == 'deployment':
-        for aid in element_archi_ids:
-            if aid in entity_archi_ids:
-                continue
-            if tech_archi_to_c4 and aid in tech_archi_to_c4:
-                c4_paths.append(tech_archi_to_c4[aid])
-            elif aid in archi_to_c4:
-                c4_paths.append(archi_to_c4[aid])
-            elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
-                for child_path in promoted_archi_to_c4[aid]:
-                    c4_paths.append(child_path)
-            else:
-                unresolved += 1
-    elif view_type == 'functional':
-        for aid in element_archi_ids:
-            if aid in entity_archi_ids:
-                continue
-            c4_path = archi_to_c4.get(aid)
-            if c4_path:
-                c4_paths.append(c4_path)
-            elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
-                for child_path in promoted_archi_to_c4[aid]:
-                    c4_paths.append(child_path)
-            else:
-                unresolved += 1
-    elif view_type == 'integration':
-        for aid in element_archi_ids:
-            if aid in entity_archi_ids:
+    for aid in element_archi_ids:
+        if aid in entity_archi_ids:
+            if collect_entities:
                 entity_path = archi_to_c4.get(aid)
                 if entity_path:
                     entity_paths.append(entity_path)
-                continue
-            c4_path = archi_to_c4.get(aid)
-            if c4_path:
-                c4_paths.append(c4_path)
-            elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
-                for child_path in promoted_archi_to_c4[aid]:
-                    c4_paths.append(child_path)
-            else:
-                unresolved += 1
+            continue
+
+        # Deployment prefers tech_archi_to_c4 lookup
+        if use_tech and tech_archi_to_c4 and aid in tech_archi_to_c4:
+            c4_paths.append(tech_archi_to_c4[aid])
+        elif aid in archi_to_c4:
+            c4_paths.append(archi_to_c4[aid])
+        elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
+            c4_paths.extend(promoted_archi_to_c4[aid])
+        else:
+            unresolved += 1
 
     return c4_paths, entity_paths, unresolved, non_entity_count
 
@@ -532,7 +509,104 @@ def _generate_integration_view(
     return lines
 
 
-def generate_solution_views(  # noqa: C901 — 3 view-type branches with distinct rendering logic; tracked as #2
+# Element count thresholds for QA-11 warnings
+_MAX_FUNCTIONAL = 25
+_MAX_INTEGRATION = 50  # ~20 systems + ~30 relationships
+_MAX_DEPLOYMENT = 40
+_MAX_INTEGRATION_ENTITIES = 10
+
+_VIEW_TYPE_LABELS = {'functional': 'Functional', 'integration': 'Integration', 'deployment': 'Deployment'}
+
+
+def _make_unique_view_id(view_type: str, solution_slug: str, used: set[str]) -> str:
+    """Generate a unique view id, appending a numeric suffix on collision."""
+    view_id = f'{view_type}_{solution_slug}'
+    if view_id in used:
+        suffix = 2
+        while f'{view_id}_{suffix}' in used:
+            suffix += 1
+        view_id = f'{view_id}_{suffix}'
+    used.add(view_id)
+    return view_id
+
+
+def _build_rel_lookup(relationships: list[RawRelationship] | None) -> dict[str, tuple[str, str, str]]:
+    """Build relationship lookup: rel_archi_id -> (source_archi_id, target_archi_id, rel_type)."""
+    if not relationships:
+        return {}
+    return {rel.rel_id: (rel.source_id, rel.target_id, rel.rel_type) for rel in relationships}
+
+
+def _build_deploy_targets(deployment_map: list[tuple[str, str]] | None) -> dict[str, set[str]]:
+    """Build deployment target lookup: app_c4_path -> set of infra c4_ids."""
+    targets: dict[str, set[str]] = {}
+    if deployment_map:
+        for app_path, infra_id in deployment_map:
+            targets.setdefault(app_path, set()).add(infra_id)
+    return targets
+
+
+def _dispatch_view(
+    sv: SolutionView,
+    solution_slug: str,
+    used_view_ids: set[str],
+    archi_to_c4: dict[str, str],
+    promoted_archi_to_c4: dict[str, list[str]] | None,
+    tech_archi_to_c4: dict[str, str] | None,
+    entity_archi_ids: set[str],
+    rel_lookup: dict[str, tuple[str, str, str]],
+    deploy_targets: dict[str, set[str]],
+    sys_domain: dict[str, str],
+    sys_subdomain: dict[str, str] | None,
+    sys_ids: set[str],
+    deployment_env: str,
+) -> tuple[list[str], int, int]:
+    """Resolve elements and dispatch to the appropriate per-type view generator.
+
+    Returns (view_lines, unresolved_count, non_entity_count).
+    """
+    c4_paths, entity_paths, unresolved, non_entity_count = _resolve_elements(
+        sv.element_archi_ids, archi_to_c4, promoted_archi_to_c4,
+        tech_archi_to_c4, entity_archi_ids, sv.view_type,
+    )
+
+    if not c4_paths and not entity_paths and sv.view_type != 'deployment':
+        return [], unresolved, non_entity_count
+
+    unique_paths = list(dict.fromkeys(c4_paths))
+    view_id = _make_unique_view_id(sv.view_type, solution_slug, used_view_ids)
+    label = _VIEW_TYPE_LABELS.get(sv.view_type, sv.view_type.title())
+    solution_label = sv.name.split('.', 1)[-1] if '.' in sv.name else sv.name
+    title = f'{label} Architecture: {solution_label}'
+
+    if sv.view_type == 'functional':
+        lines = _generate_functional_view(
+            view_id=view_id, title=title, unique_paths=unique_paths,
+            sys_subdomain=sys_subdomain, sys_ids=sys_ids, sys_domain=sys_domain,
+            max_functional=_MAX_FUNCTIONAL,
+        )
+    elif sv.view_type == 'integration':
+        lines = _generate_integration_view(
+            view_id=view_id, title=title, unique_paths=unique_paths,
+            entity_paths=entity_paths, relationship_archi_ids=sv.relationship_archi_ids,
+            rel_lookup=rel_lookup, archi_to_c4=archi_to_c4,
+            promoted_archi_to_c4=promoted_archi_to_c4, sys_subdomain=sys_subdomain,
+            sys_ids=sys_ids, sys_domain=sys_domain,
+            max_integration=_MAX_INTEGRATION, max_integration_entities=_MAX_INTEGRATION_ENTITIES,
+        )
+    elif sv.view_type == 'deployment':
+        lines = _generate_deployment_view(
+            view_id=view_id, title=title, c4_paths=c4_paths,
+            deploy_targets=deploy_targets, tech_archi_to_c4=tech_archi_to_c4,
+            deployment_env=deployment_env, max_deployment=_MAX_DEPLOYMENT,
+        )
+    else:
+        lines = []
+
+    return lines, unresolved, non_entity_count
+
+
+def generate_solution_views(
     solution_views: list[SolutionView],
     archi_to_c4: dict[str, str],
     sys_domain: dict[str, str],
@@ -546,43 +620,15 @@ def generate_solution_views(  # noqa: C901 — 3 view-type branches with distinc
 ) -> tuple[dict[str, str], int, int]:
     """Generate solution view .c4 files.
 
-    Returns (files, total_unresolved, total_elements) where:
-      - files: dict filename → file content string
-      - total_unresolved: count of diagram elements that could not be resolved
-      - total_elements: total diagram elements processed
-    Groups functional and integration views for the same solution into one file.
-    Uses actual diagram relationships for integration views when available.
-    When a promoted parent archi_id appears, fans out to all children.
-
-    Strict filtering rules per view type:
-      - functional: exclude dataEntity/dataStore; only primary system gets .*
-      - integration: entity cap (≤10); fan-out fix; orphan removal; exclude dataStore
-      - deployment: app paths without .*; infra paths without .*; ancestor dedup; exclude dataEntity
+    Returns (files, total_unresolved, total_elements).
+    Dispatches to per-type generators via ``_dispatch_view``.
     """
     if entity_archi_ids is None:
         entity_archi_ids = set()
+    deploy_targets = _build_deploy_targets(deployment_map)
+    sys_ids: set[str] = set(sys_domain.keys())
+    rel_lookup = _build_rel_lookup(relationships)
 
-    # Element count thresholds for QA-11 warnings
-    _MAX_FUNCTIONAL = 25
-    _MAX_INTEGRATION = 50  # ~20 systems + ~30 relationships
-    _MAX_DEPLOYMENT = 40
-    _MAX_INTEGRATION_ENTITIES = 10
-
-    # Build deployment target lookup: app_c4_path → set of infra c4_ids
-    _deploy_targets: dict[str, set[str]] = {}
-    if deployment_map:
-        for app_path, infra_id in deployment_map:
-            _deploy_targets.setdefault(app_path, set()).add(infra_id)
-
-    # Precompute system c4_id set for subdomain path disambiguation
-    _sys_ids: set[str] = set(sys_domain.keys())
-
-    # Build relationship lookup: rel_archi_id → (source_archi_id, target_archi_id, rel_type)
-    rel_lookup: dict[str, tuple[str, str, str]] = {}
-    if relationships:
-        for rel in relationships:
-            rel_lookup[rel.rel_id] = (rel.source_id, rel.target_id, rel.rel_type)
-    # Group views by solution slug
     by_solution: dict[str, list[SolutionView]] = {}
     for sv in solution_views:
         by_solution.setdefault(sv.solution, []).append(sv)
@@ -591,88 +637,25 @@ def generate_solution_views(  # noqa: C901 — 3 view-type branches with distinc
     used_view_ids: set[str] = set()
     total_unresolved = 0
     total_elements = 0
+
     for solution_slug, views in sorted(by_solution.items()):
-        lines = [
-            f'// ── Solution: {views[0].name.split(".", 1)[-1] if "." in views[0].name else views[0].name} ──',
-            '',
-            'views {',
-            '',
-        ]
+        sol_name = views[0].name.split('.', 1)[-1] if '.' in views[0].name else views[0].name
+        lines = [f'// ── Solution: {sol_name} ──', '', 'views {', '']
 
         for sv in sorted(views, key=lambda v: v.view_type):
-            # Resolve element archi_ids to c4 paths
-            c4_paths, entity_paths, unresolved, non_entity_count = _resolve_elements(
-                sv.element_archi_ids, archi_to_c4, promoted_archi_to_c4,
-                tech_archi_to_c4, entity_archi_ids, sv.view_type,
+            view_lines, unresolved, count = _dispatch_view(
+                sv, solution_slug, used_view_ids, archi_to_c4, promoted_archi_to_c4,
+                tech_archi_to_c4, entity_archi_ids, rel_lookup, deploy_targets,
+                sys_domain, sys_subdomain, sys_ids, deployment_env,
             )
-            total_elements += non_entity_count
+            total_elements += count
             total_unresolved += unresolved
-
-            if not c4_paths and not entity_paths and sv.view_type != 'deployment':
-                continue
-
-            # Deduplicate paths
-            unique_paths = list(dict.fromkeys(c4_paths))
-
-            view_id = f'{sv.view_type}_{solution_slug}'
-            if view_id in used_view_ids:
-                suffix = 2
-                while f'{view_id}_{suffix}' in used_view_ids:
-                    suffix += 1
-                view_id = f'{view_id}_{suffix}'
-            used_view_ids.add(view_id)
-            view_type_labels = {'functional': 'Functional', 'integration': 'Integration', 'deployment': 'Deployment'}
-            view_type_label = view_type_labels.get(sv.view_type, sv.view_type.title())
-            solution_label = sv.name.split('.', 1)[-1] if '.' in sv.name else sv.name
-            title = f'{view_type_label} Architecture: {solution_label}'
-
-            if sv.view_type == 'functional':
-                func_lines = _generate_functional_view(
-                    view_id=view_id,
-                    title=title,
-                    unique_paths=unique_paths,
-                    sys_subdomain=sys_subdomain,
-                    sys_ids=_sys_ids,
-                    sys_domain=sys_domain,
-                    max_functional=_MAX_FUNCTIONAL,
-                )
-                lines.extend(func_lines)
-
-            elif sv.view_type == 'integration':
-                int_lines = _generate_integration_view(
-                    view_id=view_id,
-                    title=title,
-                    unique_paths=unique_paths,
-                    entity_paths=entity_paths,
-                    relationship_archi_ids=sv.relationship_archi_ids,
-                    rel_lookup=rel_lookup,
-                    archi_to_c4=archi_to_c4,
-                    promoted_archi_to_c4=promoted_archi_to_c4,
-                    sys_subdomain=sys_subdomain,
-                    sys_ids=_sys_ids,
-                    sys_domain=sys_domain,
-                    max_integration=_MAX_INTEGRATION,
-                    max_integration_entities=_MAX_INTEGRATION_ENTITIES,
-                )
-                lines.extend(int_lines)
-
-            elif sv.view_type == 'deployment':
-                deploy_lines = _generate_deployment_view(
-                    view_id=view_id,
-                    title=title,
-                    c4_paths=c4_paths,
-                    deploy_targets=_deploy_targets,
-                    tech_archi_to_c4=tech_archi_to_c4,
-                    deployment_env=deployment_env,
-                    max_deployment=_MAX_DEPLOYMENT,
-                )
-                lines.extend(deploy_lines)
-
-            lines.append('')
+            if view_lines:
+                lines.extend(view_lines)
+                lines.append('')
 
         lines.append('}')
         lines.append('')
-        # Only emit file if it contains at least one view block
         content = '\n'.join(lines)
         if '  view ' in content or '  deployment view ' in content:
             files[solution_slug] = content

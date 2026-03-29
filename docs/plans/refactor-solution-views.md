@@ -54,11 +54,11 @@
 
 Главная функция становится dispatcher'ом, снимаем C901.
 
-- [ ] В `archi2likec4/generators/views.py`: переписать `generate_solution_views()` как thin dispatcher — итерация по `solution_views`, вызов нужной `_generate_*_view()` функции
-- [ ] Убрать `# noqa: C901` из строки функции
-- [ ] Убрать unreachable `else`-блок (если был)
-- [ ] Итоговый размер `generate_solution_views()` должен быть ≤ 60 строк
-- [ ] `ruff check` без C901 предупреждений
-- [ ] Закоммитить: `refactor: split generate_solution_views into per-type functions, remove C901 noqa (#2)`
-- [ ] Add/update tests for the above changes (интеграционный тест через `tests/test_pipeline_e2e.py`)
-- [ ] Mark completed
+- [x] В `archi2likec4/generators/views.py`: переписать `generate_solution_views()` как thin dispatcher — итерация по `solution_views`, вызов нужной `_generate_*_view()` функции
+- [x] Убрать `# noqa: C901` из строки функции
+- [x] Убрать unreachable `else`-блок (если был)
+- [x] Итоговый размер `generate_solution_views()` должен быть ≤ 60 строк
+- [x] `ruff check` без C901 предупреждений
+- [x] Закоммитить: `refactor: split generate_solution_views into per-type functions, remove C901 noqa (#2)`
+- [x] Add/update tests for the above changes (интеграционный тест через `tests/test_pipeline_e2e.py`)
+- [x] Mark completed

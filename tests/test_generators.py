@@ -16,7 +16,13 @@ from archi2likec4.generators import (
     generate_spec,
     generate_system_detail_c4,
 )
-from archi2likec4.generators.views import _generate_deployment_view, _resolve_elements, _system_path_from_c4
+from archi2likec4.generators.views import (
+    _generate_deployment_view,
+    _generate_functional_view,
+    _generate_integration_view,
+    _resolve_elements,
+    _system_path_from_c4,
+)
 from archi2likec4.models import (
     AppFunction,
     DataAccess,
@@ -605,6 +611,284 @@ class TestGenerateDeploymentView:
         assert not include_lines[-1].endswith(',')
 
 
+# ── _generate_functional_view ────────────────────────────────────────────
+
+
+class TestGenerateFunctionalView:
+    def test_single_system_scoped_view(self):
+        """Single system produces a scoped 'of' view with include *."""
+        lines = _generate_functional_view(
+            view_id='functional_myapp',
+            title='Functional Architecture: MyApp',
+            unique_paths=['channels.efs'],
+            sys_subdomain=None,
+            sys_ids={'efs'},
+            sys_domain={'efs': 'channels'},
+        )
+        content = '\n'.join(lines)
+        assert 'view functional_myapp of channels.efs' in content
+        assert 'include *' in content
+        assert 'exclude * where kind is dataEntity' in content
+        assert 'exclude * where kind is dataStore' in content
+
+    def test_multi_system_primary_gets_wildcard(self):
+        """Multi-system: primary system (most elements) gets .* include."""
+        lines = _generate_functional_view(
+            view_id='functional_multi',
+            title='Functional Architecture: Multi',
+            unique_paths=[
+                'channels.efs', 'channels.efs', 'channels.efs',  # 3 elements
+                'products.abs',  # 1 element
+            ],
+            sys_subdomain=None,
+            sys_ids={'efs', 'abs'},
+            sys_domain={'efs': 'channels', 'abs': 'products'},
+        )
+        content = '\n'.join(lines)
+        assert 'view functional_multi {' in content
+        assert 'channels.efs.*' in content
+        assert 'products.abs' in content
+        # Non-primary should NOT have .*
+        assert 'products.abs.*' not in content
+
+    def test_empty_paths_returns_empty(self):
+        """No paths → empty lines."""
+        lines = _generate_functional_view(
+            view_id='functional_empty',
+            title='Empty',
+            unique_paths=[],
+            sys_subdomain=None,
+            sys_ids=set(),
+            sys_domain={},
+        )
+        assert lines == []
+
+    def test_qa11_warning(self, caplog):
+        """QA-11 warning emitted when element count exceeds threshold."""
+        import logging
+        paths = [f'channels.sys{i}' for i in range(30)]
+        with caplog.at_level(logging.WARNING):
+            _generate_functional_view(
+                view_id='functional_big',
+                title='Big',
+                unique_paths=paths,
+                sys_subdomain=None,
+                sys_ids={f'sys{i}' for i in range(30)},
+                sys_domain={f'sys{i}': 'channels' for i in range(30)},
+                max_functional=25,
+            )
+        assert 'QA-11' in caplog.text
+
+    def test_subdomain_path(self):
+        """System in subdomain correctly resolved to 3-part path."""
+        lines = _generate_functional_view(
+            view_id='functional_sub',
+            title='Subdomain',
+            unique_paths=['channels.cards.efs'],
+            sys_subdomain={'efs': 'cards'},
+            sys_ids={'efs'},
+            sys_domain={'efs': 'channels'},
+        )
+        content = '\n'.join(lines)
+        assert 'view functional_sub of channels.cards.efs' in content
+
+    def test_no_trailing_comma(self):
+        """Last include line should not have trailing comma."""
+        lines = _generate_functional_view(
+            view_id='functional_comma',
+            title='Comma',
+            unique_paths=['channels.efs', 'products.abs'],
+            sys_subdomain=None,
+            sys_ids={'efs', 'abs'},
+            sys_domain={'efs': 'channels', 'abs': 'products'},
+        )
+        include_section = [ln for ln in lines if ln.strip().startswith(('channels.', 'products.'))]
+        assert not include_section[-1].endswith(',')
+
+
+# ── _generate_integration_view ──────────────────────────────────────────
+
+
+class TestGenerateIntegrationView:
+    def test_basic_with_relationships(self):
+        """Integration view with relationships includes system paths and edges."""
+        lines = _generate_integration_view(
+            view_id='integration_myapp',
+            title='Integration Architecture: MyApp',
+            unique_paths=['channels.efs', 'products.abs'],
+            entity_paths=[],
+            relationship_archi_ids=['rel-1'],
+            rel_lookup={'rel-1': ('sys-1', 'sys-2', 'FlowRelationship')},
+            archi_to_c4={'sys-1': 'channels.efs', 'sys-2': 'products.abs'},
+            promoted_archi_to_c4=None,
+            sys_subdomain=None,
+            sys_ids={'efs', 'abs'},
+            sys_domain={'efs': 'channels', 'abs': 'products'},
+        )
+        content = '\n'.join(lines)
+        assert 'view integration_myapp' in content
+        assert 'channels.efs -> products.abs' in content
+
+    def test_structural_rels_skipped(self):
+        """Structural relationships are excluded from integration views."""
+        lines = _generate_integration_view(
+            view_id='integration_struct',
+            title='Structural',
+            unique_paths=['channels.efs', 'products.abs'],
+            entity_paths=[],
+            relationship_archi_ids=['rel-1'],
+            rel_lookup={'rel-1': ('sys-1', 'sys-2', 'CompositionRelationship')},
+            archi_to_c4={'sys-1': 'channels.efs', 'sys-2': 'products.abs'},
+            promoted_archi_to_c4=None,
+            sys_subdomain=None,
+            sys_ids={'efs', 'abs'},
+            sys_domain={'efs': 'channels', 'abs': 'products'},
+        )
+        content = '\n'.join(lines)
+        assert 'channels.efs -> products.abs' not in content
+
+    def test_orphan_removal(self):
+        """Systems not in any relationship pair are removed."""
+        lines = _generate_integration_view(
+            view_id='integration_orphan',
+            title='Orphan',
+            unique_paths=['channels.efs', 'products.abs', 'infra.monitor'],
+            entity_paths=[],
+            relationship_archi_ids=['rel-1'],
+            rel_lookup={'rel-1': ('sys-1', 'sys-2', 'FlowRelationship')},
+            archi_to_c4={'sys-1': 'channels.efs', 'sys-2': 'products.abs', 'sys-3': 'infra.monitor'},
+            promoted_archi_to_c4=None,
+            sys_subdomain=None,
+            sys_ids={'efs', 'abs', 'monitor'},
+            sys_domain={'efs': 'channels', 'abs': 'products', 'monitor': 'infra'},
+        )
+        content = '\n'.join(lines)
+        assert 'infra.monitor' not in content
+        assert 'channels.efs' in content
+
+    def test_entity_cap_excludes_excess(self, caplog):
+        """Entities exceeding cap are excluded with comment."""
+        import logging
+        entities = [f'de_entity{i}' for i in range(15)]
+        with caplog.at_level(logging.INFO):
+            lines = _generate_integration_view(
+                view_id='integration_cap',
+                title='Cap',
+                unique_paths=['channels.efs'],
+                entity_paths=entities,
+                relationship_archi_ids=[],
+                rel_lookup={},
+                archi_to_c4={},
+                promoted_archi_to_c4=None,
+                sys_subdomain=None,
+                sys_ids={'efs'},
+                sys_domain={'efs': 'channels'},
+                max_integration_entities=10,
+            )
+        content = '\n'.join(lines)
+        assert '15 data entities excluded' in content
+        assert 'de_entity0' not in content
+
+    def test_entity_cap_includes_within_limit(self):
+        """Entities within cap are included."""
+        lines = _generate_integration_view(
+            view_id='integration_ent',
+            title='Entities',
+            unique_paths=['channels.efs'],
+            entity_paths=['de_account', 'de_card'],
+            relationship_archi_ids=[],
+            rel_lookup={},
+            archi_to_c4={},
+            promoted_archi_to_c4=None,
+            sys_subdomain=None,
+            sys_ids={'efs'},
+            sys_domain={'efs': 'channels'},
+            max_integration_entities=10,
+        )
+        content = '\n'.join(lines)
+        assert 'de_account' in content
+        assert 'de_card' in content
+
+    def test_promoted_parent_fanout(self):
+        """Promoted parent fans out to children in relationship endpoints."""
+        lines = _generate_integration_view(
+            view_id='integration_fanout',
+            title='Fanout',
+            unique_paths=['channels.efs_card', 'channels.efs_loan', 'products.abs'],
+            entity_paths=[],
+            relationship_archi_ids=['rel-1'],
+            rel_lookup={'rel-1': ('parent-1', 'sys-2', 'FlowRelationship')},
+            archi_to_c4={'sys-2': 'products.abs'},
+            promoted_archi_to_c4={'parent-1': ['channels.efs_card', 'channels.efs_loan']},
+            sys_subdomain=None,
+            sys_ids={'efs_card', 'efs_loan', 'abs'},
+            sys_domain={'efs_card': 'channels', 'efs_loan': 'channels', 'abs': 'products'},
+        )
+        content = '\n'.join(lines)
+        assert 'channels.efs_card -> products.abs' in content
+        assert 'channels.efs_loan -> products.abs' in content
+
+    def test_qa11_warning(self, caplog):
+        """QA-11 warning emitted when element count exceeds threshold."""
+        import logging
+        paths = [f'dom.sys{i}' for i in range(30)]
+        rels = [(f'sys-{i}', f'sys-{i+1}', 'FlowRelationship') for i in range(25)]
+        rel_lookup = {f'rel-{i}': r for i, r in enumerate(rels)}
+        archi_to_c4 = {f'sys-{i}': f'dom.sys{i}' for i in range(30)}
+        with caplog.at_level(logging.WARNING):
+            _generate_integration_view(
+                view_id='integration_big',
+                title='Big',
+                unique_paths=paths,
+                entity_paths=[],
+                relationship_archi_ids=list(rel_lookup.keys()),
+                rel_lookup=rel_lookup,
+                archi_to_c4=archi_to_c4,
+                promoted_archi_to_c4=None,
+                sys_subdomain=None,
+                sys_ids={f'sys{i}' for i in range(30)},
+                sys_domain={f'sys{i}': 'dom' for i in range(30)},
+                max_integration=10,
+            )
+        assert 'QA-11' in caplog.text
+
+    def test_no_trailing_comma(self):
+        """Last include line should not have trailing comma."""
+        lines = _generate_integration_view(
+            view_id='integration_comma',
+            title='Comma',
+            unique_paths=['channels.efs', 'products.abs'],
+            entity_paths=[],
+            relationship_archi_ids=['rel-1'],
+            rel_lookup={'rel-1': ('sys-1', 'sys-2', 'FlowRelationship')},
+            archi_to_c4={'sys-1': 'channels.efs', 'sys-2': 'products.abs'},
+            promoted_archi_to_c4=None,
+            sys_subdomain=None,
+            sys_ids={'efs', 'abs'},
+            sys_domain={'efs': 'channels', 'abs': 'products'},
+        )
+        include_lines = [ln for ln in lines if '->' in ln or ln.strip().startswith(('channels.', 'products.'))]
+        assert not include_lines[-1].endswith(',')
+
+    def test_exclude_datastore(self):
+        """Integration view always has exclude dataStore."""
+        lines = _generate_integration_view(
+            view_id='integration_ds',
+            title='DataStore',
+            unique_paths=['channels.efs'],
+            entity_paths=[],
+            relationship_archi_ids=[],
+            rel_lookup={},
+            archi_to_c4={},
+            promoted_archi_to_c4=None,
+            sys_subdomain=None,
+            sys_ids={'efs'},
+            sys_domain={'efs': 'channels'},
+        )
+        content = '\n'.join(lines)
+        assert 'exclude * where kind is dataStore' in content
+
+
 # ── generate_solution_views ──────────────────────────────────────────────
 
 class TestGenerateSolutionViews:
@@ -808,6 +1092,59 @@ class TestGenerateSolutionViews:
         # Infra path appears with prod. prefix and .** suffix
         assert 'prod.server_1.**' in content
         assert 'deployment view' in content
+
+    def test_dispatcher_all_three_view_types_in_one_solution(self):
+        """Dispatcher produces all three view types in a single solution file."""
+        archi_to_c4 = {
+            'sys-1': 'channels.efs',
+            'sys-2': 'products.abs',
+        }
+        sys_domain = {'efs': 'channels', 'abs': 'products'}
+        rels = [
+            RawRelationship(
+                rel_id='rel-1', rel_type='FlowRelationship', name='pay',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='ApplicationComponent', target_id='sys-2',
+            ),
+        ]
+        deploy_map = [('channels.efs', 'server_1')]
+        tech_archi_to_c4 = {'tech-1': 'server_1'}
+        views = [
+            SolutionView(name='sol.Pay', view_type='functional', solution='pay',
+                         element_archi_ids=['sys-1', 'sys-2']),
+            SolutionView(name='sol.Pay', view_type='integration', solution='pay',
+                         element_archi_ids=['sys-1', 'sys-2'], relationship_archi_ids=['rel-1']),
+            SolutionView(name='sol.Pay', view_type='deployment', solution='pay',
+                         element_archi_ids=['sys-1', 'tech-1']),
+        ]
+        files, unresolved, total = generate_solution_views(
+            views, archi_to_c4, sys_domain, rels,
+            tech_archi_to_c4=tech_archi_to_c4, deployment_map=deploy_map,
+        )
+        assert 'pay' in files
+        content = files['pay']
+        # All three view types present
+        assert 'view functional_pay' in content
+        assert 'view integration_pay' in content
+        assert 'deployment view deployment_pay' in content
+        # Functional view title
+        assert "Functional Architecture: Pay" in content
+        # Integration view has relationship
+        assert 'channels.efs -> products.abs' in content
+        # Deployment view has infra
+        assert 'prod.server_1.**' in content
+        assert unresolved == 0
+        assert total > 0
+
+    def test_dispatcher_unknown_view_type_produces_no_lines(self):
+        """Unknown view type is silently skipped (no crash, no file)."""
+        sv = SolutionView(
+            name='sol.X', view_type='unknown', solution='x',
+            element_archi_ids=['sys-1'],
+        )
+        files, _, _ = generate_solution_views([sv], {'sys-1': 'dom.sys'}, {'sys': 'dom'})
+        # No file emitted since unknown type produces no view lines
+        assert 'x' not in files
 
 
 # ── Deployment generators ───────────────────────────────────────────────
