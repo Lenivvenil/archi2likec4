@@ -137,3 +137,50 @@ class TestConvertRaisesOnBadInput:
             cfg = _make_config()
             with pytest.raises(ParseError):
                 convert(tmp_path, tmp_path / 'out', config=cfg)
+
+
+class TestConvertConfigRuntimeValidation:
+    """convert() validates pre-built ConvertConfig at runtime."""
+
+    def test_invalid_deployment_env_raises(self, tmp_path):
+        from archi2likec4.config import ConvertConfig
+        cfg = ConvertConfig()
+        cfg.deployment_env = 'INVALID ID'
+        with pytest.raises(ConfigError, match='deployment_env.*invalid C4 identifier'):
+            convert(tmp_path, tmp_path / 'out', config=cfg)
+
+    def test_none_deployment_env_raises(self, tmp_path):
+        from archi2likec4.config import ConvertConfig
+        cfg = ConvertConfig()
+        cfg.deployment_env = None  # type: ignore[assignment]
+        with pytest.raises(ConfigError, match='deployment_env.*must not be None'):
+            convert(tmp_path, tmp_path / 'out', config=cfg)
+
+    def test_invalid_extra_view_pattern_regex_raises(self, tmp_path):
+        from archi2likec4.config import ConvertConfig
+        cfg = ConvertConfig()
+        cfg.extra_view_patterns = [{'pattern': '(', 'view_type': 'functional'}]
+        with pytest.raises(ConfigError, match='extra_view_patterns.*invalid regex'):
+            convert(tmp_path, tmp_path / 'out', config=cfg)
+
+    def test_invalid_extra_view_pattern_type_raises(self, tmp_path):
+        from archi2likec4.config import ConvertConfig
+        cfg = ConvertConfig()
+        cfg.extra_view_patterns = [{'pattern': '.*', 'view_type': 'bad'}]
+        with pytest.raises(ConfigError, match="extra_view_patterns.*must be"):
+            convert(tmp_path, tmp_path / 'out', config=cfg)
+
+    def test_valid_prebuilt_config_passes(self, tmp_path):
+        from archi2likec4.config import ConvertConfig
+        cfg = ConvertConfig()
+        cfg.deployment_env = 'prod'
+        cfg.extra_view_patterns = [{'pattern': '.*test.*', 'view_type': 'functional'}]
+        with patch('archi2likec4.pipeline._parse'), \
+             patch('archi2likec4.pipeline._build') as mock_build, \
+             patch(_SV_PATCH, return_value=({}, 0, 0)), \
+             patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
+             patch('archi2likec4.pipeline._generate', return_value=0):
+            mock_build.return_value.systems = []
+            mock_build.return_value.integrations = []
+            result = convert(tmp_path, tmp_path / 'out', config=cfg)
+        assert isinstance(result, ConvertResult)

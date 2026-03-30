@@ -651,6 +651,89 @@ def _sync_output(config: ConvertConfig) -> bool:
     return True
 
 
+# ── Config validation ────────────────────────────────────────────────────
+
+def _validate_config_runtime(config: ConvertConfig) -> None:
+    """Validate runtime-critical config fields.
+
+    Called from :func:`convert` to catch invalid values in pre-built configs
+    that bypassed the YAML loading path.  Silently skips validation when
+    *config* is not a real :class:`ConvertConfig` (e.g. test mocks).
+    """
+    if not isinstance(config, ConvertConfig):
+        return
+
+    import re as _re
+
+    _C4_ID_RE = _re.compile(r'^[a-z][a-z0-9_-]*$')
+
+    if config.deployment_env is None:
+        raise ConfigError("deployment_env: must not be None")
+    env = str(config.deployment_env).strip()
+    if not env:
+        raise ConfigError("deployment_env: must not be empty")
+    if not _C4_ID_RE.match(env):
+        raise ConfigError(
+            f"deployment_env: invalid C4 identifier {env!r} "
+            f"(must match [a-z][a-z0-9_-]*)")
+    config.deployment_env = env
+
+    if not isinstance(config.extra_view_patterns, list):
+        raise ConfigError(
+            f"extra_view_patterns: expected list, got {type(config.extra_view_patterns).__name__}")
+    for i, entry in enumerate(config.extra_view_patterns):
+        if not isinstance(entry, dict):
+            raise ConfigError(
+                f"extra_view_patterns[{i}]: expected mapping, got {type(entry).__name__}")
+        for key in ('pattern', 'view_type'):
+            if key not in entry:
+                raise ConfigError(
+                    f"extra_view_patterns[{i}]: missing required key '{key}'")
+        if not isinstance(entry['pattern'], str):
+            raise ConfigError(
+                f"extra_view_patterns[{i}]['pattern']: expected string, got {type(entry['pattern']).__name__}")
+        try:
+            _re.compile(entry['pattern'])
+        except _re.error as err:
+            raise ConfigError(
+                f"extra_view_patterns[{i}]['pattern']: invalid regex: {err}") from err
+        if entry.get('view_type') not in ('functional', 'integration', 'deployment'):
+            raise ConfigError(
+                f"extra_view_patterns[{i}]['view_type']: must be 'functional', "
+                f"'integration', or 'deployment', got '{entry.get('view_type')}'")
+
+    # Validate spec_colors
+    from archi2likec4.config import _DEFAULT_SPEC_SHAPES as _KNOWN_SHAPES
+    if not isinstance(config.spec_colors, dict):
+        raise ConfigError(f"spec_colors: expected mapping, got {type(config.spec_colors).__name__}")
+    for k, v in config.spec_colors.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            raise ConfigError(f"spec_colors: keys and values must be strings, got {k!r}: {v!r}")
+        if not _C4_ID_RE.match(k):
+            raise ConfigError(
+                f"spec_colors: invalid C4 identifier {k!r} "
+                f"(must match [a-z][a-z0-9_-]*)")
+
+    # Validate spec_shapes
+    if not isinstance(config.spec_shapes, dict):
+        raise ConfigError(f"spec_shapes: expected mapping, got {type(config.spec_shapes).__name__}")
+    for k, v in config.spec_shapes.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            raise ConfigError(f"spec_shapes: keys and values must be strings, got {k!r}: {v!r}")
+        if k not in _KNOWN_SHAPES:
+            raise ConfigError(
+                f"spec_shapes: unknown element kind {k!r} "
+                f"(must be one of: {', '.join(sorted(_KNOWN_SHAPES))})")
+
+    # Validate spec_tags
+    if not isinstance(config.spec_tags, list):
+        raise ConfigError(f"spec_tags: expected list, got {type(config.spec_tags).__name__}")
+    for item in config.spec_tags:
+        if not isinstance(item, str):
+            raise ConfigError(f"spec_tags: all items must be strings, got {type(item).__name__}: {item!r}")
+        if not _C4_ID_RE.match(item):
+            raise ConfigError(f"spec_tags: invalid C4 identifier {item!r} (must match [a-z][a-z0-9_-]*)")
+
 # ── Public API ───────────────────────────────────────────────────────────
 
 def convert(
@@ -706,6 +789,8 @@ def convert(
     config.model_root = model_root_path
     config.output_dir = output_dir_path
     config.dry_run = dry_run
+
+    _validate_config_runtime(config)
 
     parsed = _parse(model_root_path, config)
     built = _build(parsed, config)

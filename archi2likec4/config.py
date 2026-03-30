@@ -522,10 +522,10 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             if not isinstance(k, str) or not isinstance(v, str):
                 raise ConfigError(
                     f"spec_shapes: keys and values must be strings, got {k!r}: {v!r}")
-            if k not in _DEFAULT_SPEC_SHAPES and not _VALID_C4_ID.match(k):
+            if k not in _DEFAULT_SPEC_SHAPES:
                 raise ConfigError(
-                    f"spec_shapes: invalid element kind {k!r} "
-                    f"(must be a known kind or match [a-z][a-z0-9_-]*)")
+                    f"spec_shapes: unknown element kind {k!r} "
+                    f"(must be one of: {', '.join(sorted(_DEFAULT_SPEC_SHAPES))})")
         config.spec_shapes = {**config.spec_shapes, **val}
 
     if 'spec_tags' in data:

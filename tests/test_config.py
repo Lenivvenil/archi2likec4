@@ -954,8 +954,13 @@ class TestSpecConfig:
 
     def test_spec_shapes_invalid_key_raises(self):
         config = ConvertConfig()
-        with pytest.raises(ConfigError, match='spec_shapes.*invalid element kind'):
+        with pytest.raises(ConfigError, match='spec_shapes.*unknown element kind'):
             _apply_yaml(config, {'spec_shapes': {'My Shape': 'rectangle'}})
+
+    def test_spec_shapes_rejects_unknown_c4_identifier(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_shapes.*unknown element kind'):
+            _apply_yaml(config, {'spec_shapes': {'custom_kind': 'hexagon'}})
 
     def test_spec_shapes_accepts_camelcase_element_kinds(self):
         config = ConvertConfig()

@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from archi2likec4.config import ConvertConfig
+
+logger = logging.getLogger(__name__)
 
 # Element-kind → default color name (used when generating spec).
 _DEFAULT_ELEMENT_COLORS: dict[str, str] = {
@@ -57,6 +60,12 @@ def generate_spec(config: ConvertConfig | None = None) -> str:
         colors = {**_DEFAULT_SPEC_COLORS, **config.spec_colors}
         shapes = {**_DEFAULT_SPEC_SHAPES, **config.spec_shapes}
         tags = list(dict.fromkeys(list(_DEFAULT_SPEC_TAGS) + list(config.spec_tags)))
+        unknown_shapes = set(config.spec_shapes) - set(_ELEMENT_ORDER)
+        if unknown_shapes:
+            logger.warning(
+                "spec_shapes: unknown element kinds ignored: %s",
+                ', '.join(sorted(unknown_shapes)),
+            )
     else:
         colors = _DEFAULT_SPEC_COLORS
         shapes = _DEFAULT_SPEC_SHAPES
