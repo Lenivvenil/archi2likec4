@@ -100,6 +100,10 @@ quality_gates:
 #   - OldSystem
 #   - MigratedApp
 
+# ── Deployment environment ────────────────────────────────────────────
+# Environment name used in generated deployment views.
+# deployment_env: prod
+
 # ── Behaviour flags ───────────────────────────────────────────────────
 # Treat quality-gate warnings as errors (exit 1)
 strict: false
