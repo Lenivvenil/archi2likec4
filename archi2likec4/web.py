@@ -87,7 +87,13 @@ def create_app(
 
     template_dir = Path(__file__).parent / 'templates'
     app = Flask(__name__, template_folder=str(template_dir))
-    app.secret_key = os.environ.get('FLASK_SECRET_KEY') or secrets.token_hex(32)
+    explicit_key = os.environ.get('FLASK_SECRET_KEY')
+    if explicit_key:
+        app.secret_key = explicit_key
+    else:
+        logger.warning('FLASK_SECRET_KEY not set — using random secret; '
+                       'sessions will not survive restarts or multi-worker deployments')
+        app.secret_key = secrets.token_hex(32)
 
     def _safe_redirect(url: str) -> str:
         """Validate redirect URL to prevent open redirect attacks."""

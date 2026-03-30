@@ -474,6 +474,16 @@ class TestDeploymentEnvConfig:
         with pytest.raises(ConfigError, match='deployment_env.*must not be empty'):
             _apply_yaml(config, {'deployment_env': '  '})
 
+    def test_invalid_c4_id_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='deployment_env.*invalid C4 identifier'):
+            _apply_yaml(config, {'deployment_env': 'prod west'})
+
+    def test_uppercase_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='deployment_env.*invalid C4 identifier'):
+            _apply_yaml(config, {'deployment_env': 'Prod'})
+
     def test_in_known_keys(self):
         from archi2likec4.config import _KNOWN_YAML_KEYS
         assert 'deployment_env' in _KNOWN_YAML_KEYS
@@ -936,6 +946,27 @@ class TestSpecConfig:
         config = ConvertConfig()
         with pytest.raises(ConfigError, match='spec_colors.*must be strings'):
             _apply_yaml(config, {'spec_colors': {'archi-app': 123}})
+
+    def test_spec_colors_invalid_key_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_colors.*invalid C4 identifier'):
+            _apply_yaml(config, {'spec_colors': {'my color': '#FF0000'}})
+
+    def test_spec_shapes_invalid_key_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_shapes.*invalid element kind'):
+            _apply_yaml(config, {'spec_shapes': {'My Shape': 'rectangle'}})
+
+    def test_spec_shapes_accepts_camelcase_element_kinds(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'spec_shapes': {'appFunction': 'hexagon', 'dataStore': 'rectangle'}})
+        assert config.spec_shapes['appFunction'] == 'hexagon'
+        assert config.spec_shapes['dataStore'] == 'rectangle'
+
+    def test_spec_tags_invalid_id_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_tags.*invalid C4 identifier'):
+            _apply_yaml(config, {'spec_tags': ['needs review']})
 
     def test_known_yaml_keys_include_spec(self):
         from archi2likec4.config import _KNOWN_YAML_KEYS

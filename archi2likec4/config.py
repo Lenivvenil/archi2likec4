@@ -407,6 +407,10 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
         env_val = str(data['deployment_env']).strip()
         if not env_val:
             raise ConfigError("deployment_env: must not be empty")
+        if not _VALID_C4_ID.match(env_val):
+            raise ConfigError(
+                f"deployment_env: invalid C4 identifier {env_val!r} "
+                f"(must match [a-z][a-z0-9_-]*)")
         config.deployment_env = env_val
 
     if 'extra_view_patterns' in data:
@@ -503,6 +507,10 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             if not isinstance(k, str) or not isinstance(v, str):
                 raise ConfigError(
                     f"spec_colors: keys and values must be strings, got {k!r}: {v!r}")
+            if not _VALID_C4_ID.match(k):
+                raise ConfigError(
+                    f"spec_colors: invalid C4 identifier {k!r} "
+                    f"(must match [a-z][a-z0-9_-]*)")
         config.spec_colors = {**config.spec_colors, **val}
 
     if 'spec_shapes' in data:
@@ -514,6 +522,10 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             if not isinstance(k, str) or not isinstance(v, str):
                 raise ConfigError(
                     f"spec_shapes: keys and values must be strings, got {k!r}: {v!r}")
+            if k not in _DEFAULT_SPEC_SHAPES and not _VALID_C4_ID.match(k):
+                raise ConfigError(
+                    f"spec_shapes: invalid element kind {k!r} "
+                    f"(must be a known kind or match [a-z][a-z0-9_-]*)")
         config.spec_shapes = {**config.spec_shapes, **val}
 
     if 'spec_tags' in data:
@@ -525,6 +537,10 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
             if not isinstance(item, str):
                 raise ConfigError(
                     f"spec_tags: all items must be strings, got {type(item).__name__}: {item!r}")
+            if not _VALID_C4_ID.match(item):
+                raise ConfigError(
+                    f"spec_tags: invalid C4 identifier {item!r} "
+                    f"(must match [a-z][a-z0-9_-]*)")
         config.spec_tags = list(dict.fromkeys(config.spec_tags + list(val)))
 
     if 'sync_protected_top' in data:
