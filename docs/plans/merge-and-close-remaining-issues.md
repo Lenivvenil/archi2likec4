@@ -49,13 +49,13 @@
 
 ### Task 4: Fix stale type: ignore and bare except
 Устранить устаревшие type: ignore комментарии и bare except в config.py и audit_data.py (issue #33).
-- [ ] In `archi2likec4/config.py`: audit all `type: ignore` comments — remove stale ones, narrow remaining to specific error codes
-- [ ] In `archi2likec4/audit_data.py`: audit all `type: ignore` comments — remove stale ones
-- [ ] In `archi2likec4/audit_data.py`: replace bare `except:` with specific exception types
-- [ ] Run `mypy archi2likec4/ --ignore-missing-imports` — confirm no regressions
-- [ ] Add/update tests if behavior changes
-- [ ] Close issue #33 with reference to commit
-- [ ] Mark completed
+- [x] In `archi2likec4/config.py`: audit all `type: ignore` comments — remove stale ones, narrow remaining to specific error codes
+- [x] In `archi2likec4/audit_data.py`: audit all `type: ignore` comments — remove stale ones
+- [x] In `archi2likec4/audit_data.py`: replace bare `except:` with specific exception types (none found — no bare except in current code)
+- [x] Run `mypy archi2likec4/ --ignore-missing-imports` — confirm no regressions
+- [x] Add/update tests if behavior changes (no behavior changes, existing tests pass)
+- [x] Close issue #33 with reference to commit
+- [x] Mark completed
 
 ### Task 5: Update pygments and close CVE issue
 Обновить pygments для устранения CVE-2026-4539 (issue #36).

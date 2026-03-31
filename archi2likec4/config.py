@@ -188,7 +188,7 @@ def load_config(config_path: Path | None) -> ConvertConfig:
                     f'Config file not found: {config_path}')
             return config  # auto-detect miss — return defaults
         try:
-            import yaml  # type: ignore[import-untyped]
+            import yaml
         except ImportError as err:
             raise ConfigError(
                 f'Config file {config_path} requires PyYAML: pip install pyyaml') from err
@@ -219,7 +219,7 @@ _KNOWN_YAML_KEYS: set[str] = {
 }
 
 
-def _apply_yaml(config: ConvertConfig, data: dict) -> None:
+def _apply_yaml(config: ConvertConfig, data: dict[str, Any]) -> None:
     """Merge *data* from YAML into *config*, overriding only supplied keys."""
     unknown = set(data.keys()) - _KNOWN_YAML_KEYS
     if unknown:
@@ -576,9 +576,9 @@ def save_suppress(
 
     Creates the file if it does not exist.  Preserves all other keys.
     """
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 
-    data: dict = {}
+    data: dict[str, Any] = {}
     if config_path.exists():
         with open(config_path, encoding='utf-8') as fh:
             raw = yaml.safe_load(fh)
@@ -601,16 +601,16 @@ def save_suppress(
 def update_config_field(
     config_path: Path,
     field_name: str,
-    value: dict | list | str | int | float | bool | None,
+    value: dict[str, Any] | list[Any] | str | int | float | bool | None,
 ) -> None:
     """Update a single field in YAML config file.
 
     Creates the file if it does not exist.  Preserves all other keys.
     If *value* is an empty dict/list or ``None``, removes the key.
     """
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 
-    data: dict = {}
+    data: dict[str, Any] = {}
     if config_path.exists():
         with open(config_path, encoding='utf-8') as fh:
             raw = yaml.safe_load(fh)
