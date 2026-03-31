@@ -59,8 +59,8 @@
 
 ### Task 5: Update pygments and close CVE issue
 Обновить pygments для устранения CVE-2026-4539 (issue #36).
-- [ ] Check current pygments version in dev dependencies
-- [ ] Update pygments to latest patched version in pyproject.toml or requirements
-- [ ] Run validation commands to confirm no regressions
-- [ ] Close issue #36 with reference to commit
-- [ ] Mark completed
+- [x] Check current pygments version in dev dependencies
+- [x] Update pygments to latest patched version in pyproject.toml or requirements
+- [x] Run validation commands to confirm no regressions
+- [x] Close issue #36 with reference to commit
+- [x] Mark completed
