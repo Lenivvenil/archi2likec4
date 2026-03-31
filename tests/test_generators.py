@@ -17,13 +17,15 @@ from archi2likec4.generators import (
     generate_system_detail_c4,
 )
 from archi2likec4.generators.views import (
+    ViewContext,
     _generate_deployment_view,
     _generate_functional_view,
     _generate_integration_view,
     _group_by_solution,
-    _prepare_view_context,
     _resolve_elements,
     _system_path_from_c4,
+    _ViewData,
+    build_view_context,
 )
 from archi2likec4.models import (
     AppFunction,
@@ -442,73 +444,61 @@ class TestGeneratePersistenceMap:
 
 class TestResolveElements:
     def test_functional_skips_entities(self):
-        archi_to_c4 = {'a1': 'dom.sys1', 'e1': 'entities.ent1'}
-        c4_paths, entity_paths, unresolved, total = _resolve_elements(
-            ['a1', 'e1'], archi_to_c4, None, None, {'e1'}, 'functional',
-        )
+        ctx = ViewContext(archi_to_c4={'a1': 'dom.sys1', 'e1': 'entities.ent1'}, sys_domain={}, entity_archi_ids={'e1'})
+        c4_paths, entity_paths, unresolved, total = _resolve_elements(['a1', 'e1'], ctx, 'functional')
         assert c4_paths == ['dom.sys1']
         assert entity_paths == []
         assert unresolved == 0
         assert total == 1
 
     def test_integration_separates_entities(self):
-        archi_to_c4 = {'a1': 'dom.sys1', 'e1': 'entities.ent1'}
-        c4_paths, entity_paths, unresolved, total = _resolve_elements(
-            ['a1', 'e1'], archi_to_c4, None, None, {'e1'}, 'integration',
-        )
+        ctx = ViewContext(archi_to_c4={'a1': 'dom.sys1', 'e1': 'entities.ent1'}, sys_domain={}, entity_archi_ids={'e1'})
+        c4_paths, entity_paths, unresolved, total = _resolve_elements(['a1', 'e1'], ctx, 'integration')
         assert c4_paths == ['dom.sys1']
         assert entity_paths == ['entities.ent1']
         assert unresolved == 0
         assert total == 1
 
     def test_deployment_prefers_tech_map(self):
-        archi_to_c4 = {'a1': 'dom.sys1'}
-        tech_map = {'a1': 'infra.node1'}
-        c4_paths, entity_paths, unresolved, total = _resolve_elements(
-            ['a1'], archi_to_c4, None, tech_map, set(), 'deployment',
-        )
+        ctx = ViewContext(archi_to_c4={'a1': 'dom.sys1'}, sys_domain={}, tech_archi_to_c4={'a1': 'infra.node1'})
+        c4_paths, entity_paths, unresolved, total = _resolve_elements(['a1'], ctx, 'deployment')
         assert c4_paths == ['infra.node1']
         assert total == 1
 
     def test_deployment_falls_back_to_archi(self):
-        archi_to_c4 = {'a1': 'dom.sys1'}
-        c4_paths, _, unresolved, _ = _resolve_elements(
-            ['a1'], archi_to_c4, None, {}, set(), 'deployment',
-        )
+        ctx = ViewContext(archi_to_c4={'a1': 'dom.sys1'}, sys_domain={}, tech_archi_to_c4={})
+        c4_paths, _, unresolved, _ = _resolve_elements(['a1'], ctx, 'deployment')
         assert c4_paths == ['dom.sys1']
         assert unresolved == 0
 
     def test_promoted_fanout(self):
-        promoted = {'parent1': ['dom.child1', 'dom.child2']}
-        c4_paths, _, unresolved, total = _resolve_elements(
-            ['parent1'], {}, promoted, None, set(), 'functional',
+        ctx = ViewContext(
+            archi_to_c4={}, sys_domain={},
+            promoted_archi_to_c4={'parent1': ['dom.child1', 'dom.child2']},
         )
+        c4_paths, _, unresolved, total = _resolve_elements(['parent1'], ctx, 'functional')
         assert c4_paths == ['dom.child1', 'dom.child2']
         assert unresolved == 0
         assert total == 1
 
     def test_unresolved_counted(self):
-        c4_paths, _, unresolved, total = _resolve_elements(
-            ['unknown1', 'unknown2'], {}, None, None, set(), 'functional',
-        )
+        ctx = ViewContext(archi_to_c4={}, sys_domain={})
+        c4_paths, _, unresolved, total = _resolve_elements(['unknown1', 'unknown2'], ctx, 'functional')
         assert c4_paths == []
         assert unresolved == 2
         assert total == 2
 
     def test_deployment_skips_entities(self):
-        archi_to_c4 = {'e1': 'entities.ent1'}
-        c4_paths, entity_paths, unresolved, total = _resolve_elements(
-            ['e1'], archi_to_c4, None, None, {'e1'}, 'deployment',
-        )
+        ctx = ViewContext(archi_to_c4={'e1': 'entities.ent1'}, sys_domain={}, entity_archi_ids={'e1'})
+        c4_paths, entity_paths, unresolved, total = _resolve_elements(['e1'], ctx, 'deployment')
         assert c4_paths == []
         assert entity_paths == []
         assert total == 0
 
     def test_integration_unresolved_entity_not_counted(self):
         """Entities that can't be resolved are silently dropped, not counted as unresolved."""
-        c4_paths, entity_paths, unresolved, total = _resolve_elements(
-            ['e_unknown'], {}, None, None, {'e_unknown'}, 'integration',
-        )
+        ctx = ViewContext(archi_to_c4={}, sys_domain={}, entity_archi_ids={'e_unknown'})
+        c4_paths, entity_paths, unresolved, total = _resolve_elements(['e_unknown'], ctx, 'integration')
         assert entity_paths == []
         assert unresolved == 0
         assert total == 0
@@ -517,80 +507,55 @@ class TestResolveElements:
 # ── _generate_deployment_view ────────────────────────────────────────────
 
 class TestGenerateDeploymentView:
+    @staticmethod
+    def _vd(view_id: str, title: str, c4_paths: list[str]) -> _ViewData:
+        return _ViewData(view_id=view_id, title=title, c4_paths=c4_paths,
+                         unique_paths=list(dict.fromkeys(c4_paths)), entity_paths=[], relationship_archi_ids=[])
+
     def test_basic_infra_paths(self):
         """Infra paths are emitted with env prefix and .** suffix."""
-        lines = _generate_deployment_view(
-            view_id='deployment_myapp',
-            title='Deployment Architecture: MyApp',
-            c4_paths=['loc.cluster.node1'],
-            deploy_targets={},
-            tech_archi_to_c4={'infra-1': 'loc.cluster.node1'},
-            deployment_env='prod',
-        )
+        vd = self._vd('deployment_myapp', 'Deployment Architecture: MyApp', ['loc.cluster.node1'])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={}, tech_archi_to_c4={'infra-1': 'loc.cluster.node1'})
+        lines = _generate_deployment_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'deployment view deployment_myapp' in content
         assert 'prod.loc.cluster.node1.**' in content
 
     def test_empty_paths_returns_empty(self):
         """No c4_paths → no lines."""
-        lines = _generate_deployment_view(
-            view_id='deployment_empty',
-            title='Empty',
-            c4_paths=[],
-            deploy_targets={},
-            tech_archi_to_c4=None,
-            deployment_env='prod',
-        )
-        assert lines == []
+        vd = self._vd('deployment_empty', 'Empty', [])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={})
+        assert _generate_deployment_view(vd, ctx) == []
 
     def test_app_only_no_infra_returns_empty(self):
         """App paths without infra mapping → no lines (app paths excluded from deployment views)."""
-        lines = _generate_deployment_view(
-            view_id='deployment_apponly',
-            title='App Only',
-            c4_paths=['channels.efs'],
-            deploy_targets={},
-            tech_archi_to_c4={'infra-1': 'loc.cluster.node1'},
-            deployment_env='prod',
-        )
-        assert lines == []
+        vd = self._vd('deployment_apponly', 'App Only', ['channels.efs'])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={}, tech_archi_to_c4={'infra-1': 'loc.cluster.node1'})
+        assert _generate_deployment_view(vd, ctx) == []
 
     def test_enrichment_from_deploy_targets(self):
         """Infra paths enriched from deploy_targets for app paths."""
-        lines = _generate_deployment_view(
-            view_id='deployment_enrich',
-            title='Enriched',
-            c4_paths=['channels.efs'],
-            deploy_targets={'channels.efs': {'loc.server1'}},
-            tech_archi_to_c4={},
-            deployment_env='prod',
-        )
+        vd = self._vd('deployment_enrich', 'Enriched', ['channels.efs'])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={}, tech_archi_to_c4={},
+                          deploy_targets={'channels.efs': {'loc.server1'}})
+        lines = _generate_deployment_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'prod.loc.server1.**' in content
 
     def test_prefix_match_enrichment(self):
         """Subsystem deploy mappings picked up via prefix match on system path."""
-        lines = _generate_deployment_view(
-            view_id='deployment_prefix',
-            title='Prefix',
-            c4_paths=['channels.efs'],
-            deploy_targets={'channels.efs.subsys': {'loc.node2'}},
-            tech_archi_to_c4={},
-            deployment_env='staging',
-        )
+        vd = self._vd('deployment_prefix', 'Prefix', ['channels.efs'])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={}, tech_archi_to_c4={},
+                          deploy_targets={'channels.efs.subsys': {'loc.node2'}}, deployment_env='staging')
+        lines = _generate_deployment_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'staging.loc.node2.**' in content
 
     def test_ancestor_dedup(self):
         """Ancestor dedup: 'loc' subsumes 'loc.cluster.node1'."""
-        lines = _generate_deployment_view(
-            view_id='deployment_dedup',
-            title='Dedup',
-            c4_paths=['loc', 'loc.cluster.node1'],
-            deploy_targets={},
-            tech_archi_to_c4={'i1': 'loc', 'i2': 'loc.cluster.node1'},
-            deployment_env='prod',
-        )
+        vd = self._vd('deployment_dedup', 'Dedup', ['loc', 'loc.cluster.node1'])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={}, tech_archi_to_c4={'i1': 'loc', 'i2': 'loc.cluster.node1'})
+        lines = _generate_deployment_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'prod.loc.**' in content
         assert 'prod.loc.cluster.node1.**' not in content
@@ -600,29 +565,18 @@ class TestGenerateDeploymentView:
         import logging
         many_infra = [f'loc.node{i}' for i in range(45)]
         tech_map = {f'i{i}': f'loc.node{i}' for i in range(45)}
+        vd = self._vd('deployment_big', 'Big', many_infra)
+        ctx = ViewContext(archi_to_c4={}, sys_domain={}, tech_archi_to_c4=tech_map)
         with caplog.at_level(logging.WARNING):
-            lines = _generate_deployment_view(
-                view_id='deployment_big',
-                title='Big',
-                c4_paths=many_infra,
-                deploy_targets={},
-                tech_archi_to_c4=tech_map,
-                deployment_env='prod',
-                max_deployment=40,
-            )
+            lines = _generate_deployment_view(vd, ctx)
         assert lines  # should produce output
         assert 'QA-11' in caplog.text
 
     def test_no_trailing_comma(self):
         """Last include line should not have trailing comma."""
-        lines = _generate_deployment_view(
-            view_id='deployment_comma',
-            title='Comma',
-            c4_paths=['loc.node1', 'loc.node2'],
-            deploy_targets={},
-            tech_archi_to_c4={'i1': 'loc.node1', 'i2': 'loc.node2'},
-            deployment_env='prod',
-        )
+        vd = self._vd('deployment_comma', 'Comma', ['loc.node1', 'loc.node2'])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={}, tech_archi_to_c4={'i1': 'loc.node1', 'i2': 'loc.node2'})
+        lines = _generate_deployment_view(vd, ctx)
         include_lines = [ln for ln in lines if ln.strip().startswith('prod.')]
         assert not include_lines[-1].endswith(',')
 
@@ -631,16 +585,16 @@ class TestGenerateDeploymentView:
 
 
 class TestGenerateFunctionalView:
+    @staticmethod
+    def _vd(view_id: str, title: str, unique_paths: list[str]) -> _ViewData:
+        return _ViewData(view_id=view_id, title=title, c4_paths=unique_paths,
+                         unique_paths=unique_paths, entity_paths=[], relationship_archi_ids=[])
+
     def test_single_system_scoped_view(self):
         """Single system produces a scoped 'of' view with include *."""
-        lines = _generate_functional_view(
-            view_id='functional_myapp',
-            title='Functional Architecture: MyApp',
-            unique_paths=['channels.efs'],
-            sys_subdomain=None,
-            sys_ids={'efs'},
-            sys_domain={'efs': 'channels'},
-        )
+        vd = self._vd('functional_myapp', 'Functional Architecture: MyApp', ['channels.efs'])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={'efs': 'channels'}, sys_ids={'efs'})
+        lines = _generate_functional_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'view functional_myapp of channels.efs' in content
         assert 'include *' in content
@@ -649,17 +603,13 @@ class TestGenerateFunctionalView:
 
     def test_multi_system_primary_gets_wildcard(self):
         """Multi-system: primary system (most elements) gets .* include."""
-        lines = _generate_functional_view(
-            view_id='functional_multi',
-            title='Functional Architecture: Multi',
-            unique_paths=[
-                'channels.efs', 'channels.efs', 'channels.efs',  # 3 elements
-                'products.abs',  # 1 element
-            ],
-            sys_subdomain=None,
-            sys_ids={'efs', 'abs'},
-            sys_domain={'efs': 'channels', 'abs': 'products'},
-        )
+        vd = self._vd('functional_multi', 'Functional Architecture: Multi', [
+            'channels.efs', 'channels.efs', 'channels.efs',  # 3 elements
+            'products.abs',  # 1 element
+        ])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={'efs': 'channels', 'abs': 'products'},
+                          sys_ids={'efs', 'abs'})
+        lines = _generate_functional_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'view functional_multi {' in content
         assert 'channels.efs.*' in content
@@ -669,55 +619,36 @@ class TestGenerateFunctionalView:
 
     def test_empty_paths_returns_empty(self):
         """No paths → empty lines."""
-        lines = _generate_functional_view(
-            view_id='functional_empty',
-            title='Empty',
-            unique_paths=[],
-            sys_subdomain=None,
-            sys_ids=set(),
-            sys_domain={},
-        )
-        assert lines == []
+        vd = self._vd('functional_empty', 'Empty', [])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={})
+        assert _generate_functional_view(vd, ctx) == []
 
     def test_qa11_warning(self, caplog):
         """QA-11 warning emitted when element count exceeds threshold."""
         import logging
         paths = [f'channels.sys{i}' for i in range(30)]
+        vd = self._vd('functional_big', 'Big', paths)
+        ctx = ViewContext(archi_to_c4={}, sys_domain={f'sys{i}': 'channels' for i in range(30)},
+                          sys_ids={f'sys{i}' for i in range(30)})
         with caplog.at_level(logging.WARNING):
-            _generate_functional_view(
-                view_id='functional_big',
-                title='Big',
-                unique_paths=paths,
-                sys_subdomain=None,
-                sys_ids={f'sys{i}' for i in range(30)},
-                sys_domain={f'sys{i}': 'channels' for i in range(30)},
-                max_functional=25,
-            )
+            _generate_functional_view(vd, ctx)
         assert 'QA-11' in caplog.text
 
     def test_subdomain_path(self):
         """System in subdomain correctly resolved to 3-part path."""
-        lines = _generate_functional_view(
-            view_id='functional_sub',
-            title='Subdomain',
-            unique_paths=['channels.cards.efs'],
-            sys_subdomain={'efs': 'cards'},
-            sys_ids={'efs'},
-            sys_domain={'efs': 'channels'},
-        )
+        vd = self._vd('functional_sub', 'Subdomain', ['channels.cards.efs'])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={'efs': 'channels'},
+                          sys_subdomain={'efs': 'cards'}, sys_ids={'efs'})
+        lines = _generate_functional_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'view functional_sub of channels.cards.efs' in content
 
     def test_no_trailing_comma(self):
         """Last include line should not have trailing comma."""
-        lines = _generate_functional_view(
-            view_id='functional_comma',
-            title='Comma',
-            unique_paths=['channels.efs', 'products.abs'],
-            sys_subdomain=None,
-            sys_ids={'efs', 'abs'},
-            sys_domain={'efs': 'channels', 'abs': 'products'},
-        )
+        vd = self._vd('functional_comma', 'Comma', ['channels.efs', 'products.abs'])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={'efs': 'channels', 'abs': 'products'},
+                          sys_ids={'efs', 'abs'})
+        lines = _generate_functional_view(vd, ctx)
         include_section = [ln for ln in lines if ln.strip().startswith(('channels.', 'products.'))]
         assert not include_section[-1].endswith(',')
 
@@ -726,58 +657,54 @@ class TestGenerateFunctionalView:
 
 
 class TestGenerateIntegrationView:
+    @staticmethod
+    def _vd(view_id: str, title: str, unique_paths: list[str],
+            entity_paths: list[str] | None = None,
+            relationship_archi_ids: list[str] | None = None) -> _ViewData:
+        return _ViewData(view_id=view_id, title=title, c4_paths=unique_paths,
+                         unique_paths=unique_paths, entity_paths=entity_paths or [],
+                         relationship_archi_ids=relationship_archi_ids or [])
+
     def test_basic_with_relationships(self):
         """Integration view with relationships includes system paths and edges."""
-        lines = _generate_integration_view(
-            view_id='integration_myapp',
-            title='Integration Architecture: MyApp',
-            unique_paths=['channels.efs', 'products.abs'],
-            entity_paths=[],
-            relationship_archi_ids=['rel-1'],
-            rel_lookup={'rel-1': ('sys-1', 'sys-2', 'FlowRelationship')},
+        vd = self._vd('integration_myapp', 'Integration Architecture: MyApp',
+                       ['channels.efs', 'products.abs'], relationship_archi_ids=['rel-1'])
+        ctx = ViewContext(
             archi_to_c4={'sys-1': 'channels.efs', 'sys-2': 'products.abs'},
-            promoted_archi_to_c4=None,
-            sys_subdomain=None,
-            sys_ids={'efs', 'abs'},
             sys_domain={'efs': 'channels', 'abs': 'products'},
+            rel_lookup={'rel-1': ('sys-1', 'sys-2', 'FlowRelationship')},
+            sys_ids={'efs', 'abs'},
         )
+        lines = _generate_integration_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'view integration_myapp' in content
         assert 'channels.efs -> products.abs' in content
 
     def test_structural_rels_skipped(self):
         """Structural relationships are excluded from integration views."""
-        lines = _generate_integration_view(
-            view_id='integration_struct',
-            title='Structural',
-            unique_paths=['channels.efs', 'products.abs'],
-            entity_paths=[],
-            relationship_archi_ids=['rel-1'],
-            rel_lookup={'rel-1': ('sys-1', 'sys-2', 'CompositionRelationship')},
+        vd = self._vd('integration_struct', 'Structural', ['channels.efs', 'products.abs'],
+                       relationship_archi_ids=['rel-1'])
+        ctx = ViewContext(
             archi_to_c4={'sys-1': 'channels.efs', 'sys-2': 'products.abs'},
-            promoted_archi_to_c4=None,
-            sys_subdomain=None,
-            sys_ids={'efs', 'abs'},
             sys_domain={'efs': 'channels', 'abs': 'products'},
+            rel_lookup={'rel-1': ('sys-1', 'sys-2', 'CompositionRelationship')},
+            sys_ids={'efs', 'abs'},
         )
+        lines = _generate_integration_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'channels.efs -> products.abs' not in content
 
     def test_orphan_removal(self):
         """Systems not in any relationship pair are removed."""
-        lines = _generate_integration_view(
-            view_id='integration_orphan',
-            title='Orphan',
-            unique_paths=['channels.efs', 'products.abs', 'infra.monitor'],
-            entity_paths=[],
-            relationship_archi_ids=['rel-1'],
-            rel_lookup={'rel-1': ('sys-1', 'sys-2', 'FlowRelationship')},
+        vd = self._vd('integration_orphan', 'Orphan', ['channels.efs', 'products.abs', 'infra.monitor'],
+                       relationship_archi_ids=['rel-1'])
+        ctx = ViewContext(
             archi_to_c4={'sys-1': 'channels.efs', 'sys-2': 'products.abs', 'sys-3': 'infra.monitor'},
-            promoted_archi_to_c4=None,
-            sys_subdomain=None,
-            sys_ids={'efs', 'abs', 'monitor'},
             sys_domain={'efs': 'channels', 'abs': 'products', 'monitor': 'infra'},
+            rel_lookup={'rel-1': ('sys-1', 'sys-2', 'FlowRelationship')},
+            sys_ids={'efs', 'abs', 'monitor'},
         )
+        lines = _generate_integration_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'infra.monitor' not in content
         assert 'channels.efs' in content
@@ -786,78 +713,44 @@ class TestGenerateIntegrationView:
         """Entities exceeding cap are excluded with comment."""
         import logging
         entities = [f'de_entity{i}' for i in range(15)]
+        vd = self._vd('integration_cap', 'Cap', ['channels.efs'], entity_paths=entities)
+        ctx = ViewContext(archi_to_c4={}, sys_domain={'efs': 'channels'}, sys_ids={'efs'})
         with caplog.at_level(logging.INFO):
-            lines = _generate_integration_view(
-                view_id='integration_cap',
-                title='Cap',
-                unique_paths=['channels.efs'],
-                entity_paths=entities,
-                relationship_archi_ids=[],
-                rel_lookup={},
-                archi_to_c4={},
-                promoted_archi_to_c4=None,
-                sys_subdomain=None,
-                sys_ids={'efs'},
-                sys_domain={'efs': 'channels'},
-                max_integration_entities=10,
-            )
+            lines = _generate_integration_view(vd, ctx)
         content = '\n'.join(lines)
         assert '15 data entities excluded' in content
         assert 'de_entity0' not in content
 
     def test_entity_only_overcap_returns_empty(self):
         """View with only entities exceeding cap and no systems/rels returns []."""
-        lines = _generate_integration_view(
-            view_id='integration_entity_only_overcap',
-            title='EntityOnlyOvercap',
-            unique_paths=[],
-            entity_paths=[f'de_entity{i}' for i in range(15)],
-            relationship_archi_ids=[],
-            rel_lookup={},
-            archi_to_c4={},
-            promoted_archi_to_c4=None,
-            sys_subdomain=None,
-            sys_ids=set(),
-            sys_domain={},
-            max_integration_entities=10,
-        )
-        assert lines == []
+        vd = self._vd('integration_entity_only_overcap', 'EntityOnlyOvercap', [],
+                       entity_paths=[f'de_entity{i}' for i in range(15)])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={})
+        assert _generate_integration_view(vd, ctx) == []
 
     def test_entity_cap_includes_within_limit(self):
         """Entities within cap are included."""
-        lines = _generate_integration_view(
-            view_id='integration_ent',
-            title='Entities',
-            unique_paths=['channels.efs'],
-            entity_paths=['de_account', 'de_card'],
-            relationship_archi_ids=[],
-            rel_lookup={},
-            archi_to_c4={},
-            promoted_archi_to_c4=None,
-            sys_subdomain=None,
-            sys_ids={'efs'},
-            sys_domain={'efs': 'channels'},
-            max_integration_entities=10,
-        )
+        vd = self._vd('integration_ent', 'Entities', ['channels.efs'],
+                       entity_paths=['de_account', 'de_card'])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={'efs': 'channels'}, sys_ids={'efs'})
+        lines = _generate_integration_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'de_account' in content
         assert 'de_card' in content
 
     def test_promoted_parent_fanout(self):
         """Promoted parent fans out to children in relationship endpoints."""
-        lines = _generate_integration_view(
-            view_id='integration_fanout',
-            title='Fanout',
-            unique_paths=['channels.efs_card', 'channels.efs_loan', 'products.abs'],
-            entity_paths=[],
-            relationship_archi_ids=['rel-1'],
-            rel_lookup={'rel-1': ('parent-1', 'sys-2', 'FlowRelationship')},
+        vd = self._vd('integration_fanout', 'Fanout',
+                       ['channels.efs_card', 'channels.efs_loan', 'products.abs'],
+                       relationship_archi_ids=['rel-1'])
+        ctx = ViewContext(
             archi_to_c4={'sys-2': 'products.abs'},
-            promoted_archi_to_c4={'parent-1': ['channels.efs_card', 'channels.efs_loan']},
-            sys_subdomain=None,
-            sys_ids={'efs_card', 'efs_loan', 'abs'},
             sys_domain={'efs_card': 'channels', 'efs_loan': 'channels', 'abs': 'products'},
+            promoted_archi_to_c4={'parent-1': ['channels.efs_card', 'channels.efs_loan']},
+            rel_lookup={'rel-1': ('parent-1', 'sys-2', 'FlowRelationship')},
+            sys_ids={'efs_card', 'efs_loan', 'abs'},
         )
+        lines = _generate_integration_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'channels.efs_card -> products.abs' in content
         assert 'channels.efs_loan -> products.abs' in content
@@ -869,61 +762,38 @@ class TestGenerateIntegrationView:
         rels = [(f'sys-{i}', f'sys-{i+1}', 'FlowRelationship') for i in range(25)]
         rel_lookup = {f'rel-{i}': r for i, r in enumerate(rels)}
         archi_to_c4 = {f'sys-{i}': f'dom.sys{i}' for i in range(30)}
+        # Use enough data to exceed default _MAX_INTEGRATION (50)
+        vd = self._vd('integration_big', 'Big', paths, relationship_archi_ids=list(rel_lookup.keys()))
+        ctx = ViewContext(archi_to_c4=archi_to_c4, sys_domain={f'sys{i}': 'dom' for i in range(30)},
+                          rel_lookup=rel_lookup, sys_ids={f'sys{i}' for i in range(30)})
         with caplog.at_level(logging.WARNING):
-            _generate_integration_view(
-                view_id='integration_big',
-                title='Big',
-                unique_paths=paths,
-                entity_paths=[],
-                relationship_archi_ids=list(rel_lookup.keys()),
-                rel_lookup=rel_lookup,
-                archi_to_c4=archi_to_c4,
-                promoted_archi_to_c4=None,
-                sys_subdomain=None,
-                sys_ids={f'sys{i}' for i in range(30)},
-                sys_domain={f'sys{i}': 'dom' for i in range(30)},
-                max_integration=10,
-            )
+            _generate_integration_view(vd, ctx)
         assert 'QA-11' in caplog.text
 
     def test_no_trailing_comma(self):
         """Last include line should not have trailing comma."""
-        lines = _generate_integration_view(
-            view_id='integration_comma',
-            title='Comma',
-            unique_paths=['channels.efs', 'products.abs'],
-            entity_paths=[],
-            relationship_archi_ids=['rel-1'],
-            rel_lookup={'rel-1': ('sys-1', 'sys-2', 'FlowRelationship')},
+        vd = self._vd('integration_comma', 'Comma', ['channels.efs', 'products.abs'],
+                       relationship_archi_ids=['rel-1'])
+        ctx = ViewContext(
             archi_to_c4={'sys-1': 'channels.efs', 'sys-2': 'products.abs'},
-            promoted_archi_to_c4=None,
-            sys_subdomain=None,
-            sys_ids={'efs', 'abs'},
             sys_domain={'efs': 'channels', 'abs': 'products'},
+            rel_lookup={'rel-1': ('sys-1', 'sys-2', 'FlowRelationship')},
+            sys_ids={'efs', 'abs'},
         )
+        lines = _generate_integration_view(vd, ctx)
         include_lines = [ln for ln in lines if '->' in ln or ln.strip().startswith(('channels.', 'products.'))]
         assert not include_lines[-1].endswith(',')
 
     def test_exclude_datastore(self):
         """Integration view always has exclude dataStore."""
-        lines = _generate_integration_view(
-            view_id='integration_ds',
-            title='DataStore',
-            unique_paths=['channels.efs'],
-            entity_paths=[],
-            relationship_archi_ids=[],
-            rel_lookup={},
-            archi_to_c4={},
-            promoted_archi_to_c4=None,
-            sys_subdomain=None,
-            sys_ids={'efs'},
-            sys_domain={'efs': 'channels'},
-        )
+        vd = self._vd('integration_ds', 'DataStore', ['channels.efs'])
+        ctx = ViewContext(archi_to_c4={}, sys_domain={'efs': 'channels'}, sys_ids={'efs'})
+        lines = _generate_integration_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'exclude * where kind is dataStore' in content
 
 
-# ── _prepare_view_context / _group_by_solution ──────────────────────────
+# ── build_view_context / _group_by_solution ──────────────────────────
 
 class TestGroupBySolution:
     def test_groups_by_solution_slug(self):
@@ -939,16 +809,15 @@ class TestGroupBySolution:
         assert _group_by_solution([]) == {}
 
 
-class TestPrepareViewContext:
+class TestBuildViewContext:
     def test_builds_lookups(self):
-        sv = SolutionView(name='f.X', view_type='functional', solution='sol_x', element_archi_ids=['e1'])
         rel = RawRelationship(
             rel_id='r1', rel_type='FlowRelationship', name='',
             source_type='ApplicationComponent', source_id='s1',
             target_type='ApplicationComponent', target_id='t1',
         )
-        ctx = _prepare_view_context(
-            solution_views=[sv],
+        ctx = build_view_context(
+            archi_to_c4={},
             sys_domain={'sys1': 'dom1'},
             relationships=[rel],
             entity_archi_ids=None,
@@ -958,15 +827,12 @@ class TestPrepareViewContext:
         assert ctx.sys_ids == {'sys1'}
         assert 'r1' in ctx.rel_lookup
         assert 'dom1.sys1' in ctx.deploy_targets
-        assert 'sol_x' in ctx.by_solution
 
     def test_preserves_entity_archi_ids(self):
-        ctx = _prepare_view_context(
-            solution_views=[],
+        ctx = build_view_context(
+            archi_to_c4={},
             sys_domain={},
-            relationships=None,
             entity_archi_ids={'ent1', 'ent2'},
-            deployment_map=None,
         )
         assert ctx.entity_archi_ids == {'ent1', 'ent2'}
 
@@ -982,7 +848,8 @@ class TestGenerateSolutionViews:
             element_archi_ids=['sys-1'],
         )
         archi_to_c4 = {'sys-1': 'channels.efs'}
-        files, unresolved, total = generate_solution_views([sv], archi_to_c4, {'efs': 'channels'})
+        ctx = build_view_context(archi_to_c4, {'efs': 'channels'})
+        files, unresolved, total = generate_solution_views([sv], ctx)
         assert 'auto_repay' in files
         content = files['auto_repay']
         assert 'view functional_auto_repay of channels.efs' in content
@@ -1008,8 +875,8 @@ class TestGenerateSolutionViews:
                 target_type='ApplicationComponent', target_id='sys-2',
             ),
         ]
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, {'efs': 'channels', 'abs': 'products'}, rels)
+        ctx = build_view_context(archi_to_c4, {'efs': 'channels', 'abs': 'products'}, rels)
+        files, _, _ = generate_solution_views([sv], ctx)
         content = files['auto_repay']
         assert 'channels.efs -> products.abs' in content
 
@@ -1032,8 +899,8 @@ class TestGenerateSolutionViews:
                 target_type='ApplicationComponent', target_id='sys-2',
             ),
         ]
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, {'efs': 'channels', 'abs': 'products'}, rels)
+        ctx = build_view_context(archi_to_c4, {'efs': 'channels', 'abs': 'products'}, rels)
+        files, _, _ = generate_solution_views([sv], ctx)
         content = files['test']
         # Should NOT contain direct relationship (structural filtered)
         assert 'channels.efs -> products.abs' not in content
@@ -1051,8 +918,8 @@ class TestGenerateSolutionViews:
             'sys-1': 'channels.efs',
             'sys-2': 'products.abs',
         }
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, {'efs': 'channels', 'abs': 'products'}, [])
+        ctx = build_view_context(archi_to_c4, {'efs': 'channels', 'abs': 'products'}, [])
+        files, _, _ = generate_solution_views([sv], ctx)
         content = files['no_rels']
         assert '-> *' not in content
         assert '* ->' not in content
@@ -1084,9 +951,10 @@ class TestGenerateSolutionViews:
                 target_type='ApplicationComponent', target_id='sys-2',
             ),
         ]
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, {'efs_card': 'channels', 'efs_loan': 'channels', 'abs': 'products'},
-            rels, promoted_archi_to_c4)
+        ctx = build_view_context(
+            archi_to_c4, {'efs_card': 'channels', 'efs_loan': 'channels', 'abs': 'products'},
+            rels, promoted_archi_to_c4=promoted_archi_to_c4)
+        files, _, _ = generate_solution_views([sv], ctx)
         content = files['test']
         # Fan-out: promoted parent → both children create relationships
         assert 'channels.efs_card -> products.abs' in content
@@ -1099,7 +967,8 @@ class TestGenerateSolutionViews:
             solution='ghost',
             element_archi_ids=['unknown-1'],
         )
-        files, unresolved, total = generate_solution_views([sv], {}, {})
+        ctx = build_view_context({}, {})
+        files, unresolved, total = generate_solution_views([sv], ctx)
         assert 'ghost' not in files
         assert unresolved == 1
         assert total == 1
@@ -1115,8 +984,8 @@ class TestGenerateSolutionViews:
         )
         archi_to_c4 = {'do-1': 'de_account', 'do-2': 'de_card'}
         entity_archi_ids = {'do-1', 'do-2'}
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, {}, entity_archi_ids=entity_archi_ids)
+        ctx = build_view_context(archi_to_c4, {}, entity_archi_ids=entity_archi_ids)
+        files, _, _ = generate_solution_views([sv], ctx)
         assert 'data_only' in files
         content = files['data_only']
         assert 'de_account' in content
@@ -1132,8 +1001,8 @@ class TestGenerateSolutionViews:
         )
         archi_to_c4 = {'sys-1': 'channels.efs', 'do-1': 'de_account'}
         entity_archi_ids = {'do-1'}
-        _, unresolved, total = generate_solution_views(
-            [sv], archi_to_c4, {'efs': 'channels'}, entity_archi_ids=entity_archi_ids)
+        ctx = build_view_context(archi_to_c4, {'efs': 'channels'}, entity_archi_ids=entity_archi_ids)
+        _, unresolved, total = generate_solution_views([sv], ctx)
         # total should be 2 (sys-1 + unknown-1), not 3 (do-1 is filtered)
         assert total == 2
         assert unresolved == 1
@@ -1148,8 +1017,8 @@ class TestGenerateSolutionViews:
         )
         archi_to_c4 = {'sys-1': 'channels.efs', 'do-1': 'de_account'}
         entity_archi_ids = {'do-1'}
-        _, unresolved, total = generate_solution_views(
-            [sv], archi_to_c4, {'efs': 'channels'}, entity_archi_ids=entity_archi_ids)
+        ctx = build_view_context(archi_to_c4, {'efs': 'channels'}, entity_archi_ids=entity_archi_ids)
+        _, unresolved, total = generate_solution_views([sv], ctx)
         # total should be 2 (sys-1 + unknown-1), not 3 (do-1 is entity)
         assert total == 2
         assert unresolved == 1
@@ -1164,9 +1033,8 @@ class TestGenerateSolutionViews:
         )
         archi_to_c4 = {'ac-1': 'channels.efs'}
         deploy_map = [('channels.efs', 'server_1')]
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, {'efs': 'channels'},
-            deployment_map=deploy_map)
+        ctx = build_view_context(archi_to_c4, {'efs': 'channels'}, deployment_map=deploy_map)
+        files, _, _ = generate_solution_views([sv], ctx)
         assert 'app_only' in files
         content = files['app_only']
         # App path is NOT included directly — it lives inside node via instanceOf
@@ -1199,10 +1067,9 @@ class TestGenerateSolutionViews:
             SolutionView(name='sol.Pay', view_type='deployment', solution='pay',
                          element_archi_ids=['sys-1', 'tech-1']),
         ]
-        files, unresolved, total = generate_solution_views(
-            views, archi_to_c4, sys_domain, rels,
-            tech_archi_to_c4=tech_archi_to_c4, deployment_map=deploy_map,
-        )
+        ctx = build_view_context(archi_to_c4, sys_domain, rels,
+            tech_archi_to_c4=tech_archi_to_c4, deployment_map=deploy_map)
+        files, unresolved, total = generate_solution_views(views, ctx)
         assert 'pay' in files
         content = files['pay']
         # All three view types present
@@ -1224,7 +1091,8 @@ class TestGenerateSolutionViews:
             name='sol.X', view_type='unknown', solution='x',
             element_archi_ids=['sys-1'],
         )
-        files, _, _ = generate_solution_views([sv], {'sys-1': 'dom.sys'}, {'sys': 'dom'})
+        ctx = build_view_context({'sys-1': 'dom.sys'}, {'sys': 'dom'})
+        files, _, _ = generate_solution_views([sv], ctx)
         # No file emitted since unknown type produces no view lines
         assert 'x' not in files
 
@@ -1564,8 +1432,8 @@ class TestSolutionViewDeployment:
             element_archi_ids=['n-1', 'sw-1'],
         )
         tech_archi_to_c4 = {'n-1': 'server_1', 'sw-1': 'server_1.pg'}
-        files, unresolved, total = generate_solution_views(
-            [sv], {}, {}, tech_archi_to_c4=tech_archi_to_c4)
+        ctx = build_view_context({}, {}, tech_archi_to_c4=tech_archi_to_c4)
+        files, unresolved, total = generate_solution_views([sv], ctx)
         assert 'payment_svc' in files
         content = files['payment_svc']
         assert 'Deployment' in content
@@ -1586,9 +1454,9 @@ class TestSolutionViewDeployment:
             ('channels.efs', 'dc.server_1'),
             ('products.abs', 'dc.server_2'),
         ]
-        files, unresolved, total = generate_solution_views(
-            [sv], archi_to_c4, {'efs': 'channels', 'abs': 'products'},
+        ctx = build_view_context(archi_to_c4, {'efs': 'channels', 'abs': 'products'},
             deployment_map=deploy_map)
+        files, unresolved, total = generate_solution_views([sv], ctx)
         assert 'payment_deploy' in files
         content = files['payment_deploy']
         # App paths are NOT included in deployment views (they live inside nodes via instanceOf)
@@ -1608,8 +1476,8 @@ class TestSolutionViewDeployment:
             element_archi_ids=['n-1', 'sw-1'],
         )
         tech_archi_to_c4 = {'n-1': 'dc.server_1', 'sw-1': 'dc.server_1.pg'}
-        files, _, _ = generate_solution_views(
-            [sv], {}, {}, tech_archi_to_c4=tech_archi_to_c4)
+        ctx = build_view_context({}, {}, tech_archi_to_c4=tech_archi_to_c4)
+        files, _, _ = generate_solution_views([sv], ctx)
         content = files['infra_only']
         # Ancestor dedup: dc.server_1 is ancestor of dc.server_1.pg → only dc.server_1.** emitted
         assert 'prod.dc.server_1.**' in content
@@ -1632,8 +1500,8 @@ class TestSolutionViewsSubdomainPaths:
         archi_to_c4 = {'sys-1': 'channels.retail.efs'}
         sys_domain = {'efs': 'channels'}
         sys_subdomain = {'efs': 'retail'}
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        ctx = build_view_context(archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        files, _, _ = generate_solution_views([sv], ctx)
         content = files['auto_repay']
         # Must scope to the system, not just the subdomain
         assert 'view functional_auto_repay of channels.retail.efs' in content
@@ -1661,9 +1529,8 @@ class TestSolutionViewsSubdomainPaths:
         ]
         sys_domain = {'efs': 'channels', 'cards': 'channels'}
         sys_subdomain = {'efs': 'retail', 'cards': 'retail'}
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, sys_domain, rels,
-            sys_subdomain=sys_subdomain)
+        ctx = build_view_context(archi_to_c4, sys_domain, rels, sys_subdomain=sys_subdomain)
+        files, _, _ = generate_solution_views([sv], ctx)
         content = files['retail']
         # The two systems are distinct — relationship must appear
         assert 'channels.retail.efs -> channels.retail.cards' in content
@@ -1690,9 +1557,8 @@ class TestSolutionViewsSubdomainPaths:
         ]
         sys_domain = {'efs': 'channels', 'abs': 'products'}
         sys_subdomain = {'efs': 'retail'}
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, sys_domain, rels,
-            sys_subdomain=sys_subdomain)
+        ctx = build_view_context(archi_to_c4, sys_domain, rels, sys_subdomain=sys_subdomain)
+        files, _, _ = generate_solution_views([sv], ctx)
         content = files['cross']
         assert 'channels.retail.efs -> products.abs' in content
 
@@ -1708,8 +1574,8 @@ class TestSolutionViewsSubdomainPaths:
         archi_to_c4 = {'fn-1': 'channels.retail.efs.do_loan'}
         sys_domain = {'efs': 'channels'}
         sys_subdomain = {'efs': 'retail'}
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        ctx = build_view_context(archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        files, _, _ = generate_solution_views([sv], ctx)
         content = files['auto_repay']
         # Should scope to channels.retail.efs, not channels.retail
         assert 'of channels.retail.efs' in content
@@ -1739,8 +1605,8 @@ class TestSolutionViewsSubdomainPaths:
         sys_domain = {'efs': 'channels'}
         # sys_subdomain says 'core' maps to subdomain 'efs'
         sys_subdomain = {'core': 'efs'}
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        ctx = build_view_context(archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        files, _, _ = generate_solution_views([sv], ctx)
         content = files['channels']
         # Should scope to channels.efs (the actual system), not channels.efs.core
         # because 'core' is not in sys_domain (not a known system in this context)
@@ -1768,8 +1634,8 @@ class TestSolutionViewsSubdomainPaths:
         # 'core' is a known system in sys_domain, but in domain 'products', not 'channels'
         sys_domain = {'efs': 'channels', 'core': 'products'}
         sys_subdomain = {'core': 'efs'}
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        ctx = build_view_context(archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        files, _, _ = generate_solution_views([sv], ctx)
         content = files['channels']
         # Should collapse to channels.efs (system), not channels.efs.core
         assert 'of channels.efs' in content
@@ -1797,8 +1663,8 @@ class TestSolutionViewsSubdomainPaths:
         # Both 'efs' and 'core' are known systems in 'channels'; 'core' is in subdomain 'efs'
         sys_domain = {'efs': 'channels', 'core': 'channels'}
         sys_subdomain = {'core': 'efs'}
-        files, _, _ = generate_solution_views(
-            [sv], archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        ctx = build_view_context(archi_to_c4, sys_domain, sys_subdomain=sys_subdomain)
+        files, _, _ = generate_solution_views([sv], ctx)
         content = files['channels']
         # sys_subdomain is authoritative: core is in subdomain efs, so path is channels.efs.core
         assert 'of channels.efs.core' in content

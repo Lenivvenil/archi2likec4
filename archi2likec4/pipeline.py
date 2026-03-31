@@ -34,6 +34,7 @@ from .config import ConvertConfig, load_config
 from .exceptions import ConfigError, ParseError, ValidationError
 from .federation import generate_federate_script, generate_federation_registry
 from .generators import (
+    build_view_context,
     generate_audit_md,
     generate_datastore_mapping_c4,
     generate_deployment_c4,
@@ -797,15 +798,19 @@ def convert(
 
     # Compute solution views once — metrics go to _validate, files go to _generate
     sys_subdomain = _build_solution_view_index(built)
-    sv_files, sv_unresolved, sv_total = generate_solution_views(
-        parsed.solution_views, built.archi_to_c4, built.sys_domain,
-        parsed.relationships,
+    view_ctx = build_view_context(
+        archi_to_c4=built.archi_to_c4,
+        sys_domain=built.sys_domain,
+        relationships=parsed.relationships,
         promoted_archi_to_c4=built.promoted_archi_to_c4,
         tech_archi_to_c4=built.tech_archi_to_c4,
         entity_archi_ids={e.archi_id for e in built.entities},
         deployment_map=built.deployment_map,
         sys_subdomain=sys_subdomain or None,
         deployment_env=config.deployment_env,
+    )
+    sv_files, sv_unresolved, sv_total = generate_solution_views(
+        parsed.solution_views, view_ctx,
     )
 
     gate_warnings, gate_errors = _validate(built, config, sv_unresolved, sv_total)

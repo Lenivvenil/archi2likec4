@@ -26,16 +26,16 @@
 
 ### Task 2: Introduce ViewContext dataclass to reduce PLR0913 in views.py
 Создать контекстный объект для передачи общих параметров в функции генерации views, сократив количество параметров с 6-13 до 2-4.
-- [ ] In `archi2likec4/generators/views.py`: create `ViewContext` dataclass grouping common parameters (config, systems, integrations, archi_to_c4, sys_domain, domain_systems, iface_c4_path, etc.)
-- [ ] Refactor `generate_solution_views()` to accept `ViewContext` instead of 10 individual params
-- [ ] Refactor `_dispatch_view()` to accept `ViewContext` instead of 13 params
-- [ ] Refactor `_generate_integration_view()` to accept `ViewContext` instead of 13 params
-- [ ] Refactor `_generate_system_view()` to accept `ViewContext` instead of 11 params
-- [ ] Refactor `_generate_domain_view()`, `_generate_functional_view()`, `_generate_deployment_view()` similarly
-- [ ] Update callers in `archi2likec4/pipeline.py` (`_generate()` function) to construct and pass `ViewContext`
-- [ ] Add/update tests for the above changes
-- [ ] Run validation commands — confirm zero PLR0913 violations in views.py
-- [ ] Mark completed
+- [x] In `archi2likec4/generators/views.py`: create `ViewContext` dataclass grouping common parameters (config, systems, integrations, archi_to_c4, sys_domain, domain_systems, iface_c4_path, etc.)
+- [x] Refactor `generate_solution_views()` to accept `ViewContext` instead of 10 individual params
+- [x] Refactor `_dispatch_view()` to accept `ViewContext` instead of 13 params
+- [x] Refactor `_generate_integration_view()` to accept `ViewContext` instead of 13 params
+- [x] Refactor `_generate_system_view()` to accept `ViewContext` instead of 11 params
+- [x] Refactor `_generate_domain_view()`, `_generate_functional_view()`, `_generate_deployment_view()` similarly
+- [x] Update callers in `archi2likec4/pipeline.py` (`_generate()` function) to construct and pass `ViewContext`
+- [x] Add/update tests for the above changes
+- [x] Run validation commands — confirm zero PLR0913 violations in views.py
+- [x] Mark completed
 
 ### Task 3: Introduce BuildContext to reduce PLR0913 in builders and pipeline
 Создать контекстный объект для builder-функций и _generate(), чтобы устранить оставшиеся PLR0913 нарушения.

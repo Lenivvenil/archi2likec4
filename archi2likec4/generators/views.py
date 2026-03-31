@@ -3,12 +3,40 @@
 from __future__ import annotations
 
 import logging
+from dataclasses import dataclass, field
 from typing import NamedTuple
 
 from ..models import RawRelationship, SolutionView
 from ..utils import escape_str
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass
+class ViewContext:
+    """Shared lookup tables for solution view generation."""
+
+    archi_to_c4: dict[str, str]
+    sys_domain: dict[str, str]
+    promoted_archi_to_c4: dict[str, list[str]] | None = None
+    tech_archi_to_c4: dict[str, str] | None = None
+    entity_archi_ids: set[str] = field(default_factory=set)
+    rel_lookup: dict[str, tuple[str, str, str]] = field(default_factory=dict)
+    deploy_targets: dict[str, set[str]] = field(default_factory=dict)
+    sys_subdomain: dict[str, str] | None = None
+    sys_ids: set[str] = field(default_factory=set)
+    deployment_env: str = 'prod'
+
+
+class _ViewData(NamedTuple):
+    """Per-view resolved data passed to type-specific generators."""
+
+    view_id: str
+    title: str
+    c4_paths: list[str]
+    unique_paths: list[str]
+    entity_paths: list[str]
+    relationship_archi_ids: list[str]
 
 
 def generate_landscape_view() -> str:
@@ -136,10 +164,7 @@ def _system_path_from_c4(
 
 def _resolve_elements(
     element_archi_ids: list[str],
-    archi_to_c4: dict[str, str],
-    promoted_archi_to_c4: dict[str, list[str]] | None,
-    tech_archi_to_c4: dict[str, str] | None,
-    entity_archi_ids: set[str],
+    ctx: ViewContext,
     view_type: str,
 ) -> tuple[list[str], list[str], int, int]:
     """Resolve element archi_ids to c4 paths.
@@ -154,25 +179,25 @@ def _resolve_elements(
     c4_paths: list[str] = []
     entity_paths: list[str] = []
     unresolved = 0
-    non_entity_count = sum(1 for a in element_archi_ids if a not in entity_archi_ids)
+    non_entity_count = sum(1 for a in element_archi_ids if a not in ctx.entity_archi_ids)
     use_tech = view_type == 'deployment'
     collect_entities = view_type == 'integration'
 
     for aid in element_archi_ids:
-        if aid in entity_archi_ids:
+        if aid in ctx.entity_archi_ids:
             if collect_entities:
-                entity_path = archi_to_c4.get(aid)
+                entity_path = ctx.archi_to_c4.get(aid)
                 if entity_path:
                     entity_paths.append(entity_path)
             continue
 
         # Deployment prefers tech_archi_to_c4 lookup
-        if use_tech and tech_archi_to_c4 and aid in tech_archi_to_c4:
-            c4_paths.append(tech_archi_to_c4[aid])
-        elif aid in archi_to_c4:
-            c4_paths.append(archi_to_c4[aid])
-        elif promoted_archi_to_c4 and aid in promoted_archi_to_c4:
-            c4_paths.extend(promoted_archi_to_c4[aid])
+        if use_tech and ctx.tech_archi_to_c4 and aid in ctx.tech_archi_to_c4:
+            c4_paths.append(ctx.tech_archi_to_c4[aid])
+        elif aid in ctx.archi_to_c4:
+            c4_paths.append(ctx.archi_to_c4[aid])
+        elif ctx.promoted_archi_to_c4 and aid in ctx.promoted_archi_to_c4:
+            c4_paths.extend(ctx.promoted_archi_to_c4[aid])
         else:
             unresolved += 1
 
@@ -204,15 +229,7 @@ def _enrich_infra_paths(
                         infra_paths.append(target)
 
 
-def _generate_deployment_view(
-    view_id: str,
-    title: str,
-    c4_paths: list[str],
-    deploy_targets: dict[str, set[str]],
-    tech_archi_to_c4: dict[str, str] | None,
-    deployment_env: str,
-    max_deployment: int = 40,
-) -> list[str]:
+def _generate_deployment_view(vd: _ViewData, ctx: ViewContext) -> list[str]:
     """Generate deployment view lines for a single solution view.
 
     Returns list of .c4 lines for the deployment view block (empty if nothing to render).
@@ -227,17 +244,17 @@ def _generate_deployment_view(
       3. Ancestor dedup: if both 'loc' and 'loc.cluster.node' are present, keep ancestor.
       4. Emit ``deployment view`` block with ``<env>.<ip>.**`` includes.
     """
-    resolved_unique = list(dict.fromkeys(c4_paths))
+    resolved_unique = list(dict.fromkeys(vd.c4_paths))
     if not resolved_unique:
         return []
 
-    tech_c4_values = set((tech_archi_to_c4 or {}).values())
+    tech_c4_values = set((ctx.tech_archi_to_c4 or {}).values())
     app_paths = [rp for rp in resolved_unique if rp not in tech_c4_values]
     infra_paths = [rp for rp in resolved_unique if rp in tech_c4_values]
 
     # Enrich: pull mapped infra targets from deployment_map
-    if app_paths and deploy_targets:
-        _enrich_infra_paths(app_paths, infra_paths, deploy_targets)
+    if app_paths and ctx.deploy_targets:
+        _enrich_infra_paths(app_paths, infra_paths, ctx.deploy_targets)
 
     # Ancestor dedup for infra: if both 'loc' and 'loc.cluster.node' are present,
     # keep only the ancestor (with .**) to avoid redundant includes.
@@ -257,28 +274,26 @@ def _generate_deployment_view(
         return []
 
     lines: list[str] = []
-    lines.append(f"  deployment view {view_id} {{")
-    lines.append(f"    title '{escape_str(title)}'")
+    lines.append(f"  deployment view {vd.view_id} {{")
+    lines.append(f"    title '{escape_str(vd.title)}'")
     lines.append("    include")
     # Infra paths: <env>.<path>.** to include all nested deployment nodes
     for ip in infra_paths:
-        lines.append(f"      {deployment_env}.{ip}.**,")
+        lines.append(f"      {ctx.deployment_env}.{ip}.**,")
     if lines[-1].endswith(','):
         lines[-1] = lines[-1][:-1]
     lines.append("  }")
     # QA-11: warn on element count
     est = len(infra_paths)
-    if est > max_deployment:
+    if est > _MAX_DEPLOYMENT:
         logger.warning('QA-11: deployment view %s has ~%d elements '
-                        '(threshold: %d)', view_id, est, max_deployment)
+                        '(threshold: %d)', vd.view_id, est, _MAX_DEPLOYMENT)
     return lines
 
 
 def _collect_system_paths(
     unique_paths: list[str],
-    sys_subdomain: dict[str, str] | None,
-    sys_ids: set[str],
-    sys_domain: dict[str, str],
+    ctx: ViewContext,
 ) -> tuple[list[str], dict[str, int]]:
     """Collect unique system-level paths from resolved c4 element paths.
 
@@ -289,7 +304,7 @@ def _collect_system_paths(
     counts: dict[str, int] = {}
     for p in unique_paths:
         if len(p.split('.')) >= 2:
-            sp = _system_path_from_c4(p, sys_subdomain, sys_ids, sys_domain)
+            sp = _system_path_from_c4(p, ctx.sys_subdomain, ctx.sys_ids, ctx.sys_domain)
             counts[sp] = counts.get(sp, 0) + 1
             if sp not in seen:
                 seen.add(sp)
@@ -297,22 +312,12 @@ def _collect_system_paths(
     return system_paths, counts
 
 
-def _generate_functional_view(
-    view_id: str,
-    title: str,
-    unique_paths: list[str],
-    sys_subdomain: dict[str, str] | None,
-    sys_ids: set[str],
-    sys_domain: dict[str, str],
-    max_functional: int = 25,
-) -> list[str]:
+def _generate_functional_view(vd: _ViewData, ctx: ViewContext) -> list[str]:
     """Generate functional view lines for a single solution view.
 
     Returns list of .c4 lines for the functional view block.
     """
-    system_paths, sys_element_count = _collect_system_paths(
-        unique_paths, sys_subdomain, sys_ids, sys_domain,
-    )
+    system_paths, sys_element_count = _collect_system_paths(vd.unique_paths, ctx)
 
     if not system_paths:
         return []
@@ -320,22 +325,22 @@ def _generate_functional_view(
     lines: list[str] = []
     if len(system_paths) == 1:
         # Scoped view for a single system
-        lines.append(f"  view {view_id} of {system_paths[0]} {{")
-        lines.append(f"    title '{escape_str(title)}'")
+        lines.append(f"  view {vd.view_id} of {system_paths[0]} {{")
+        lines.append(f"    title '{escape_str(vd.title)}'")
         lines.append("    include *")
         lines.append("    exclude * where kind is dataEntity")
         lines.append("    exclude * where kind is dataStore")
         lines.append("  }")
         # QA-11: warn on element count (estimate)
         est = sys_element_count.get(system_paths[0], 0)
-        if est > max_functional:
+        if est > _MAX_FUNCTIONAL:
             logger.warning('QA-11: functional view %s has ~%d elements '
-                            '(threshold: %d)', view_id, est, max_functional)
+                            '(threshold: %d)', vd.view_id, est, _MAX_FUNCTIONAL)
     else:
         # Multi-system: determine primary system (most elements)
         primary_sys = max(system_paths, key=lambda sp: sys_element_count.get(sp, 0))
-        lines.append(f"  view {view_id} {{")
-        lines.append(f"    title '{escape_str(title)}'")
+        lines.append(f"  view {vd.view_id} {{")
+        lines.append(f"    title '{escape_str(vd.title)}'")
         lines.append("    include")
         for sp in system_paths:
             if sp == primary_sys:
@@ -354,32 +359,25 @@ def _generate_functional_view(
             len(system_paths) + sys_element_count.get(primary_sys, 0)
             if primary_sys else len(system_paths)
         )
-        if est > max_functional:
+        if est > _MAX_FUNCTIONAL:
             logger.warning('QA-11: functional view %s has ~%d elements '
-                            '(threshold: %d)', view_id, est, max_functional)
+                            '(threshold: %d)', vd.view_id, est, _MAX_FUNCTIONAL)
 
     return lines
 
 
-def _resolve_endpoint_to_systems(
-    archi_id: str,
-    archi_to_c4: dict[str, str],
-    promoted_archi_to_c4: dict[str, list[str]] | None,
-    sys_subdomain: dict[str, str] | None,
-    sys_ids: set[str],
-    sys_domain: dict[str, str],
-) -> set[str]:
+def _resolve_endpoint_to_systems(archi_id: str, ctx: ViewContext) -> set[str]:
     """Resolve a single relationship endpoint archi_id to system-level c4 paths."""
     result: set[str] = set()
-    if archi_id in archi_to_c4:
-        path = archi_to_c4[archi_id]
+    if archi_id in ctx.archi_to_c4:
+        path = ctx.archi_to_c4[archi_id]
         result.add(
-            _system_path_from_c4(path, sys_subdomain, sys_ids, sys_domain)
+            _system_path_from_c4(path, ctx.sys_subdomain, ctx.sys_ids, ctx.sys_domain)
             if len(path.split('.')) >= 2 else path)
-    elif promoted_archi_to_c4 and archi_id in promoted_archi_to_c4:
-        for child_path in promoted_archi_to_c4[archi_id]:
+    elif ctx.promoted_archi_to_c4 and archi_id in ctx.promoted_archi_to_c4:
+        for child_path in ctx.promoted_archi_to_c4[archi_id]:
             result.add(
-                _system_path_from_c4(child_path, sys_subdomain, sys_ids, sys_domain)
+                _system_path_from_c4(child_path, ctx.sys_subdomain, ctx.sys_ids, ctx.sys_domain)
                 if len(child_path.split('.')) >= 2 else child_path)
     return result
 
@@ -390,26 +388,19 @@ _STRUCTURAL_TYPES = frozenset({'CompositionRelationship', 'RealizationRelationsh
 
 def _resolve_rel_pairs(
     relationship_archi_ids: list[str],
-    rel_lookup: dict[str, tuple[str, str, str]],
-    archi_to_c4: dict[str, str],
-    promoted_archi_to_c4: dict[str, list[str]] | None,
-    sys_subdomain: dict[str, str] | None,
-    sys_ids: set[str],
-    sys_domain: dict[str, str],
+    ctx: ViewContext,
 ) -> list[tuple[str, str]]:
     """Resolve diagram relationship archi_ids to unique system-level (src, tgt) pairs."""
     rel_pairs: list[tuple[str, str]] = []
     seen_pairs: set[tuple[str, str]] = set()
     for rel_id in relationship_archi_ids:
-        if rel_id not in rel_lookup:
+        if rel_id not in ctx.rel_lookup:
             continue
-        src_aid, tgt_aid, rtype = rel_lookup[rel_id]
+        src_aid, tgt_aid, rtype = ctx.rel_lookup[rel_id]
         if rtype in _STRUCTURAL_TYPES or rtype == 'AccessRelationship':
             continue
-        src_sys_set = _resolve_endpoint_to_systems(
-            src_aid, archi_to_c4, promoted_archi_to_c4, sys_subdomain, sys_ids, sys_domain)
-        tgt_sys_set = _resolve_endpoint_to_systems(
-            tgt_aid, archi_to_c4, promoted_archi_to_c4, sys_subdomain, sys_ids, sys_domain)
+        src_sys_set = _resolve_endpoint_to_systems(src_aid, ctx)
+        tgt_sys_set = _resolve_endpoint_to_systems(tgt_aid, ctx)
         if not src_sys_set or not tgt_sys_set:
             continue
         for src_sys in src_sys_set:
@@ -423,21 +414,7 @@ def _resolve_rel_pairs(
     return rel_pairs
 
 
-def _generate_integration_view(
-    view_id: str,
-    title: str,
-    unique_paths: list[str],
-    entity_paths: list[str],
-    relationship_archi_ids: list[str],
-    rel_lookup: dict[str, tuple[str, str, str]],
-    archi_to_c4: dict[str, str],
-    promoted_archi_to_c4: dict[str, list[str]] | None,
-    sys_subdomain: dict[str, str] | None,
-    sys_ids: set[str],
-    sys_domain: dict[str, str],
-    max_integration: int = 50,
-    max_integration_entities: int = 10,
-) -> list[str]:
+def _generate_integration_view(vd: _ViewData, ctx: ViewContext) -> list[str]:
     """Generate integration view lines for a single solution view.
 
     Returns list of .c4 lines for the integration view block.
@@ -448,15 +425,10 @@ def _generate_integration_view(
       3. Orphan removal: keep only systems that participate in relationships.
       4. Entity cap: include entities only if within threshold.
     """
-    system_paths, _ = _collect_system_paths(
-        unique_paths, sys_subdomain, sys_ids, sys_domain,
-    )
+    system_paths, _ = _collect_system_paths(vd.unique_paths, ctx)
 
     # Resolve diagram relationships to system-level pairs
-    rel_pairs = _resolve_rel_pairs(
-        relationship_archi_ids, rel_lookup, archi_to_c4,
-        promoted_archi_to_c4, sys_subdomain, sys_ids, sys_domain,
-    )
+    rel_pairs = _resolve_rel_pairs(vd.relationship_archi_ids, ctx)
 
     # Orphan removal: keep only systems that participate in relationships
     if rel_pairs:
@@ -469,13 +441,13 @@ def _generate_integration_view(
     # Entity cap: include entities only if ≤ threshold
     include_entities = False
     resolved_entities: list[str] = []
-    if entity_paths:
-        resolved_entities = list(dict.fromkeys(entity_paths))
-        if len(resolved_entities) <= max_integration_entities:
+    if vd.entity_paths:
+        resolved_entities = list(dict.fromkeys(vd.entity_paths))
+        if len(resolved_entities) <= _MAX_INTEGRATION_ENTITIES:
             include_entities = True
         else:
             logger.info('Integration view %s: %d data entities exceed cap (%d), excluding',
-                         view_id, len(resolved_entities), max_integration_entities)
+                         vd.view_id, len(resolved_entities), _MAX_INTEGRATION_ENTITIES)
 
     # Nothing to include — skip this view
     has_includable = system_paths or rel_pairs or (resolved_entities and include_entities)
@@ -483,11 +455,10 @@ def _generate_integration_view(
         return []
 
     lines: list[str] = []
-    lines.append(f"  view {view_id} {{")
-    lines.append(f"    title '{escape_str(title)}'")
+    lines.append(f"  view {vd.view_id} {{")
+    lines.append(f"    title '{escape_str(vd.title)}'")
     if not include_entities and resolved_entities:
-        cap = max_integration_entities
-        lines.append(f"    // {len(resolved_entities)} data entities excluded (>{cap} cap)")
+        lines.append(f"    // {len(resolved_entities)} data entities excluded (>{_MAX_INTEGRATION_ENTITIES} cap)")
     lines.append("    include")
     for sp in system_paths:
         lines.append(f"      {sp},")
@@ -505,9 +476,9 @@ def _generate_integration_view(
     lines.append("  }")
     # QA-11: warn on element count
     est = len(system_paths) + len(rel_pairs) + (len(resolved_entities) if include_entities else 0)
-    if est > max_integration:
+    if est > _MAX_INTEGRATION:
         logger.warning('QA-11: integration view %s has ~%d elements '
-                        '(threshold: %d)', view_id, est, max_integration)
+                        '(threshold: %d)', vd.view_id, est, _MAX_INTEGRATION)
 
     return lines
 
@@ -553,16 +524,7 @@ def _dispatch_view(
     sv: SolutionView,
     solution_slug: str,
     used_view_ids: set[str],
-    archi_to_c4: dict[str, str],
-    promoted_archi_to_c4: dict[str, list[str]] | None,
-    tech_archi_to_c4: dict[str, str] | None,
-    entity_archi_ids: set[str],
-    rel_lookup: dict[str, tuple[str, str, str]],
-    deploy_targets: dict[str, set[str]],
-    sys_domain: dict[str, str],
-    sys_subdomain: dict[str, str] | None,
-    sys_ids: set[str],
-    deployment_env: str,
+    ctx: ViewContext,
 ) -> tuple[list[str], int, int]:
     """Resolve elements and dispatch to the appropriate per-type view generator.
 
@@ -573,8 +535,7 @@ def _dispatch_view(
         return [], 0, 0
 
     c4_paths, entity_paths, unresolved, non_entity_count = _resolve_elements(
-        sv.element_archi_ids, archi_to_c4, promoted_archi_to_c4,
-        tech_archi_to_c4, entity_archi_ids, sv.view_type,
+        sv.element_archi_ids, ctx, sv.view_type,
     )
 
     if not c4_paths and not entity_paths and sv.view_type != 'deployment':
@@ -586,56 +547,23 @@ def _dispatch_view(
     solution_label = sv.name.split('.', 1)[-1] if '.' in sv.name else sv.name
     title = f'{label} Architecture: {solution_label}'
 
+    vd = _ViewData(
+        view_id=view_id,
+        title=title,
+        c4_paths=c4_paths,
+        unique_paths=unique_paths,
+        entity_paths=entity_paths,
+        relationship_archi_ids=sv.relationship_archi_ids,
+    )
+
     if sv.view_type == 'functional':
-        lines = _generate_functional_view(
-            view_id=view_id, title=title, unique_paths=unique_paths,
-            sys_subdomain=sys_subdomain, sys_ids=sys_ids, sys_domain=sys_domain,
-            max_functional=_MAX_FUNCTIONAL,
-        )
+        lines = _generate_functional_view(vd, ctx)
     elif sv.view_type == 'integration':
-        lines = _generate_integration_view(
-            view_id=view_id, title=title, unique_paths=unique_paths,
-            entity_paths=entity_paths, relationship_archi_ids=sv.relationship_archi_ids,
-            rel_lookup=rel_lookup, archi_to_c4=archi_to_c4,
-            promoted_archi_to_c4=promoted_archi_to_c4, sys_subdomain=sys_subdomain,
-            sys_ids=sys_ids, sys_domain=sys_domain,
-            max_integration=_MAX_INTEGRATION, max_integration_entities=_MAX_INTEGRATION_ENTITIES,
-        )
+        lines = _generate_integration_view(vd, ctx)
     else:  # deployment
-        lines = _generate_deployment_view(
-            view_id=view_id, title=title, c4_paths=c4_paths,
-            deploy_targets=deploy_targets, tech_archi_to_c4=tech_archi_to_c4,
-            deployment_env=deployment_env, max_deployment=_MAX_DEPLOYMENT,
-        )
+        lines = _generate_deployment_view(vd, ctx)
 
     return lines, unresolved, non_entity_count
-
-
-class _ViewContext(NamedTuple):
-    """Precomputed lookup tables for solution view generation."""
-
-    entity_archi_ids: set[str]
-    deploy_targets: dict[str, set[str]]
-    sys_ids: set[str]
-    rel_lookup: dict[str, tuple[str, str, str]]
-    by_solution: dict[str, list[SolutionView]]
-
-
-def _prepare_view_context(
-    solution_views: list[SolutionView],
-    sys_domain: dict[str, str],
-    relationships: list[RawRelationship] | None,
-    entity_archi_ids: set[str] | None,
-    deployment_map: list[tuple[str, str]] | None,
-) -> _ViewContext:
-    """Build lookup tables and group solution views by solution slug."""
-    return _ViewContext(
-        entity_archi_ids=entity_archi_ids if entity_archi_ids is not None else set(),
-        deploy_targets=_build_deploy_targets(deployment_map),
-        sys_ids=set(sys_domain.keys()),
-        rel_lookup=_build_rel_lookup(relationships),
-        by_solution=_group_by_solution(solution_views),
-    )
 
 
 def _group_by_solution(solution_views: list[SolutionView]) -> dict[str, list[SolutionView]]:
@@ -646,38 +574,54 @@ def _group_by_solution(solution_views: list[SolutionView]) -> dict[str, list[Sol
     return by_solution
 
 
-def generate_solution_views(
-    solution_views: list[SolutionView],
+def build_view_context(
     archi_to_c4: dict[str, str],
     sys_domain: dict[str, str],
     relationships: list[RawRelationship] | None = None,
-    promoted_archi_to_c4: dict[str, list[str]] | None = None,
-    tech_archi_to_c4: dict[str, str] | None = None,
-    entity_archi_ids: set[str] | None = None,
-    deployment_map: list[tuple[str, str]] | None = None,
-    sys_subdomain: dict[str, str] | None = None,
-    deployment_env: str = 'prod',
+    **kwargs: object,
+) -> ViewContext:
+    """Build a ViewContext from raw parsed/built data.
+
+    Accepts the same keyword arguments as ViewContext fields, plus:
+      - relationships: raw RawRelationship list (converted to rel_lookup)
+      - deployment_map: raw (app_path, infra_id) pairs (converted to deploy_targets)
+      - entity_archi_ids: set or None (defaults to empty set)
+    """
+    entity_archi_ids = kwargs.pop('entity_archi_ids', None)
+    deployment_map = kwargs.pop('deployment_map', None)
+    return ViewContext(
+        archi_to_c4=archi_to_c4,
+        sys_domain=sys_domain,
+        entity_archi_ids=entity_archi_ids if entity_archi_ids is not None else set(),  # type: ignore[arg-type]
+        deploy_targets=_build_deploy_targets(deployment_map),  # type: ignore[arg-type]
+        sys_ids=set(sys_domain.keys()),
+        rel_lookup=_build_rel_lookup(relationships),
+        **kwargs,  # type: ignore[arg-type]
+    )
+
+
+def generate_solution_views(
+    solution_views: list[SolutionView],
+    ctx: ViewContext,
 ) -> tuple[dict[str, str], int, int]:
     """Generate solution view .c4 files.
 
     Returns (files, total_unresolved, total_elements).
     Dispatches to per-type generators via ``_dispatch_view``.
     """
-    ctx = _prepare_view_context(solution_views, sys_domain, relationships, entity_archi_ids, deployment_map)
+    by_solution = _group_by_solution(solution_views)
 
     files: dict[str, str] = {}
     used_view_ids: set[str] = set()
     total_unresolved = 0
     total_elements = 0
-    for solution_slug, views in sorted(ctx.by_solution.items()):
+    for solution_slug, views in sorted(by_solution.items()):
         sol_name = views[0].name.split('.', 1)[-1] if '.' in views[0].name else views[0].name
         lines = [f'// ── Solution: {sol_name} ──', '', 'views {', '']
 
         for sv in sorted(views, key=lambda v: v.view_type):
             view_lines, unresolved, count = _dispatch_view(
-                sv, solution_slug, used_view_ids, archi_to_c4, promoted_archi_to_c4,
-                tech_archi_to_c4, ctx.entity_archi_ids, ctx.rel_lookup, ctx.deploy_targets,
-                sys_domain, sys_subdomain, ctx.sys_ids, deployment_env,
+                sv, solution_slug, used_view_ids, ctx,
             )
             total_elements += count
             total_unresolved += unresolved
