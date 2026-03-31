@@ -578,25 +578,32 @@ def build_view_context(
     archi_to_c4: dict[str, str],
     sys_domain: dict[str, str],
     relationships: list[RawRelationship] | None = None,
-    **kwargs: object,
+    *,
+    promoted_archi_to_c4: dict[str, list[str]] | None = None,
+    tech_archi_to_c4: dict[str, str] | None = None,
+    entity_archi_ids: set[str] | None = None,
+    deployment_map: list[tuple[str, str]] | None = None,
+    sys_subdomain: dict[str, str] | None = None,
+    deployment_env: str = 'prod',
 ) -> ViewContext:
     """Build a ViewContext from raw parsed/built data.
 
-    Accepts the same keyword arguments as ViewContext fields, plus:
-      - relationships: raw RawRelationship list (converted to rel_lookup)
-      - deployment_map: raw (app_path, infra_id) pairs (converted to deploy_targets)
-      - entity_archi_ids: set or None (defaults to empty set)
+    Converts raw data into lookup structures:
+      - relationships → rel_lookup
+      - deployment_map → deploy_targets
+      - sys_domain.keys() → sys_ids
     """
-    entity_archi_ids = kwargs.pop('entity_archi_ids', None)
-    deployment_map = kwargs.pop('deployment_map', None)
     return ViewContext(
         archi_to_c4=archi_to_c4,
         sys_domain=sys_domain,
-        entity_archi_ids=entity_archi_ids if entity_archi_ids is not None else set(),  # type: ignore[arg-type]
-        deploy_targets=_build_deploy_targets(deployment_map),  # type: ignore[arg-type]
+        promoted_archi_to_c4=promoted_archi_to_c4,
+        tech_archi_to_c4=tech_archi_to_c4,
+        entity_archi_ids=entity_archi_ids if entity_archi_ids is not None else set(),
+        deploy_targets=_build_deploy_targets(deployment_map),
         sys_ids=set(sys_domain.keys()),
         rel_lookup=_build_rel_lookup(relationships),
-        **kwargs,  # type: ignore[arg-type]
+        sys_subdomain=sys_subdomain,
+        deployment_env=deployment_env,
     )
 
 
