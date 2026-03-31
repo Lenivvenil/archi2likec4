@@ -2629,3 +2629,612 @@ class TestBuilderDeterminism:
         entities_a = build_data_entities(data_objects, set())
         entities_b = build_data_entities(data_objects, set())
         assert [(e.c4_id, e.name) for e in entities_a] == [(e.c4_id, e.name) for e in entities_b]
+
+
+# ── systems.py edge cases (coverage uplift) ─────────────────────────────
+
+class TestExtractUrl:
+    """Tests for _extract_url helper."""
+
+    def test_returns_none_for_empty_string(self):
+        from archi2likec4.builders.systems import _extract_url
+        assert _extract_url('') is None
+
+    def test_returns_none_for_no_url(self):
+        from archi2likec4.builders.systems import _extract_url
+        assert _extract_url('No links here, just documentation.') is None
+
+    def test_extracts_https_url(self):
+        from archi2likec4.builders.systems import _extract_url
+        result = _extract_url('See docs at https://example.com/api for details')
+        assert result == 'https://example.com/api'
+
+    def test_strips_trailing_punctuation(self):
+        from archi2likec4.builders.systems import _extract_url
+        result = _extract_url('Visit https://example.com/api.')
+        assert result == 'https://example.com/api'
+
+
+class TestAttachSubsystemsMissingParent:
+    """Tests for _attach_subsystems when parent system is missing."""
+
+    def test_missing_parent_logs_warning(self):
+        from archi2likec4.builders.systems import _attach_subsystems
+        systems: dict[str, System] = {
+            'CRM': System(c4_id='crm', name='CRM', archi_id='sys-1'),
+        }
+        orphan = AppComponent(archi_id='id-2', name='Unknown.Module', source_folder='')
+        _attach_subsystems(
+            systems, [orphan],
+            parent_name_fn=lambda ac: ac.name.split('.', 1)[0],
+            sub_name_fn=lambda ac: ac.name.split('.', 1)[1],
+        )
+        # Unknown not in systems → skipped, CRM unchanged
+        assert len(systems['CRM'].subsystems) == 0
+
+
+class TestBuildCompIndex:
+    """Tests for _build_comp_index with extra_archi_ids and subsystems."""
+
+    def test_indexes_extra_archi_ids(self):
+        from archi2likec4.builders.systems import _build_comp_index
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1', extra_archi_ids=['sys-dup'])
+        index = _build_comp_index([sys])
+        assert 'sys-1' in index
+        assert 'sys-dup' in index
+        assert index['sys-dup'] == (sys, None)
+
+    def test_indexes_subsystems(self):
+        from archi2likec4.builders.systems import _build_comp_index
+        sub = Subsystem(c4_id='core', name='CRM.Core', archi_id='sub-1')
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1', subsystems=[sub])
+        index = _build_comp_index([sys])
+        assert 'sub-1' in index
+        assert index['sub-1'] == (sys, sub)
+
+
+class TestCollectSystemsDuplicateDisplacement:
+    """Tests for _collect_systems duplicate AC displacement — lines 123-124."""
+
+    def test_duplicate_with_fewer_props_tracked_in_extra_ids(self):
+        """When a duplicate AC has fewer properties, its archi_id goes to extra_ids."""
+        comps = [
+            AppComponent(archi_id='id-rich', name='CRM', properties={'CI': '123', 'URL': 'x'}),
+            AppComponent(archi_id='id-poor', name='CRM', properties={}),
+        ]
+        system_acs, extra_ids, _ = _collect_systems(comps)
+        assert system_acs['CRM'].archi_id == 'id-rich'
+        assert 'id-poor' in extra_ids['CRM']
+
+
+class TestUpsertSystemAcDisplacement:
+    """Tests for _upsert_system_ac — existing has more props, new AC's archi_id tracked."""
+
+    def test_existing_richer_keeps_position(self):
+        from archi2likec4.builders.systems import _upsert_system_ac
+        system_acs: dict[str, AppComponent] = {
+            'CRM': AppComponent(archi_id='id-rich', name='CRM', properties={'CI': '123', 'URL': 'x'}),
+        }
+        extra_ids: dict[str, list[str]] = {}
+        new_ac = AppComponent(archi_id='id-poor', name='CRM', properties={})
+        _upsert_system_ac(system_acs, extra_ids, 'CRM', new_ac)
+        assert system_acs['CRM'].archi_id == 'id-rich'
+        assert 'id-poor' in extra_ids['CRM']
+
+
+class TestAttachFunctionsEdgeCases:
+    """Tests for attach_functions edge cases — reverse rels, suffix collision, unknown orphans."""
+
+    def test_reverse_relationship_direction(self):
+        """source=AppFunction, target=AppComponent should also resolve parent."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1')
+        fn = AppFunction(archi_id='fn-1', name='Process', parent_archi_id='')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='CompositionRelationship', name='',
+                source_type='ApplicationFunction', source_id='fn-1',
+                target_type='ApplicationComponent', target_id='sys-1',
+            ),
+        ]
+        orphans = attach_functions([sys], [fn], rels)
+        assert orphans == 0
+        assert len(sys.functions) == 1
+
+    def test_triple_name_collision_suffix(self):
+        """Three functions with same name should produce c4_ids with _2 and _3 suffixes."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1')
+        fns = [
+            AppFunction(archi_id=f'fn-{i}', name='Action', parent_archi_id='sys-1')
+            for i in range(3)
+        ]
+        attach_functions([sys], fns)
+        ids = sorted(f.c4_id for f in sys.functions)
+        assert ids == ['action', 'action_2', 'action_3']
+
+    def test_unknown_parent_orphan(self):
+        """Function with parent_archi_id pointing to unknown system counts as orphan."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1')
+        fn = AppFunction(archi_id='fn-1', name='Lost', parent_archi_id='nonexistent-id')
+        orphans = attach_functions([sys], [fn])
+        assert orphans == 1
+
+    def test_promoted_parent_orphan(self):
+        """Function referencing promoted parent counts as orphan."""
+        sys = System(c4_id='child_a', name='P.A', archi_id='id-a')
+        fn = AppFunction(archi_id='fn-1', name='Task', parent_archi_id='id-parent')
+        promoted = {'id-parent': ['child_a']}
+        orphans = attach_functions([sys], [fn], promoted_parents=promoted)
+        assert orphans == 1
+
+
+class TestResolveIfaceOwnerByName:
+    """Tests for _resolve_iface_owner_by_name — various name resolution branches."""
+
+    def test_two_part_name_matches_subsystem(self):
+        from archi2likec4.builders.systems import _resolve_iface_owner_by_name
+        sub = Subsystem(c4_id='core', name='CRM.Core', archi_id='sub-1')
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1', subsystems=[sub])
+        name_to_sys = {'CRM': sys}
+        name_to_sub = {'CRM.Core': (sys, sub)}
+        result = _resolve_iface_owner_by_name('CRM.Core.API', name_to_sys, name_to_sub)
+        assert result == (sys, sub)
+
+    def test_two_part_name_matches_system(self):
+        from archi2likec4.builders.systems import _resolve_iface_owner_by_name
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        name_to_sys = {'CRM': sys}
+        result = _resolve_iface_owner_by_name('CRM.SomeAPI', name_to_sys, {})
+        assert result == (sys, None)
+
+    def test_two_part_name_matches_promoted_system(self):
+        from archi2likec4.builders.systems import _resolve_iface_owner_by_name
+        sys = System(c4_id='efs_card', name='EFS.Card', archi_id='sys-1')
+        name_to_sys = {'EFS.Card': sys}
+        result = _resolve_iface_owner_by_name('EFS.Card.API', name_to_sys, {})
+        assert result == (sys, None)
+
+    def test_single_part_name_matches_system(self):
+        from archi2likec4.builders.systems import _resolve_iface_owner_by_name
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        name_to_sys = {'CRM': sys}
+        result = _resolve_iface_owner_by_name('CRM', name_to_sys, {})
+        assert result == (sys, None)
+
+    def test_unresolvable_returns_none(self):
+        from archi2likec4.builders.systems import _resolve_iface_owner_by_name
+        result = _resolve_iface_owner_by_name('Unknown.Thing', {}, {})
+        assert result is None
+
+
+class TestAttachInterfacesEdgeCases:
+    """Tests for attach_interfaces edge cases — name-based fallback, subsystem ownership."""
+
+    def test_name_based_fallback_resolution(self):
+        """Interface resolved by name when no relationship exists."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        iface = AppInterface(archi_id='iface-1', name='CRM.API', documentation='')
+        result = attach_interfaces([sys], [iface], [])
+        assert 'iface-1' in result
+        assert result['iface-1'] == 'crm'
+
+    def test_unresolved_interface_warning(self):
+        """Interface that cannot be resolved is counted as unresolved."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        iface = AppInterface(archi_id='iface-1', name='Unknown.API', documentation='')
+        result = attach_interfaces([sys], [iface], [])
+        assert 'iface-1' not in result
+
+    def test_interface_owned_by_subsystem(self):
+        """Interface ownership resolved to subsystem returns sys.sub path."""
+        sub = Subsystem(c4_id='core', name='CRM.Core', archi_id='sub-1')
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1', subsystems=[sub])
+        iface = AppInterface(archi_id='iface-1', name='API', documentation='')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='CompositionRelationship', name='',
+                source_type='ApplicationComponent', source_id='sub-1',
+                target_type='ApplicationInterface', target_id='iface-1',
+            ),
+        ]
+        result = attach_interfaces([sys], [iface], rels)
+        assert result['iface-1'] == 'crm.core'
+
+    def test_name_to_sub_lookup_for_fallback(self):
+        """Interface name matching subsystem name falls back to subsystem owner."""
+        sub = Subsystem(c4_id='core', name='CRM.Core', archi_id='sub-1')
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1', subsystems=[sub])
+        iface = AppInterface(archi_id='iface-1', name='CRM.Core.Endpoint', documentation='')
+        result = attach_interfaces([sys], [iface], [])
+        assert result['iface-1'] == 'crm.core'
+
+    def test_non_ownership_rel_skipped(self):
+        """Non-ownership relationship types are skipped during interface resolution."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        iface = AppInterface(archi_id='iface-1', name='CRM.API', documentation='')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='FlowRelationship', name='',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='ApplicationInterface', target_id='iface-1',
+            ),
+        ]
+        # FlowRelationship is not an ownership rel, so interface resolved by name fallback
+        result = attach_interfaces([sys], [iface], rels)
+        assert 'iface-1' in result
+
+    def test_iface_owner_with_missing_iface_index_entry(self):
+        """When iface_owner references an ID not in iface_index, it's skipped gracefully."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        # Create a relationship that adds an iface_id to iface_owner
+        # but do NOT include that interface in the interfaces list
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='CompositionRelationship', name='',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='ApplicationInterface', target_id='ghost-iface',
+            ),
+        ]
+        # Pass empty interface list — iface_owner will have 'ghost-iface' but iface_index won't
+        result = attach_interfaces([sys], [], rels)
+        # The ghost interface should not appear in the result since it can't be resolved
+        assert 'ghost-iface' not in result
+
+    def test_promoted_system_name_fallback(self):
+        """Interface with dot-name matching a promoted system (dot name in name_to_sys)."""
+        sys = System(c4_id='efs_card', name='EFS.Card_Service', archi_id='sys-1')
+        iface = AppInterface(archi_id='iface-1', name='EFS.Card_Service.Endpoint', documentation='')
+        result = attach_interfaces([sys], [iface], [])
+        assert result['iface-1'] == 'efs_card'
+
+    def test_single_part_name_resolved_to_system(self):
+        """Interface with a single-part name matching a system resolves correctly."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        iface = AppInterface(archi_id='iface-1', name='CRM', documentation='')
+        result = attach_interfaces([sys], [iface], [])
+        assert result['iface-1'] == 'crm'
+
+
+# ── systems.py additional edge cases ─────────────────────────────────────
+
+class TestAttachSubsystemsEdgeCases:
+    """Tests for _attach_subsystems — missing parent, build_cfg propagation."""
+
+    def test_subsystem_with_missing_parent_skipped(self):
+        """Subsystem whose parent is not found is skipped with warning."""
+        parent_systems: dict[str, System] = {}  # no parents at all
+        orphan_ac = AppComponent(archi_id='sub-1', name='Missing.Core')
+        from archi2likec4.builders.systems import _attach_subsystems
+        _attach_subsystems(
+            parent_systems, [orphan_ac],
+            parent_name_fn=lambda ac: ac.name.split('.', 1)[0],
+            sub_name_fn=lambda ac: ac.name.split('.', 1)[1],
+        )
+        # No crash, parent_systems still empty
+        assert len(parent_systems) == 0
+
+    def test_subsystem_with_build_cfg_metadata(self):
+        """build_cfg.prop_map and standard_keys are passed through to subsystem metadata."""
+        parent = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        parent_systems = {'CRM': parent}
+        ac = AppComponent(archi_id='sub-1', name='CRM.Core', properties={'CI': '42'})
+        cfg = SystemBuildConfig(prop_map={'CI': 'ci_number'}, standard_keys=['ci_number'])
+        from archi2likec4.builders.systems import _attach_subsystems
+        _attach_subsystems(
+            parent_systems, [ac],
+            parent_name_fn=lambda ac: ac.name.split('.', 1)[0],
+            sub_name_fn=lambda ac: ac.name.split('.', 1)[1],
+            build_cfg=cfg,
+        )
+        assert len(parent.subsystems) == 1
+        assert parent.subsystems[0].metadata.get('ci_number') == '42'
+
+
+class TestAttachFunctionsExtraEdgeCases:
+    """Extra edge cases for attach_functions — subsystem attachment, no parent."""
+
+    def test_function_no_parent_id_is_orphan(self):
+        """Function with no parent_archi_id and no relationship is orphaned."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        fn = AppFunction(archi_id='fn-1', name='Calc', parent_archi_id='')
+        orphans = attach_functions([sys], [fn])
+        assert orphans == 1
+        assert len(sys.functions) == 0
+
+    def test_function_attached_to_subsystem_via_composition(self):
+        """Function resolved to subsystem via CompositionRelationship."""
+        sub = Subsystem(c4_id='core', name='CRM.Core', archi_id='sub-1')
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1', subsystems=[sub])
+        fn = AppFunction(archi_id='fn-1', name='Calc', parent_archi_id='')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='CompositionRelationship', name='',
+                source_type='ApplicationComponent', source_id='sub-1',
+                target_type='ApplicationFunction', target_id='fn-1',
+            ),
+        ]
+        orphans = attach_functions([sys], [fn], relationships=rels)
+        assert orphans == 0
+        assert len(sub.functions) == 1
+        assert sub.functions[0].name == 'Calc'
+
+    def test_function_attached_via_extra_archi_ids(self):
+        """Function resolves to system via extra_archi_ids."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1', extra_archi_ids=['sys-dup'])
+        fn = AppFunction(archi_id='fn-1', name='Calc', parent_archi_id='sys-dup')
+        orphans = attach_functions([sys], [fn])
+        assert orphans == 0
+        assert len(sys.functions) == 1
+
+
+class TestExtractUrlAndAssignTags:
+    """Tests for _extract_url and _assign_tags helpers."""
+
+    def test_extract_url_empty_string(self):
+        from archi2likec4.builders.systems import _extract_url
+        assert _extract_url('') is None
+
+    def test_extract_url_no_url(self):
+        from archi2likec4.builders.systems import _extract_url
+        assert _extract_url('just some text') is None
+
+    def test_extract_url_with_url(self):
+        from archi2likec4.builders.systems import _extract_url
+        assert _extract_url('see https://example.com/api for docs') == 'https://example.com/api'
+
+    def test_extract_url_strips_trailing_punctuation(self):
+        from archi2likec4.builders.systems import _extract_url
+        assert _extract_url('URL: https://example.com/api.') == 'https://example.com/api'
+
+    def test_assign_tags_review(self):
+        from archi2likec4.builders.systems import _assign_tags
+        assert _assign_tags('!РАЗБОР') == ['to_review']
+
+    def test_assign_tags_external(self):
+        from archi2likec4.builders.systems import _assign_tags
+        assert _assign_tags('!External_services') == ['external']
+
+    def test_assign_tags_normal_folder(self):
+        from archi2likec4.builders.systems import _assign_tags
+        assert _assign_tags('some_folder') == []
+
+
+class TestBuildDataAccessMissingEntity:
+    """Tests for data.py edge cases — missing entity, empty relationships."""
+
+    def test_access_with_unknown_entity_skipped(self):
+        """AccessRelationship referencing unknown DataObject is skipped."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='read',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='DataObject', target_id='unknown-do',
+            ),
+        ]
+        result = build_data_access([sys], [], rels)
+        assert result == []
+
+    def test_access_with_no_comp_path_skipped(self):
+        """AccessRelationship with component not in any system is skipped."""
+        entity = DataEntity(c4_id='de_account', name='Account', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='write',
+                source_type='ApplicationComponent', source_id='unknown-comp',
+                target_type='DataObject', target_id='do-1',
+            ),
+        ]
+        result = build_data_access([], [entity], rels)
+        assert result == []
+
+    def test_datastore_link_missing_tech_path(self):
+        """SystemSoftware not in deployment is silently skipped."""
+        entity = DataEntity(c4_id='de_account', name='Account', archi_id='do-1')
+        node = DeploymentNode(c4_id='server', archi_id='node-1', name='Server', tech_type='Node')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='',
+                source_type='SystemSoftware', source_id='unknown-sw',
+                target_type='DataObject', target_id='do-1',
+            ),
+        ]
+        result = build_datastore_entity_links([node], [entity], rels)
+        assert result == []
+
+    def test_datastore_link_missing_entity(self):
+        """DataObject not in entities list is silently skipped."""
+        # sw-1 is the node itself (archi_id matches), so tech_path resolves
+        node = DeploymentNode(c4_id='pg', archi_id='sw-1', name='PostgreSQL', tech_type='SystemSoftware')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='',
+                source_type='SystemSoftware', source_id='sw-1',
+                target_type='DataObject', target_id='unknown-do',
+            ),
+        ]
+        result = build_datastore_entity_links([node], [], rels)
+        assert result == []
+
+    def test_datastore_empty_nodes_returns_empty(self):
+        """Empty deployment nodes returns empty list immediately."""
+        entity = DataEntity(c4_id='de_account', name='Account', archi_id='do-1')
+        result = build_datastore_entity_links([], [entity], [])
+        assert result == []
+
+    def test_datastore_empty_entities_returns_empty(self):
+        """Empty entities list returns empty list immediately."""
+        node = DeploymentNode(c4_id='server', archi_id='node-1', name='Server', tech_type='Node')
+        result = build_datastore_entity_links([node], [], [])
+        assert result == []
+
+
+# ── data.py edge cases (coverage uplift) ─────────────────────────────────
+
+class TestBuildDataAccessEdgeCases:
+    """Tests for build_data_access edge cases — skipping, reverse direction, dedup."""
+
+    def test_non_access_relationship_skipped(self):
+        """Non-AccessRelationship is silently skipped."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        entity = DataEntity(c4_id='de_account', name='Account', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='FlowRelationship', name='flow',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='DataObject', target_id='do-1',
+            ),
+        ]
+        result = build_data_access([sys], [entity], rels)
+        assert result == []
+
+    def test_reverse_direction_data_object_to_component(self):
+        """DataObject→ApplicationComponent direction creates data access."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        entity = DataEntity(c4_id='de_account', name='Account', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='reads',
+                source_type='DataObject', source_id='do-1',
+                target_type='ApplicationComponent', target_id='sys-1',
+            ),
+        ]
+        result = build_data_access([sys], [entity], rels)
+        assert len(result) == 1
+        assert result[0].system_path == 'crm'
+        assert result[0].entity_id == 'de_account'
+
+    def test_unknown_entity_skipped(self):
+        """AccessRelationship with unknown DataObject archi_id is skipped."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        entity = DataEntity(c4_id='de_account', name='Account', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='DataObject', target_id='do-unknown',
+            ),
+        ]
+        result = build_data_access([sys], [entity], rels)
+        assert result == []
+
+    def test_direct_path_resolution(self):
+        """Component directly resolved via comp_c4_path (not promoted)."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        entity = DataEntity(c4_id='de_account', name='Account', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='writes',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='DataObject', target_id='do-1',
+            ),
+        ]
+        result = build_data_access([sys], [entity], rels)
+        assert len(result) == 1
+        assert result[0].system_path == 'crm'
+
+    def test_duplicate_pair_deduplicated(self):
+        """Same (system, entity, name) pair from two rels only produces one DataAccess."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        entity = DataEntity(c4_id='de_account', name='Account', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='DataObject', target_id='do-1',
+            ),
+            RawRelationship(
+                rel_id='r-2', rel_type='AccessRelationship', name='',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='DataObject', target_id='do-1',
+            ),
+        ]
+        result = build_data_access([sys], [entity], rels)
+        assert len(result) == 1
+
+    def test_other_type_pair_skipped(self):
+        """AccessRelationship between non-Component/DataObject types is skipped."""
+        sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
+        entity = DataEntity(c4_id='de_account', name='Account', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='',
+                source_type='Node', source_id='n-1',
+                target_type='DataObject', target_id='do-1',
+            ),
+        ]
+        result = build_data_access([sys], [entity], rels)
+        assert result == []
+
+
+class TestBuildDatastoreEntityLinksEdgeCases:
+    """Tests for build_datastore_entity_links edge cases."""
+
+    def test_non_access_relationship_skipped(self):
+        """Non-AccessRelationship is skipped in datastore link building."""
+        node = DeploymentNode(c4_id='pg', name='PG', archi_id='sw-1',
+                              tech_type='SystemSoftware', kind='infraSoftware')
+        entity = DataEntity(c4_id='de_users', name='Users', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='FlowRelationship', name='',
+                source_type='SystemSoftware', source_id='sw-1',
+                target_type='DataObject', target_id='do-1',
+            ),
+        ]
+        result = build_datastore_entity_links([node], [entity], rels)
+        assert result == []
+
+    def test_non_sw_do_types_skipped(self):
+        """AccessRelationship between non-SystemSoftware/DataObject types is skipped."""
+        node = DeploymentNode(c4_id='pg', name='PG', archi_id='sw-1',
+                              tech_type='SystemSoftware', kind='infraSoftware')
+        entity = DataEntity(c4_id='de_users', name='Users', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='',
+                source_type='ApplicationComponent', source_id='sys-1',
+                target_type='DataObject', target_id='do-1',
+            ),
+        ]
+        result = build_datastore_entity_links([node], [entity], rels)
+        assert result == []
+
+    def test_unresolvable_sw_or_entity_skipped(self):
+        """When SystemSoftware not in deployment tree or entity unknown, pair is skipped."""
+        node = DeploymentNode(c4_id='pg', name='PG', archi_id='sw-1',
+                              tech_type='SystemSoftware', kind='infraSoftware')
+        entity = DataEntity(c4_id='de_users', name='Users', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='',
+                source_type='SystemSoftware', source_id='sw-unknown',
+                target_type='DataObject', target_id='do-1',
+            ),
+            RawRelationship(
+                rel_id='r-2', rel_type='AccessRelationship', name='',
+                source_type='SystemSoftware', source_id='sw-1',
+                target_type='DataObject', target_id='do-unknown',
+            ),
+        ]
+        result = build_datastore_entity_links([node], [entity], rels)
+        assert result == []
+
+    def test_duplicate_pairs_deduplicated(self):
+        """Same (tech_path, entity_c4_id) pair from multiple rels produces one result."""
+        node = DeploymentNode(c4_id='pg', name='PG', archi_id='sw-1',
+                              tech_type='SystemSoftware', kind='infraSoftware')
+        entity = DataEntity(c4_id='de_users', name='Users', archi_id='do-1')
+        rels = [
+            RawRelationship(
+                rel_id='r-1', rel_type='AccessRelationship', name='',
+                source_type='SystemSoftware', source_id='sw-1',
+                target_type='DataObject', target_id='do-1',
+            ),
+            RawRelationship(
+                rel_id='r-2', rel_type='AccessRelationship', name='',
+                source_type='SystemSoftware', source_id='sw-1',
+                target_type='DataObject', target_id='do-1',
+            ),
+        ]
+        result = build_datastore_entity_links([node], [entity], rels)
+        assert len(result) == 1

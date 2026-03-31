@@ -37,13 +37,13 @@
 
 ### Task 4: Improve builders coverage to 90%+
 `builders/systems.py` — 87% (32 uncovered), `builders/data.py` — 88% (10 uncovered). Непокрытые строки — edge cases в system hierarchy building и data entity detection.
-- [ ] Read uncovered lines in `archi2likec4/builders/systems.py` (lines 40, 70-72, 95-96, 140-141, 317-318, 328, 377, 387-400, 441-470)
-- [ ] Read uncovered lines in `archi2likec4/builders/data.py` (lines 61-69, 76, 90, 135, 140)
-- [ ] Add tests for systems.py edge cases: subsystem extraction with missing parents, function attachment with unknown systems
-- [ ] Add tests for data.py edge cases: dataStore detection fallbacks, missing entity links
-- [ ] Verify both modules ≥ 90% coverage
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Read uncovered lines in `archi2likec4/builders/systems.py` (lines 40, 70-72, 95-96, 140-141, 317-318, 328, 377, 387-400, 441-470)
+- [x] Read uncovered lines in `archi2likec4/builders/data.py` (lines 61-69, 76, 90, 135, 140)
+- [x] Add tests for systems.py edge cases: subsystem extraction with missing parents, function attachment with unknown systems
+- [x] Add tests for data.py edge cases: dataStore detection fallbacks, missing entity links
+- [x] Verify both modules ≥ 90% coverage
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ### Task 5: Verify overall coverage and cleanup
 Финальная проверка: общее покрытие ≥ 92%, все validation commands проходят, нет stale noqa/type:ignore.
