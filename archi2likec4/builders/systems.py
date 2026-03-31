@@ -3,6 +3,7 @@
 import logging
 import re
 from collections.abc import Callable
+from dataclasses import dataclass, field
 
 from ..models import (
     PROMOTE_WARN_THRESHOLD,
@@ -14,6 +15,17 @@ from ..models import (
     System,
 )
 from ..utils import build_metadata, make_id, make_unique_id
+
+
+@dataclass
+class SystemBuildConfig:
+    """Configuration for system building — groups optional params to reduce function signatures."""
+
+    promote_children: dict[str, str] = field(default_factory=dict)
+    promote_warn_threshold: int = PROMOTE_WARN_THRESHOLD
+    reviewed_systems: list[str] = field(default_factory=list)
+    prop_map: dict[str, str] | None = None
+    standard_keys: list[str] | None = None
 
 logger = logging.getLogger(__name__)
 
@@ -42,14 +54,15 @@ def _attach_subsystems(
     subsystem_acs: list[AppComponent],
     parent_name_fn: Callable[[AppComponent], str],
     sub_name_fn: Callable[[AppComponent], str],
-    prop_map: dict[str, str] | None = None,
-    standard_keys: list[str] | None = None,
+    build_cfg: SystemBuildConfig | None = None,
 ) -> None:
     """Attach a list of subsystem AppComponents to their parent Systems.
 
     *parent_name_fn(ac)* extracts the parent system name.
     *sub_name_fn(ac)* extracts the subsystem display name.
     """
+    prop_map = build_cfg.prop_map if build_cfg else None
+    standard_keys = build_cfg.standard_keys if build_cfg else None
     for ac in subsystem_acs:
         parent_name = parent_name_fn(ac)
         sub_name = sub_name_fn(ac)
@@ -195,21 +208,17 @@ def _resolve_dot_names(
 
 def build_systems(
     components: list[AppComponent],
-    promote_children: dict[str, str] | None = None,
-    promote_warn_threshold: int | None = None,
-    reviewed_systems: list[str] | None = None,
-    prop_map: dict[str, str] | None = None,
-    standard_keys: list[str] | None = None,
+    build_cfg: SystemBuildConfig | None = None,
 ) -> tuple[list[System], dict[str, list[str]]]:
     """Build System objects from parsed AppComponents.
 
     Returns (systems, promoted_parents) where promoted_parents maps
     parent archi_id → list of child c4_ids for fan-out.
     """
-    if promote_children is None:
-        promote_children = {}
-    if promote_warn_threshold is None:
-        promote_warn_threshold = PROMOTE_WARN_THRESHOLD
+    if build_cfg is None:
+        build_cfg = SystemBuildConfig()
+    promote_children = build_cfg.promote_children
+    promote_warn_threshold = build_cfg.promote_warn_threshold
 
     system_acs, extra_ids, dot_acs = _collect_systems(components)
     promoted_subsystem_acs, regular_dot_acs, parent_remap = _promote_subsystems(
@@ -227,7 +236,7 @@ def build_systems(
 
         tags = _assign_tags(ac.source_folder)
 
-        if reviewed_systems and name in reviewed_systems and 'to_review' in tags:
+        if build_cfg.reviewed_systems and name in build_cfg.reviewed_systems and 'to_review' in tags:
             tags.remove('to_review')
 
         sys_extra_ids = list(extra_ids.get(name, []))
@@ -235,7 +244,7 @@ def build_systems(
         systems[name] = System(
             c4_id=c4_id, name=name, archi_id=ac.archi_id,
             documentation=ac.documentation,
-            metadata=build_metadata(ac, prop_map=prop_map, standard_keys=standard_keys),
+            metadata=build_metadata(ac, prop_map=build_cfg.prop_map, standard_keys=build_cfg.standard_keys),
             tags=tags,
             extra_archi_ids=sys_extra_ids,
         )
@@ -245,7 +254,7 @@ def build_systems(
         systems, subsystem_acs,
         parent_name_fn=lambda ac: ac.name.split('.', 1)[0],
         sub_name_fn=lambda ac: ac.name.split('.', 1)[1] if '.' in ac.name else ac.name,
-        prop_map=prop_map, standard_keys=standard_keys,
+        build_cfg=build_cfg,
     )
 
     # ── Attach promoted subsystems (3-segment names) ─────────────────────
@@ -266,7 +275,7 @@ def build_systems(
         systems, promoted_subsystem_acs,
         parent_name_fn=lambda ac: '.'.join(ac.name.split('.', 2)[:2]),
         sub_name_fn=lambda ac: ac.name.split('.', 2)[2],
-        prop_map=prop_map, standard_keys=standard_keys,
+        build_cfg=build_cfg,
     )
 
     # ── Build promoted_parents map: parent_archi_id → [child c4_ids] ──

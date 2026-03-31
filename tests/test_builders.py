@@ -3,6 +3,8 @@
 import xml.etree.ElementTree as ET
 
 from archi2likec4.builders import (
+    DeploymentMappingContext,
+    SystemBuildConfig,
     apply_domain_prefix,
     assign_domains,
     assign_subdomains,
@@ -59,7 +61,7 @@ from archi2likec4.parsers import _extract_visual_nesting
 class TestBuildSystems:
     def test_simple_system(self):
         comps = [AppComponent(archi_id='id-1', name='CRM')]
-        systems, _ = build_systems(comps, promote_children={})
+        systems, _ = build_systems(comps)
         assert len(systems) == 1
         assert systems[0].c4_id == 'crm'
         assert systems[0].name == 'CRM'
@@ -70,7 +72,7 @@ class TestBuildSystems:
             AppComponent(archi_id='id-1', name='CRM'),
             AppComponent(archi_id='id-2', name='CRM.Core'),
         ]
-        systems, _ = build_systems(comps, promote_children={})
+        systems, _ = build_systems(comps)
         assert len(systems) == 1
         assert len(systems[0].subsystems) == 1
         assert systems[0].subsystems[0].name == 'CRM.Core'
@@ -78,7 +80,7 @@ class TestBuildSystems:
     def test_dot_without_parent_becomes_system(self):
         """If parent part doesn't match a known system, treat as standalone system."""
         comps = [AppComponent(archi_id='id-1', name='Unknown.Module')]
-        systems, _ = build_systems(comps, promote_children={})
+        systems, _ = build_systems(comps)
         assert len(systems) == 1
         assert systems[0].name == 'Unknown.Module'
 
@@ -88,14 +90,14 @@ class TestBuildSystems:
             AppComponent(archi_id='id-1', name='CRM', properties={}),
             AppComponent(archi_id='id-2', name='CRM', properties={'CI': '123', 'Full name': 'CRM Full'}),
         ]
-        systems, _ = build_systems(comps, promote_children={})
+        systems, _ = build_systems(comps)
         assert len(systems) == 1
         assert systems[0].archi_id == 'id-2'  # richer one wins
         assert 'id-1' in systems[0].extra_archi_ids
 
     def test_trailing_dot_stripped(self):
         comps = [AppComponent(archi_id='id-1', name='CRM.')]
-        systems, _ = build_systems(comps, promote_children={})
+        systems, _ = build_systems(comps)
         assert len(systems) == 1
         assert systems[0].name == 'CRM'
 
@@ -104,7 +106,7 @@ class TestBuildSystems:
             AppComponent(archi_id='id-1', name='ExtSvc', source_folder='!External_services'),
             AppComponent(archi_id='id-2', name='Review', source_folder='!РАЗБОР'),
         ]
-        systems, _ = build_systems(comps, promote_children={})
+        systems, _ = build_systems(comps)
         sys_by_name = {s.name: s for s in systems}
         assert 'external' in sys_by_name['ExtSvc'].tags
         assert 'to_review' in sys_by_name['Review'].tags
@@ -114,7 +116,7 @@ class TestBuildSystems:
             AppComponent(archi_id='id-1', name='Zebra'),
             AppComponent(archi_id='id-2', name='Alpha'),
         ]
-        systems, _ = build_systems(comps, promote_children={})
+        systems, _ = build_systems(comps)
         assert systems[0].name == 'Alpha'
         assert systems[1].name == 'Zebra'
 
@@ -124,7 +126,7 @@ class TestBuildSystems:
             AppComponent(archi_id='id-2', name='CRM.Core'),
             AppComponent(archi_id='id-3', name='CRM.API'),
         ]
-        systems, _ = build_systems(comps, promote_children={})
+        systems, _ = build_systems(comps)
         assert len(systems) == 1
         assert len(systems[0].subsystems) == 2
 
@@ -545,7 +547,7 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-p', name='Platform'),
             AppComponent(archi_id='id-1', name='Platform.ServiceA'),
         ]
-        systems, _ = build_systems(comps, promote_children={'Platform': 'infra'})
+        systems, _ = build_systems(comps, SystemBuildConfig(promote_children={'Platform': 'infra'}))
         names = [s.name for s in systems]
         assert 'Platform.ServiceA' in names
         assert 'Platform' not in names
@@ -557,7 +559,7 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-1', name='Platform.A'),
             AppComponent(archi_id='id-2', name='Platform.B'),
         ]
-        systems, _ = build_systems(comps, promote_children={'Platform': 'infra'})
+        systems, _ = build_systems(comps, SystemBuildConfig(promote_children={'Platform': 'infra'}))
         assert all(s.name != 'Platform' for s in systems)
         assert len(systems) == 2
 
@@ -568,7 +570,7 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-1', name='Platform.ServiceA'),
             AppComponent(archi_id='id-2', name='Platform.ServiceB'),
         ]
-        systems, promoted_parents = build_systems(comps, promote_children={'Platform': 'infra'})
+        systems, promoted_parents = build_systems(comps, SystemBuildConfig(promote_children={'Platform': 'infra'}))
         sys_by_name = {s.name: s for s in systems}
         # Neither child should have parent archi_id in extra_archi_ids
         assert 'id-parent' not in sys_by_name['Platform.ServiceA'].extra_archi_ids
@@ -584,7 +586,7 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-1', name='Platform.Core'),
             AppComponent(archi_id='id-2', name='Platform.Core.Module'),
         ]
-        systems, _ = build_systems(comps, promote_children={'Platform': 'infra'})
+        systems, _ = build_systems(comps, SystemBuildConfig(promote_children={'Platform': 'infra'}))
         assert len(systems) == 1
         assert systems[0].name == 'Platform.Core'
         assert len(systems[0].subsystems) == 1
@@ -597,7 +599,7 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-parent', name='Platform'),
             AppComponent(archi_id='id-2', name='Platform.Core.Module'),
         ]
-        systems, promoted_parents = build_systems(comps, promote_children={'Platform': 'infra'})
+        systems, promoted_parents = build_systems(comps, SystemBuildConfig(promote_children={'Platform': 'infra'}))
         # Auto-created 2-seg system should exist
         assert len(systems) == 1
         assert systems[0].name == 'Platform.Core'
@@ -611,7 +613,7 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-1', name='ABC'),
             AppComponent(archi_id='id-2', name='ABC.Sub'),
         ]
-        systems, _ = build_systems(comps, promote_children={'Platform': 'infra'})
+        systems, _ = build_systems(comps, SystemBuildConfig(promote_children={'Platform': 'infra'}))
         assert len(systems) == 1
         assert systems[0].name == 'ABC'
         assert len(systems[0].subsystems) == 1
@@ -622,7 +624,7 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-p', name='Platform'),
             AppComponent(archi_id='id-1', name='Platform.Card_Service'),
         ]
-        systems, _ = build_systems(comps, promote_children={'Platform': 'infra'})
+        systems, _ = build_systems(comps, SystemBuildConfig(promote_children={'Platform': 'infra'}))
         assert systems[0].c4_id == 'platform_card_service'
 
     def test_promoted_preserves_metadata(self):
@@ -632,7 +634,7 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-1', name='Platform.Svc',
                          properties={'CI': 'CI-42'}, source_folder='!External_services'),
         ]
-        systems, _ = build_systems(comps, promote_children={'Platform': 'infra'})
+        systems, _ = build_systems(comps, SystemBuildConfig(promote_children={'Platform': 'infra'}))
         s = systems[0]
         assert s.metadata['ci'] == 'CI-42'
         assert 'external' in s.tags
@@ -645,7 +647,7 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-2', name='Platform.B'),
             AppComponent(archi_id='id-3', name='Platform.C'),
         ]
-        systems, _ = build_systems(comps, promote_children={'Platform': 'infra'})
+        systems, _ = build_systems(comps, SystemBuildConfig(promote_children={'Platform': 'infra'}))
         names = sorted(s.name for s in systems)
         assert names == ['Platform.A', 'Platform.B', 'Platform.C']
 
@@ -657,7 +659,7 @@ class TestPromoteChildren:
             for i in range(12)
         ]
         with caplog.at_level('WARNING', logger='archi2likec4'):
-            systems, _ = build_systems(comps, promote_children={})
+            systems, _ = build_systems(comps)
         assert any('BigSys' in msg and 'PROMOTE_CHILDREN' in msg
                     for msg in caplog.messages)
 
@@ -670,7 +672,7 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-3', name='SmallSys.C'),
         ]
         with caplog.at_level('WARNING', logger='archi2likec4'):
-            systems, _ = build_systems(comps, promote_children={})
+            systems, _ = build_systems(comps)
         assert not any('SmallSys' in msg for msg in caplog.messages)
 
     def test_parent_kept_when_no_children(self):
@@ -679,7 +681,7 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-p', name='Platform'),
             AppComponent(archi_id='id-1', name='Other'),
         ]
-        systems, _ = build_systems(comps, promote_children={'Platform': 'infra'})
+        systems, _ = build_systems(comps, SystemBuildConfig(promote_children={'Platform': 'infra'}))
         names = [s.name for s in systems]
         assert 'Platform' in names  # not removed since no children found
 
@@ -690,7 +692,7 @@ class TestPromoteChildren:
             AppComponent(archi_id='id-1', name='Platform.Alpha'),
             AppComponent(archi_id='id-2', name='Platform.Beta'),
         ]
-        systems, promoted_parents = build_systems(comps, promote_children={'Platform': 'infra'})
+        systems, promoted_parents = build_systems(comps, SystemBuildConfig(promote_children={'Platform': 'infra'}))
         fn = AppFunction(archi_id='fn-1', name='ParentFunc', parent_archi_id='id-parent')
         orphans = attach_functions(systems, [fn], promoted_parents=promoted_parents)
         # Function becomes orphan — parent no longer exists as a single system
@@ -1049,14 +1051,14 @@ class TestDeploymentMap:
                 target_type='ApplicationComponent', target_id='ac-1',
             ),
         ]
-        result = build_deployment_map(systems, nodes, rels, {'efs': 'channels'})
+        result = build_deployment_map(systems, nodes, rels, DeploymentMappingContext(sys_domain={'efs': 'channels'}))
         assert len(result) == 1
         assert result[0] == ('channels.efs', 'server_1')
 
     def test_no_tech_elements(self):
         """Empty deployment_nodes → empty mapping."""
         systems = [System(c4_id='efs', name='EFS', archi_id='ac-1')]
-        result = build_deployment_map(systems, [], [], {'efs': 'channels'})
+        result = build_deployment_map(systems, [], [], DeploymentMappingContext(sys_domain={'efs': 'channels'}))
         assert result == []
 
     def test_dedup_pairs(self):
@@ -1077,7 +1079,7 @@ class TestDeploymentMap:
                 target_type='Node', target_id='n-1',
             ),
         ]
-        result = build_deployment_map(systems, nodes, rels, {'efs': 'channels'})
+        result = build_deployment_map(systems, nodes, rels, DeploymentMappingContext(sys_domain={'efs': 'channels'}))
         assert len(result) == 1
 
     def test_nested_node_qualified_path(self):
@@ -1094,7 +1096,7 @@ class TestDeploymentMap:
                 target_type='SystemSoftware', target_id='sw-1',
             ),
         ]
-        result = build_deployment_map(systems, [parent], rels, {'efs': 'channels'})
+        result = build_deployment_map(systems, [parent], rels, DeploymentMappingContext(sys_domain={'efs': 'channels'}))
         assert len(result) == 1
         assert result[0] == ('channels.efs', 'srv.pg')
 
@@ -1115,8 +1117,7 @@ class TestDeploymentMap:
         ]
         result = build_deployment_map(
             systems, nodes, rels,
-            sys_domain={'efs': 'channels'},
-            sys_subdomain={'efs': 'retail'},
+            DeploymentMappingContext(sys_domain={'efs': 'channels'}, sys_subdomain={'efs': 'retail'}),
         )
         assert len(result) == 1
         assert result[0] == ('channels.retail.efs', 'srv')
@@ -1138,8 +1139,7 @@ class TestDeploymentMap:
         ]
         result = build_deployment_map(
             systems, nodes, rels,
-            sys_domain={'efs': 'channels'},
-            sys_subdomain={},
+            DeploymentMappingContext(sys_domain={'efs': 'channels'}, sys_subdomain={}),
         )
         assert len(result) == 1
         assert result[0] == ('channels.efs', 'srv')
@@ -1162,8 +1162,7 @@ class TestDeploymentMap:
         ]
         result = build_deployment_map(
             systems, nodes, rels,
-            sys_domain={'efs': 'channels'},
-            sys_subdomain={'efs': 'retail'},
+            DeploymentMappingContext(sys_domain={'efs': 'channels'}, sys_subdomain={'efs': 'retail'}),
         )
         assert len(result) == 1
         assert result[0] == ('channels.retail.efs.core', 'srv')
@@ -1219,17 +1218,17 @@ class TestReviewedSystemsInBuild:
 
     def test_reviewed_strips_to_review(self):
         comps = [AppComponent(archi_id='id-1', name='Legacy', source_folder='!РАЗБОР')]
-        systems, _ = build_systems(comps, promote_children={}, reviewed_systems=['Legacy'])
+        systems, _ = build_systems(comps, SystemBuildConfig(reviewed_systems=['Legacy']))
         assert 'to_review' not in systems[0].tags
 
     def test_non_reviewed_keeps_tag(self):
         comps = [AppComponent(archi_id='id-1', name='Legacy', source_folder='!РАЗБОР')]
-        systems, _ = build_systems(comps, promote_children={}, reviewed_systems=[])
+        systems, _ = build_systems(comps, SystemBuildConfig(reviewed_systems=[]))
         assert 'to_review' in systems[0].tags
 
     def test_reviewed_noop_if_no_tag(self):
         comps = [AppComponent(archi_id='id-1', name='Normal', source_folder='')]
-        systems, _ = build_systems(comps, promote_children={}, reviewed_systems=['Normal'])
+        systems, _ = build_systems(comps, SystemBuildConfig(reviewed_systems=['Normal']))
         assert systems[0].tags == []
 
 
@@ -2292,7 +2291,7 @@ class TestBuildIntegrationsEdgeCases:
             AppComponent(archi_id='s-1', name='SysA'),
             AppComponent(archi_id='s-2', name='SysB'),
         ]
-        systems, _ = build_systems(comps, promote_children={})
+        systems, _ = build_systems(comps)
         rel = RawRelationship(
             rel_id='r-1', rel_type='AccessRelationship', name='',
             source_type='ApplicationComponent', source_id='s-1',
@@ -2307,7 +2306,7 @@ class TestBuildIntegrationsEdgeCases:
             AppComponent(archi_id='s-1', name='SysA'),
             AppComponent(archi_id='s-2', name='SysB'),
         ]
-        systems, _ = build_systems(comps, promote_children={})
+        systems, _ = build_systems(comps)
         for rel_type in ('CompositionRelationship', 'AggregationRelationship',
                          'RealizationRelationship', 'AssignmentRelationship'):
             rel = RawRelationship(
@@ -2321,7 +2320,7 @@ class TestBuildIntegrationsEdgeCases:
 
     def test_application_function_relationship_skipped(self):
         comps = [AppComponent(archi_id='s-1', name='SysA')]
-        systems, _ = build_systems(comps, promote_children={})
+        systems, _ = build_systems(comps)
         rel = RawRelationship(
             rel_id='r-1', rel_type='FlowRelationship', name='',
             source_type='ApplicationFunction', source_id='fn-1',

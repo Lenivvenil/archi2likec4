@@ -5,7 +5,7 @@ import copy
 import logging
 import shutil
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
@@ -13,6 +13,8 @@ from .audit_data import compute_audit_incidents
 from .builders import (
     BuildDiagnostics,
     BuildResult,
+    DeploymentMappingContext,
+    SystemBuildConfig,
     apply_domain_prefix,
     assign_domains,
     assign_subdomains,
@@ -171,14 +173,14 @@ def _parse(model_root: Path, config: ConvertConfig) -> ParseResult:
 def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     """Phase 2: transform parsed elements into the output model."""
     logger.info('Building system hierarchy...')
-    systems, promoted_parents = build_systems(
-        parsed.components,
+    sys_build_cfg = SystemBuildConfig(
         promote_children=config.promote_children,
         promote_warn_threshold=config.promote_warn_threshold,
         reviewed_systems=config.reviewed_systems,
         prop_map=config.property_map,
         standard_keys=config.standard_keys,
     )
+    systems, promoted_parents = build_systems(parsed.components, sys_build_cfg)
     total_subsystems = sum(len(s.subsystems) for s in systems)
     logger.info('%d systems, %d subsystems', len(systems), total_subsystems)
 
@@ -308,9 +310,13 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     logger.info('%d elements in tech archi→c4 map', len(tech_archi_to_c4))
 
     logger.info('Building deployment mapping...')
+    deploy_ctx = DeploymentMappingContext(
+        sys_domain=sys_domain,
+        sys_subdomain=sys_subdomain,
+        promoted_archi_to_c4=promoted_archi_to_c4,
+    )
     deployment_map = build_deployment_map(
-        systems, deployment_nodes, parsed.relationships, sys_domain, sys_subdomain,
-        promoted_archi_to_c4=promoted_archi_to_c4)
+        systems, deployment_nodes, parsed.relationships, deploy_ctx)
     logger.info('%d app→infrastructure deployment mappings', len(deployment_map))
 
     # Validate deployment mapping: check all infra paths resolve
@@ -412,20 +418,27 @@ def _validate(built: BuildResult, config: ConvertConfig, sv_unresolved: int, sv_
     return warnings, errors
 
 
+@dataclass
+class SolutionViewInfo:
+    """Groups pre-generated solution view data for _generate."""
+
+    files: dict[str, str] = field(default_factory=dict)
+    unresolved: int = 0
+    total: int = 0
+
+
 def _generate(
     built: BuildResult,
     output_dir: Path,
     config: ConvertConfig,
     domains_info: list[DomainInfo],
-    solution_view_files: dict[str, str] | None = None,
-    sv_unresolved: int = 0,
-    sv_total: int = 0,
+    sv_info: SolutionViewInfo | None = None,
 ) -> int:
     """Phase 4: generate .c4 files."""
     logger.info('Generating files...')
 
-    if solution_view_files is None:
-        solution_view_files = {}
+    if sv_info is None:
+        sv_info = SolutionViewInfo()
 
     # Resolve once so all subsequent operations use the same absolute path
     output_dir = output_dir.resolve()
@@ -530,11 +543,11 @@ def _generate(
         view_count += 1
 
     # Solution views (pre-generated in convert())
-    for sol_slug, content in solution_view_files.items():
+    for sol_slug, content in sv_info.files.items():
         (views_solutions_dir / f'{sol_slug}.c4').write_text(content, encoding='utf-8')
         file_count += 1
         view_count += 1
-    logger.info('%d solution view files generated', len(solution_view_files))
+    logger.info('%d solution view files generated', len(sv_info.files))
 
     # Top-level views
     (views_dir / 'landscape.c4').write_text(generate_landscape_view(), encoding='utf-8')
@@ -577,7 +590,7 @@ def _generate(
     file_count += 1
 
     # Quality audit
-    audit = generate_audit_md(built, sv_unresolved, sv_total, config)
+    audit = generate_audit_md(built, sv_info.unresolved, sv_info.total, config)
     (output_dir / 'AUDIT.md').write_text(audit, encoding='utf-8')
     file_count += 1
 
@@ -824,9 +837,9 @@ def convert(
     files_written = 0
     sync_ok = True
     if not config.dry_run:
+        sv_info = SolutionViewInfo(files=sv_files, unresolved=sv_unresolved, total=sv_total)
         files_written = _generate(
-            built, output_dir_path, config, parsed.domains_info,
-            sv_files, sv_unresolved, sv_total,
+            built, output_dir_path, config, parsed.domains_info, sv_info,
         )
         if config.sync_target is not None:
             sync_ok = _sync_output(config)

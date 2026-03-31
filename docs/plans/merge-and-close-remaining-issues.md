@@ -39,13 +39,13 @@
 
 ### Task 3: Introduce BuildContext to reduce PLR0913 in builders and pipeline
 Создать контекстный объект для builder-функций и _generate(), чтобы устранить оставшиеся PLR0913 нарушения.
-- [ ] In `archi2likec4/builders/systems.py`: create `SystemBuildContext` or use existing types to reduce params in `build_systems()` and `_attach_subsystems()`
-- [ ] In `archi2likec4/builders/deployment.py`: reduce params in `build_deployment_map()` (currently 6)
-- [ ] In `archi2likec4/pipeline.py`: reduce params in `_generate()` using ViewContext from Task 2
-- [ ] In `archi2likec4/generators/views.py`: reduce params in `_resolve_elements()` (currently 6)
-- [ ] Add/update tests for the above changes
-- [ ] Run `ruff check archi2likec4/ --select PLR0913` — confirm zero violations
-- [ ] Mark completed
+- [x] In `archi2likec4/builders/systems.py`: create `SystemBuildConfig` dataclass to reduce params in `build_systems()` and `_attach_subsystems()`
+- [x] In `archi2likec4/builders/deployment.py`: create `DeploymentMappingContext` to reduce params in `build_deployment_map()` (currently 6)
+- [x] In `archi2likec4/pipeline.py`: create `SolutionViewInfo` to reduce params in `_generate()`
+- [x] In `archi2likec4/generators/views.py`: `_resolve_elements()` already uses ViewContext (3 params, fixed in Task 2)
+- [x] Add/update tests for the above changes
+- [x] Run `ruff check archi2likec4/ --select PLR0913` — confirm zero violations
+- [x] Mark completed
 
 ### Task 4: Fix stale type: ignore and bare except
 Устранить устаревшие type: ignore комментарии и bare except в config.py и audit_data.py (issue #33).

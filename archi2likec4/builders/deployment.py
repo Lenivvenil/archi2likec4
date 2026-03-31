@@ -1,6 +1,7 @@
 """Builders: deployment topology and archi→c4 mapping."""
 
 import logging
+from dataclasses import dataclass, field
 
 from ..models import (
     DeploymentNode,
@@ -10,6 +11,15 @@ from ..models import (
 )
 from ..utils import flatten_deployment_nodes, make_id, make_unique_id
 from ._paths import build_deployment_path_index
+
+
+@dataclass
+class DeploymentMappingContext:
+    """Groups domain/subdomain mapping params for build_deployment_map."""
+
+    sys_domain: dict[str, str] = field(default_factory=dict)
+    sys_subdomain: dict[str, str] | None = None
+    promoted_archi_to_c4: dict[str, list[str]] | None = None
 
 logger = logging.getLogger(__name__)
 
@@ -197,9 +207,7 @@ def build_deployment_map(
     systems: list[System],
     deployment_nodes: list[DeploymentNode],
     relationships: list[RawRelationship],
-    sys_domain: dict[str, str],
-    sys_subdomain: dict[str, str] | None = None,
-    promoted_archi_to_c4: dict[str, list[str]] | None = None,
+    mapping_ctx: DeploymentMappingContext | None = None,
 ) -> list[tuple[str, str]]:
     """Build (app_c4_path, node_c4_path) pairs from cross-layer RealizationRelationship.
 
@@ -209,7 +217,10 @@ def build_deployment_map(
     if not deployment_nodes or not systems:
         return []
 
-    app_path = _build_app_path_index(systems, sys_domain, sys_subdomain)
+    if mapping_ctx is None:
+        mapping_ctx = DeploymentMappingContext()
+
+    app_path = _build_app_path_index(systems, mapping_ctx.sys_domain, mapping_ctx.sys_subdomain)
 
     # Build tech index: archi_id → qualified c4 path (parent.child for nested)
     tech_path = build_deployment_path_index(deployment_nodes)
@@ -241,8 +252,8 @@ def build_deployment_map(
         a = app_path.get(app_id)
         if a:
             app_paths_resolved.append(a)
-        elif promoted_archi_to_c4 and app_id in promoted_archi_to_c4:
-            app_paths_resolved.extend(promoted_archi_to_c4[app_id])
+        elif mapping_ctx.promoted_archi_to_c4 and app_id in mapping_ctx.promoted_archi_to_c4:
+            app_paths_resolved.extend(mapping_ctx.promoted_archi_to_c4[app_id])
 
         t = tech_path.get(tech_id)
         if not app_paths_resolved or not t:
