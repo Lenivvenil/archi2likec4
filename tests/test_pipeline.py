@@ -1,7 +1,6 @@
 """Unit tests for pipeline.py — covers _generate safety, _sync_output, _validate_config_runtime,
 convert() public API, and main() CLI entry point."""
 
-import contextlib
 import sys
 from pathlib import Path
 from unittest.mock import patch
@@ -497,20 +496,16 @@ class TestConvert:
     def test_convert_validation_error_on_high_unresolved(self, tmp_path):
         model = _create_model(tmp_path)
         config = ConvertConfig(max_unresolved_ratio=0.0)
-        # With ratio=0.0, any unresolved elements will trigger an error
-        # This may or may not fail depending on the model data
-        # Just ensure it doesn't crash unexpectedly
-        with contextlib.suppress(ValidationError):
-            convert(model, tmp_path / 'output', config=config)
+        # Minimal model has no solution views, so ratio check is skipped — succeeds
+        result = convert(model, tmp_path / 'output', config=config)
+        assert result.files_written > 0
 
     def test_convert_strict_mode(self, tmp_path):
         model = _create_model(tmp_path)
         config = ConvertConfig(strict=True)
-        try:
-            result = convert(model, tmp_path / 'output', config=config)
-            assert result.files_written >= 0
-        except ValidationError:
-            pass  # strict mode may raise on warnings
+        # Minimal model triggers QA warnings → strict mode raises
+        with pytest.raises(ValidationError, match='strict mode'):
+            convert(model, tmp_path / 'output', config=config)
 
     def test_convert_with_sync_target(self, tmp_path):
         model = _create_model(tmp_path)
@@ -565,8 +560,8 @@ class TestMain:
         monkeypatch.setattr(sys, 'argv', [
             'archi2likec4', str(model), str(tmp_path / 'output'), '--strict',
         ])
-        # strict mode may exit 1 on warnings or succeed
-        with contextlib.suppress(SystemExit):
+        # Minimal model triggers QA warnings → strict mode exits with code 1
+        with pytest.raises(SystemExit, match='1'):
             main()
 
     def test_main_config_file(self, tmp_path, monkeypatch):
