@@ -11,9 +11,9 @@
 
 ### Task 1: Close issue 35 and verify PLR0913 is resolved
 Закрыть issue #35 на GitHub. Проверить, что `ruff check --select PLR0913` не находит нарушений. Единственный `noqa: PLR0913` в `views.py:577` на factory-функции `build_view_context` — это осознанное решение (factory создаёт dataclass из raw-данных).
-- [ ] Run `ruff check archi2likec4/ --select PLR0913` and confirm zero violations
-- [ ] Close GitHub issue #35 with comment explaining resolution
-- [ ] Mark completed
+- [x] Run `ruff check archi2likec4/ --select PLR0913` and confirm zero violations
+- [x] Close GitHub issue #35 with comment explaining resolution
+- [x] Mark completed
 
 ### Task 2: Improve parsers.py test coverage to 90%+
 `parsers.py` — 82% (557 statements, 102 uncovered). Непокрытые строки включают edge cases парсинга XML: пустые/отсутствующие атрибуты, nested elements, специфические ArchiMate типы.
