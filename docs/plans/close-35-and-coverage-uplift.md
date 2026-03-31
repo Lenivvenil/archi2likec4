@@ -27,13 +27,13 @@
 
 ### Task 3: Improve pipeline.py test coverage to 90%+
 `pipeline.py` — 84% (490 statements, 78 uncovered). Непокрытые строки — CLI entry point (`main()`), error handling paths, file I/O в `_generate()`.
-- [ ] Read uncovered lines in `archi2likec4/pipeline.py` (lines 137, 201, 238-281, 291-296, 325-326, 387-416, 449-490, 510-578, 624-630, 646-658, 688-749, 919-962)
-- [ ] Add tests for `_generate()` error paths and edge cases in `tests/test_pipeline.py`
-- [ ] Add tests for `main()` CLI entry point using mock args and monkeypatch
-- [ ] Add tests for config validation and error handling paths
-- [ ] Verify `pipeline.py` coverage ≥ 90% with `python -m pytest tests/test_pipeline*.py --cov=archi2likec4.pipeline --cov-report=term`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Read uncovered lines in `archi2likec4/pipeline.py` (lines 137, 201, 238-281, 291-296, 325-326, 387-416, 449-490, 510-578, 624-630, 646-658, 688-749, 919-962)
+- [x] Add tests for `_generate()` error paths and edge cases in `tests/test_pipeline.py`
+- [x] Add tests for `main()` CLI entry point using mock args and monkeypatch
+- [x] Add tests for config validation and error handling paths
+- [x] Verify `pipeline.py` coverage ≥ 90% with `python -m pytest tests/test_pipeline*.py --cov=archi2likec4.pipeline --cov-report=term`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ### Task 4: Improve builders coverage to 90%+
 `builders/systems.py` — 87% (32 uncovered), `builders/data.py` — 88% (10 uncovered). Непокрытые строки — edge cases в system hierarchy building и data entity detection.
