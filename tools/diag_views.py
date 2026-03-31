@@ -368,21 +368,26 @@ if output_solutions.exists():
 else:
     print('  (output directory not found — showing what WOULD be generated)')
     from archi2likec4.generators import generate_solution_views
+    from archi2likec4.generators.views import build_view_context
     _sys_subdomain = {
         s.c4_id: s.subdomain
         for d_sys_list in built.domain_systems.values()
         for s in d_sys_list
         if s.subdomain
     }
-    sv_files, _, _ = generate_solution_views(
-        parsed.solution_views, built.archi_to_c4, built.sys_domain,
-        parsed.relationships,
+    _view_ctx = build_view_context(
+        archi_to_c4=built.archi_to_c4,
+        sys_domain=built.sys_domain,
+        relationships=parsed.relationships,
         promoted_archi_to_c4=built.promoted_archi_to_c4,
         tech_archi_to_c4=built.tech_archi_to_c4,
         entity_archi_ids={e.archi_id for e in built.entities},
         deployment_map=built.deployment_map,
         sys_subdomain=_sys_subdomain or None,
         deployment_env=config.deployment_env,
+    )
+    sv_files, _, _ = generate_solution_views(
+        parsed.solution_views, _view_ctx,
     )
     for slug in sorted(sv_files.keys()):
         print(f'    {slug}.c4')
