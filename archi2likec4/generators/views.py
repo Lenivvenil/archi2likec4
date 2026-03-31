@@ -574,7 +574,7 @@ def _group_by_solution(solution_views: list[SolutionView]) -> dict[str, list[Sol
     return by_solution
 
 
-def build_view_context(
+def build_view_context(  # noqa: PLR0913  # factory for ViewContext dataclass
     archi_to_c4: dict[str, str],
     sys_domain: dict[str, str],
     relationships: list[RawRelationship] | None = None,

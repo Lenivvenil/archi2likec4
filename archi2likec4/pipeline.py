@@ -717,7 +717,7 @@ def _validate_config_runtime(config: ConvertConfig) -> None:
                 f"'integration', or 'deployment', got '{entry.get('view_type')}'")
 
     # Validate spec_colors
-    from archi2likec4.config import _DEFAULT_SPEC_SHAPES as _KNOWN_SHAPES
+    from .config import _DEFAULT_SPEC_SHAPES as _KNOWN_SHAPES
     if not isinstance(config.spec_colors, dict):
         raise ConfigError(f"spec_colors: expected mapping, got {type(config.spec_colors).__name__}")
     for k, v in config.spec_colors.items():
