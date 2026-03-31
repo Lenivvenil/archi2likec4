@@ -35,7 +35,8 @@ def generate_audit_md(
     # Filter out suppressed and zero-count incidents (keep for suppressed_count tracking)
     incidents = [inc for inc in all_incidents if not inc.suppressed and inc.count > 0]
 
-    _L = lambda k, **kw: get_audit_label(k, lang, **kw)  # noqa: E731
+    def _L(k: str, **kw: object) -> str:
+        return get_audit_label(k, lang, **kw)
 
     # ── Header ────────────────────────────────────────────────────────
     now = datetime.now().strftime('%Y-%m-%d %H:%M')
@@ -100,7 +101,8 @@ def generate_audit_md(
 
 def _render_affected_table(inc: AuditIncident, lang: str) -> str:
     """Render incident's affected items as a markdown table."""
-    _L = lambda k, **kw: get_audit_label(k, lang, **kw)  # noqa: E731
+    def _L(k: str, **kw: object) -> str:
+        return get_audit_label(k, lang, **kw)
 
     if not inc.affected:
         return ''
@@ -147,7 +149,8 @@ def _render_affected_table(inc: AuditIncident, lang: str) -> str:
 
 def _render_qa2_table(inc: AuditIncident, lang: str) -> str:
     """Render QA-2 metadata gap tables (field completeness + top systems)."""
-    _L = lambda k, **kw: get_audit_label(k, lang, **kw)  # noqa: E731
+    def _L(k: str, **kw: object) -> str:
+        return get_audit_label(k, lang, **kw)
 
     # Top-N systems with most empty fields
     top_n = min(20, len(inc.affected))

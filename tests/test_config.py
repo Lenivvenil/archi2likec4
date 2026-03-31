@@ -1,5 +1,6 @@
 """Tests for archi2likec4.config module."""
 
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -66,9 +67,7 @@ class TestLoadConfig:
         """YAML file with list at root must raise ValueError."""
         config_file = tmp_path / 'bad.yaml'
         config_file.write_text('- item1\n- item2\n')
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
         with pytest.raises(ConfigError, match='expected YAML mapping at root'):
             load_config(config_file)
@@ -259,9 +258,7 @@ strict: true
         config_file = tmp_path / 'config.yaml'
         config_file.write_text(yaml_content)
 
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
 
         config = load_config(config_file)
@@ -373,11 +370,9 @@ class TestSaveSuppress:
 
     def test_creates_yaml(self, tmp_path):
         from archi2likec4.config import save_suppress
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
-            import pytest
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         config_file = tmp_path / '.archi2likec4.yaml'
         save_suppress(config_file, ['SystemA'], ['QA-5'])
         assert config_file.exists()
@@ -387,11 +382,9 @@ class TestSaveSuppress:
 
     def test_preserves_other_keys(self, tmp_path):
         from archi2likec4.config import save_suppress
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
-            import pytest
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         config_file = tmp_path / '.archi2likec4.yaml'
         config_file.write_text('promote_warn_threshold: 15\n')
         save_suppress(config_file, ['X'], [])
@@ -402,11 +395,9 @@ class TestSaveSuppress:
 
     def test_removes_empty_lists(self, tmp_path):
         from archi2likec4.config import save_suppress
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
-            import pytest
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         config_file = tmp_path / '.archi2likec4.yaml'
         config_file.write_text('audit_suppress:\n  - Old\n')
         save_suppress(config_file, [], [])
@@ -417,10 +408,9 @@ class TestSaveSuppress:
     def test_list_root_yaml_not_crash(self, tmp_path):
         """save_suppress should handle YAML file with list root gracefully."""
         from archi2likec4.config import save_suppress
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         config_file = tmp_path / '.archi2likec4.yaml'
         config_file.write_text('- item1\n- item2\n')
         save_suppress(config_file, ['Sys'], [])
@@ -564,7 +554,7 @@ class TestUpdateConfigField:
     def test_creates_file(self, tmp_path):
         from archi2likec4.config import update_config_field
         try:
-            import yaml  # noqa: F401
+            import yaml
         except ImportError:
             pytest.skip('PyYAML not installed')
         f = tmp_path / '.archi2likec4.yaml'
@@ -575,7 +565,7 @@ class TestUpdateConfigField:
     def test_preserves_other_keys(self, tmp_path):
         from archi2likec4.config import update_config_field
         try:
-            import yaml  # noqa: F401
+            import yaml
         except ImportError:
             pytest.skip('PyYAML not installed')
         f = tmp_path / '.archi2likec4.yaml'
@@ -588,7 +578,7 @@ class TestUpdateConfigField:
     def test_removes_empty_dict(self, tmp_path):
         from archi2likec4.config import update_config_field
         try:
-            import yaml  # noqa: F401
+            import yaml
         except ImportError:
             pytest.skip('PyYAML not installed')
         f = tmp_path / '.archi2likec4.yaml'

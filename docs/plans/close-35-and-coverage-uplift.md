@@ -47,9 +47,9 @@
 
 ### Task 5: Verify overall coverage and cleanup
 Финальная проверка: общее покрытие ≥ 92%, все validation commands проходят, нет stale noqa/type:ignore.
-- [ ] Run full test suite with coverage: `python -m pytest tests/ --cov=archi2likec4 --cov-report=term --cov-fail-under=92`
-- [ ] Run `ruff check archi2likec4/ tests/` — confirm zero violations
-- [ ] Run `mypy archi2likec4/ --ignore-missing-imports` — confirm zero errors
-- [ ] Verify no stale `noqa` comments (each should still suppress a real violation)
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Run full test suite with coverage: `python -m pytest tests/ --cov=archi2likec4 --cov-report=term --cov-fail-under=92`
+- [x] Run `ruff check archi2likec4/ tests/` — confirm zero violations
+- [x] Run `mypy archi2likec4/ --ignore-missing-imports` — confirm zero errors
+- [x] Verify no stale `noqa` comments (each should still suppress a real violation)
+- [x] Add/update tests for the above changes
+- [x] Mark completed
