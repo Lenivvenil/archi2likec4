@@ -1174,3 +1174,794 @@ class TestParserEdgeCases:
         results = parse_application_components(tmp_path)
         assert len(results) == 1
         assert results[0].name == 'System (v2.0) & API'
+
+
+# ── Coverage uplift: uncovered lines in parsers.py ────────────────────
+
+class TestDetectSpecialFolderViaFolderXml:
+    """Cover lines 34-35: _detect_special_folder finds application dir via folder.xml."""
+
+    def test_finds_app_dir_via_folder_xml(self, tmp_path):
+        """When application/folder.xml exists, model_root is set via that path."""
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        (app_dir / 'folder.xml').write_text('<folder name="application"/>', encoding='utf-8')
+        sub = app_dir / 'review'
+        _write_folder_xml(sub, '!REVIEW')
+        xml = sub / 'ApplicationComponent_x.xml'
+        xml.touch()
+        assert _detect_special_folder(xml) == '!REVIEW'
+
+
+class TestFindParentComponentEdgeCases:
+    """Cover lines 92-93, 99-114: malformed XML and multi-component folder name match."""
+
+    def test_malformed_single_component_skipped(self, tmp_path):
+        """Single ApplicationComponent XML that's malformed → skip, return ''."""
+        app_dir = tmp_path / 'application'
+        sys_dir = app_dir / 'systems'
+        sys_dir.mkdir(parents=True)
+        (sys_dir / 'ApplicationComponent_bad.xml').write_text('<broken<xml', encoding='utf-8')
+        fn_xml = sys_dir / 'ApplicationFunction_fn1.xml'
+        fn_xml.touch()
+        assert _find_parent_component(fn_xml, app_dir) == ''
+
+    def test_multiple_components_folder_name_match(self, tmp_path):
+        """Multiple components + folder.xml name matches one → returns that one."""
+        app_dir = tmp_path / 'application'
+        sys_dir = app_dir / 'crm_dir'
+        sys_dir.mkdir(parents=True)
+        _write_folder_xml(sys_dir, 'CRM')
+        _write_component(sys_dir / 'ApplicationComponent_a.xml', 'id-crm', 'CRM')
+        _write_component(sys_dir / 'ApplicationComponent_b.xml', 'id-other', 'Other')
+        fn_xml = sys_dir / 'ApplicationFunction_fn1.xml'
+        fn_xml.touch()
+        assert _find_parent_component(fn_xml, app_dir) == 'id-crm'
+
+    def test_multiple_components_malformed_folder_xml(self, tmp_path):
+        """Multiple components + malformed folder.xml → skip, return ''."""
+        app_dir = tmp_path / 'application'
+        sys_dir = app_dir / 'systems'
+        sys_dir.mkdir(parents=True)
+        (sys_dir / 'folder.xml').write_text('<broken<xml', encoding='utf-8')
+        _write_component(sys_dir / 'ApplicationComponent_a.xml', 'id-a', 'A')
+        _write_component(sys_dir / 'ApplicationComponent_b.xml', 'id-b', 'B')
+        fn_xml = sys_dir / 'ApplicationFunction_fn1.xml'
+        fn_xml.touch()
+        assert _find_parent_component(fn_xml, app_dir) == ''
+
+    def test_multiple_components_malformed_component_in_match_loop(self, tmp_path):
+        """Multiple components, folder name set, but one component XML malformed."""
+        app_dir = tmp_path / 'application'
+        sys_dir = app_dir / 'crm_dir'
+        sys_dir.mkdir(parents=True)
+        _write_folder_xml(sys_dir, 'CRM')
+        (sys_dir / 'ApplicationComponent_bad.xml').write_text('<broken<xml', encoding='utf-8')
+        _write_component(sys_dir / 'ApplicationComponent_ok.xml', 'id-crm', 'CRM')
+        fn_xml = sys_dir / 'ApplicationFunction_fn1.xml'
+        fn_xml.touch()
+        assert _find_parent_component(fn_xml, app_dir) == 'id-crm'
+
+    def test_multiple_components_no_folder_name_match(self, tmp_path):
+        """Multiple components, folder name doesn't match any → skip and walk up."""
+        app_dir = tmp_path / 'application'
+        sys_dir = app_dir / 'mixed_dir'
+        sys_dir.mkdir(parents=True)
+        _write_folder_xml(sys_dir, 'Unrelated')
+        _write_component(sys_dir / 'ApplicationComponent_a.xml', 'id-a', 'A')
+        _write_component(sys_dir / 'ApplicationComponent_b.xml', 'id-b', 'B')
+        fn_xml = sys_dir / 'ApplicationFunction_fn1.xml'
+        fn_xml.touch()
+        assert _find_parent_component(fn_xml, app_dir) == ''
+
+
+class TestExtractAllElementRefsAndVisualNesting:
+    """Cover lines 151-154, 160-165, 184-187: relationship refs and visual nesting."""
+
+    def test_relationship_refs_extracted(self, tmp_path):
+        """_extract_all_element_refs collects archimateRelationship hrefs."""
+        import defusedxml.ElementTree as ET
+
+        from archi2likec4.parsers import _extract_all_element_refs
+        xml_text = (
+            '<root>'
+            '<child><archimateElement href="x.xml#elem-1"/></child>'
+            '<child><archimateRelationship href="r.xml#rel-1"/></child>'
+            '</root>'
+        )
+        root = ET.fromstring(xml_text)
+        elem_ids: list[str] = []
+        rel_ids: list[str] = []
+        _extract_all_element_refs(root, elem_ids, rel_ids)
+        assert 'elem-1' in elem_ids
+        assert 'rel-1' in rel_ids
+
+    def test_visual_nesting_extracted(self, tmp_path):
+        """_extract_visual_nesting collects parent→child pairs from diagram."""
+        import defusedxml.ElementTree as ET
+
+        from archi2likec4.parsers import _extract_visual_nesting
+        xml_text = (
+            '<root>'
+            '<children>'
+            '<archimateElement href="x.xml#parent-1"/>'
+            '<children>'
+            '<archimateElement href="x.xml#child-1"/>'
+            '</children>'
+            '</children>'
+            '</root>'
+        )
+        root = ET.fromstring(xml_text)
+        nesting: list[tuple[str, str]] = []
+        _extract_visual_nesting(root, None, nesting)
+        assert ('parent-1', 'child-1') in nesting
+
+    def test_get_element_id_returns_none_when_no_ref(self):
+        """_get_element_id returns None when no archimateElement child."""
+        import defusedxml.ElementTree as ET
+
+        from archi2likec4.parsers import _get_element_id
+        node = ET.fromstring('<children><someOtherTag href="x.xml#id"/></children>')
+        assert _get_element_id(node) is None
+
+    def test_visual_nesting_without_child_id(self):
+        """When nested children have no archimateElement, parent_id propagates."""
+        import defusedxml.ElementTree as ET
+
+        from archi2likec4.parsers import _extract_visual_nesting
+        xml_text = (
+            '<root>'
+            '<children>'
+            '<archimateElement href="x.xml#top-1"/>'
+            '<children>'
+            '<someOtherTag/>'
+            '<children>'
+            '<archimateElement href="x.xml#deep-1"/>'
+            '</children>'
+            '</children>'
+            '</children>'
+            '</root>'
+        )
+        root = ET.fromstring(xml_text)
+        nesting: list[tuple[str, str]] = []
+        _extract_visual_nesting(root, None, nesting)
+        # deep-1's parent should be top-1 (propagated through the middle node)
+        assert ('top-1', 'deep-1') in nesting
+
+
+class TestParseInterfacesEdgeCases:
+    """Cover lines 237, 242, 254, 256-257: empty id, empty name, parse warnings."""
+
+    def test_no_app_dir_returns_empty(self, tmp_path):
+        result = parse_application_interfaces(tmp_path)
+        assert result == []
+
+    def test_trash_interface_skipped(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        trash = app_dir / 'old'
+        _write_folder_xml(trash, 'Trash')
+        _write_component(trash / 'ApplicationInterface_x.xml', archi_id='iface-1', name='OldAPI')
+        result = parse_application_interfaces(tmp_path)
+        assert result == []
+
+    def test_empty_name_skipped(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        _write_component(app_dir / 'ApplicationInterface_x.xml', archi_id='iface-1', name='')
+        result = parse_application_interfaces(tmp_path)
+        assert result == []
+
+    def test_empty_id_skipped(self, tmp_path, caplog):
+        import logging
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        (app_dir / 'ApplicationInterface_x.xml').write_text(
+            '<element name="API"/>', encoding='utf-8')
+        with caplog.at_level(logging.WARNING):
+            result = parse_application_interfaces(tmp_path)
+        assert result == []
+
+    def test_partial_malformed_warns(self, tmp_path, caplog):
+        """Some malformed + some valid interfaces → logs parse_errors warning."""
+        import logging
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        (app_dir / 'ApplicationInterface_bad.xml').write_text('<broken', encoding='utf-8')
+        _write_component(app_dir / 'ApplicationInterface_ok.xml', archi_id='ok-1', name='GoodAPI')
+        with caplog.at_level(logging.WARNING):
+            result = parse_application_interfaces(tmp_path)
+        assert len(result) == 1
+        assert any('could not be parsed' in r.message for r in caplog.records)
+
+
+class TestParseDataObjectsEdgeCases:
+    """Cover lines 271, 276, 288, 290-291: empty name/id skips."""
+
+    def test_trash_data_object_skipped(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        trash = app_dir / 'old'
+        _write_folder_xml(trash, 'Trash')
+        _write_component(trash / 'DataObject_x.xml', archi_id='do-1', name='OldData')
+        result = parse_data_objects(tmp_path)
+        assert result == []
+
+    def test_empty_name_skipped(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        _write_component(app_dir / 'DataObject_x.xml', archi_id='do-1', name='')
+        result = parse_data_objects(tmp_path)
+        assert result == []
+
+    def test_empty_id_skipped(self, tmp_path, caplog):
+        import logging
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        (app_dir / 'DataObject_x.xml').write_text(
+            '<element name="SomeData"/>', encoding='utf-8')
+        with caplog.at_level(logging.WARNING):
+            result = parse_data_objects(tmp_path)
+        assert result == []
+        assert any('empty id' in r.message.lower() or 'Skipping DataObject' in r.message
+                    for r in caplog.records)
+
+    def test_no_app_dir_returns_empty(self, tmp_path):
+        result = parse_data_objects(tmp_path)
+        assert result == []
+
+
+class TestParseFunctionsEdgeCases:
+    """Cover lines 305, 311, 323, 325-326: no app_dir, empty name/id."""
+
+    def test_no_app_dir_returns_empty(self, tmp_path):
+        result = parse_application_functions(tmp_path)
+        assert result == []
+
+    def test_trash_function_skipped(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        trash = app_dir / 'old'
+        _write_folder_xml(trash, 'Trash')
+        _write_component(trash / 'ApplicationFunction_x.xml', archi_id='fn-1', name='OldFn')
+        result = parse_application_functions(tmp_path)
+        assert result == []
+
+    def test_empty_name_skipped(self, tmp_path):
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        _write_component(app_dir / 'ApplicationFunction_x.xml', archi_id='fn-1', name='')
+        result = parse_application_functions(tmp_path)
+        assert result == []
+
+    def test_empty_id_skipped(self, tmp_path, caplog):
+        import logging
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        (app_dir / 'ApplicationFunction_x.xml').write_text(
+            '<element name="DoStuff"/>', encoding='utf-8')
+        with caplog.at_level(logging.WARNING):
+            result = parse_application_functions(tmp_path)
+        assert result == []
+
+    def test_partial_malformed_warns(self, tmp_path, caplog):
+        """Some malformed + valid function XMLs → logs warning."""
+        import logging
+        app_dir = tmp_path / 'application'
+        app_dir.mkdir()
+        (app_dir / 'ApplicationFunction_bad.xml').write_text('<broken', encoding='utf-8')
+        _write_component(app_dir / 'ApplicationFunction_ok.xml', archi_id='fn-1', name='GoodFn')
+        with caplog.at_level(logging.WARNING):
+            result = parse_application_functions(tmp_path)
+        assert len(result) == 1
+        assert any('could not be parsed' in r.message for r in caplog.records)
+
+
+class TestParseTechElementsEdgeCases:
+    """Cover lines 366, 368, 380, 391, 394: non-prefix skip, empty name, fallback tech_type."""
+
+    def test_non_prefix_file_skipped(self, tmp_path):
+        """Files that don't start with known tech prefix are skipped."""
+        tech_dir = tmp_path / 'technology'
+        tech_dir.mkdir()
+        (tech_dir / 'SomeOtherFile_x.xml').write_text(
+            '<element name="thing" id="x-1"/>', encoding='utf-8')
+        result = parse_technology_elements(tmp_path)
+        assert result == []
+
+    def test_trash_element_skipped(self, tmp_path):
+        """Tech elements inside trash folder are skipped."""
+        tech_dir = tmp_path / 'technology'
+        trash = tech_dir / 'old'
+        _write_folder_xml(trash, 'Trash')
+        _write_tech_element(trash / 'Node_n1.xml', 'Node', 'n-1', 'OldServer')
+        result = parse_technology_elements(tmp_path)
+        assert result == []
+
+    def test_empty_name_skipped(self, tmp_path):
+        tech_dir = tmp_path / 'technology'
+        tech_dir.mkdir()
+        (tech_dir / 'Node_n1.xml').write_text(
+            '<archimate:Node xmlns:archimate="http://www.archimatetool.com/archimate"'
+            ' name="" id="n-1"/>', encoding='utf-8')
+        result = parse_technology_elements(tmp_path)
+        assert result == []
+
+    def test_tech_type_fallback_from_filename(self, tmp_path):
+        """When XML tag doesn't contain archimate: prefix, tech_type falls back to filename."""
+        tech_dir = tmp_path / 'technology'
+        tech_dir.mkdir()
+        # Write XML where the root tag is just the raw tag (no namespace/archimate: prefix)
+        # so tech_type extraction yields empty or same as root.tag
+        (tech_dir / 'Node_n1.xml').write_text(
+            '<Node name="Srv1" id="n-1"/>', encoding='utf-8')
+        result = parse_technology_elements(tmp_path)
+        assert len(result) == 1
+        assert result[0].tech_type == 'Node'
+
+    def test_unrecognized_tech_type_logged(self, tmp_path, caplog):
+        """Unrecognized tech_type logs a debug message but still parses."""
+        import logging
+        tech_dir = tmp_path / 'technology'
+        tech_dir.mkdir()
+        (tech_dir / 'TechnologyFunction_tf1.xml').write_text(
+            '<archimate:TechnologyFunction xmlns:archimate="http://www.archimatetool.com/archimate"'
+            ' name="TechFunc" id="tf-1"/>', encoding='utf-8')
+        with caplog.at_level(logging.DEBUG):
+            result = parse_technology_elements(tmp_path)
+        assert len(result) == 1
+        assert result[0].tech_type == 'TechnologyFunction'
+
+
+class TestParseRelationshipsEdgeCases:
+    """Cover lines 441, 458, 466: folder.xml skip, missing source/target."""
+
+    def test_folder_xml_in_relations_skipped(self, tmp_path):
+        rel_dir = tmp_path / 'relations'
+        rel_dir.mkdir()
+        (rel_dir / 'folder.xml').write_text('<folder name="relations"/>', encoding='utf-8')
+        result = parse_relationships(tmp_path)
+        assert result == []
+
+    def test_missing_source_element_skipped(self, tmp_path):
+        """Relationship without <source> element is skipped."""
+        rel_dir = tmp_path / 'relations'
+        rel_dir.mkdir()
+        (rel_dir / 'FlowRelationship_r1.xml').write_text(
+            f'<element {_XSI_DECL} id="r-1" name="flow">'
+            f'<target href="t.xml#tgt-1" xsi:type="archimate:ApplicationComponent"/>'
+            f'</element>', encoding='utf-8')
+        result = parse_relationships(tmp_path)
+        assert result == []
+
+    def test_missing_target_element_skipped(self, tmp_path):
+        """Relationship without <target> element is skipped."""
+        rel_dir = tmp_path / 'relations'
+        rel_dir.mkdir()
+        (rel_dir / 'FlowRelationship_r1.xml').write_text(
+            f'<element {_XSI_DECL} id="r-1" name="flow">'
+            f'<source href="s.xml#src-1" xsi:type="archimate:ApplicationComponent"/>'
+            f'</element>', encoding='utf-8')
+        result = parse_relationships(tmp_path)
+        assert result == []
+
+    def test_empty_source_href_skipped(self, tmp_path):
+        """Relationship with empty href in source is skipped (no #)."""
+        rel_dir = tmp_path / 'relations'
+        rel_dir.mkdir()
+        (rel_dir / 'FlowRelationship_r1.xml').write_text(
+            f'<element {_XSI_DECL} id="r-1" name="flow">'
+            f'<source href="" xsi:type="archimate:ApplicationComponent"/>'
+            f'<target href="t.xml#tgt-1" xsi:type="archimate:ApplicationComponent"/>'
+            f'</element>', encoding='utf-8')
+        result = parse_relationships(tmp_path)
+        assert result == []
+
+    def test_non_relationship_filename_skipped(self, tmp_path):
+        """Files without underscore in stem are skipped."""
+        rel_dir = tmp_path / 'relations'
+        rel_dir.mkdir()
+        (rel_dir / 'SomeFile.xml').write_text('<element/>', encoding='utf-8')
+        result = parse_relationships(tmp_path)
+        assert result == []
+
+
+class TestParseDomainMappingEdgeCases:
+    """Cover lines 525-555: trash domains, empty names, malformed diagrams, renames."""
+
+    def test_trash_domain_skipped(self, tmp_path):
+        """Domain folders named 'Trash' are skipped."""
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        trash_dir = fa_dir / 'trash_dir'
+        _write_folder_xml(trash_dir, 'Trash')
+        _write_diagram(
+            trash_dir / 'ArchimateDiagramModel_v1.xml',
+            'functional_architecture.Deleted',
+            elements=['sys-1'],
+        )
+        result = parse_domain_mapping(tmp_path)
+        assert result == []
+
+    def test_empty_domain_name_skipped(self, tmp_path):
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        empty_dir = fa_dir / 'empty_dir'
+        _write_folder_xml(empty_dir, '')
+        result = parse_domain_mapping(tmp_path)
+        assert result == []
+
+    def test_malformed_domain_folder_xml_skipped(self, tmp_path, caplog):
+        import logging
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        bad_dir = fa_dir / 'bad_dir'
+        bad_dir.mkdir(parents=True)
+        (bad_dir / 'folder.xml').write_text('<broken<xml', encoding='utf-8')
+        with caplog.at_level(logging.WARNING):
+            result = parse_domain_mapping(tmp_path)
+        assert result == []
+
+    def test_malformed_diagram_xml_skipped(self, tmp_path, caplog):
+        import logging
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'channels_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+        (domain_dir / 'ArchimateDiagramModel_v1.xml').write_text('<broken<xml', encoding='utf-8')
+        with caplog.at_level(logging.WARNING):
+            result = parse_domain_mapping(tmp_path)
+        assert len(result) == 1
+        assert result[0].archi_ids == set()
+
+    def test_domain_renames_applied(self, tmp_path):
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'ch_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+        diagram_path = domain_dir / 'ArchimateDiagramModel_v1.xml'
+        diagram_path.parent.mkdir(parents=True, exist_ok=True)
+        diagram_path.write_text(
+            f'<archimate:ArchimateDiagramModel {_NS_DECL} name="view" id="v-1">'
+            f'<child><archimateElement xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" '
+            f'xsi:type="archimate:ApplicationComponent" href="x.xml#sys-1"/></child>'
+            f'</archimate:ArchimateDiagramModel>', encoding='utf-8')
+        renames = {'channels': ('digital_channels', 'Digital Channels')}
+        result = parse_domain_mapping(tmp_path, domain_renames=renames)
+        assert len(result) == 1
+        assert result[0].c4_id == 'digital_channels'
+        assert result[0].name == 'Digital Channels'
+
+    def test_non_dir_entries_in_fa_skipped(self, tmp_path):
+        """Files (not dirs) in functional_areas are skipped."""
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        (fa_dir / 'some_file.txt').write_text('not a dir', encoding='utf-8')
+        result = parse_domain_mapping(tmp_path)
+        assert result == []
+
+    def test_domain_dir_without_folder_xml_skipped(self, tmp_path):
+        """Domain dir without folder.xml is skipped."""
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'no_folder_xml'
+        domain_dir.mkdir(parents=True)
+        result = parse_domain_mapping(tmp_path)
+        assert result == []
+
+
+class TestParseSubdomainsEdgeCases:
+    """Cover lines 592-636: trash subdomains, malformed XMLs, empty names."""
+
+    def test_trash_subdomain_skipped(self, tmp_path):
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'channels_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+        trash_sub = domain_dir / 'trash_sub'
+        _write_folder_xml(trash_sub, 'Trash')
+        result = parse_subdomains(tmp_path)
+        assert result == []
+
+    def test_empty_subdomain_name_skipped(self, tmp_path):
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'channels_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+        empty_sub = domain_dir / 'empty_sub'
+        _write_folder_xml(empty_sub, '')
+        result = parse_subdomains(tmp_path)
+        assert result == []
+
+    def test_malformed_subdomain_folder_xml_skipped(self, tmp_path, caplog):
+        import logging
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'channels_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+        bad_sub = domain_dir / 'bad_sub'
+        bad_sub.mkdir(parents=True)
+        (bad_sub / 'folder.xml').write_text('<broken<xml', encoding='utf-8')
+        with caplog.at_level(logging.WARNING):
+            result = parse_subdomains(tmp_path)
+        assert result == []
+
+    def test_malformed_diagram_in_subdomain_skipped(self, tmp_path, caplog):
+        import logging
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'channels_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+        sub = domain_dir / 'retail_sub'
+        _write_folder_xml(sub, 'Retail')
+        (sub / 'ArchimateDiagramModel_v1.xml').write_text('<broken<xml', encoding='utf-8')
+        with caplog.at_level(logging.WARNING):
+            result = parse_subdomains(tmp_path)
+        assert len(result) == 1
+        assert result[0].component_ids == []
+
+    def test_trash_domain_folder_skipped(self, tmp_path):
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        trash_domain = fa_dir / 'trash_dir'
+        _write_folder_xml(trash_domain, 'Trash')
+        sub = trash_domain / 'retail'
+        _write_folder_xml(sub, 'Retail')
+        result = parse_subdomains(tmp_path)
+        assert result == []
+
+    def test_empty_domain_name_skipped(self, tmp_path):
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'empty_domain'
+        _write_folder_xml(domain_dir, '')
+        sub = domain_dir / 'sub1'
+        _write_folder_xml(sub, 'Sub')
+        result = parse_subdomains(tmp_path)
+        assert result == []
+
+    def test_malformed_domain_folder_xml_in_subdomains(self, tmp_path, caplog):
+        import logging
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        bad_domain = fa_dir / 'bad_domain'
+        bad_domain.mkdir(parents=True)
+        (bad_domain / 'folder.xml').write_text('<broken<xml', encoding='utf-8')
+        with caplog.at_level(logging.WARNING):
+            result = parse_subdomains(tmp_path)
+        assert result == []
+
+    def test_non_dir_subdomain_skipped(self, tmp_path):
+        """Files inside domain dir are skipped when looking for subdomains."""
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'channels_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+        (domain_dir / 'not_a_dir.txt').write_text('file', encoding='utf-8')
+        result = parse_subdomains(tmp_path)
+        assert result == []
+
+    def test_subdomain_dir_without_folder_xml_skipped(self, tmp_path):
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'channels_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+        sub = domain_dir / 'no_fxml'
+        sub.mkdir(parents=True)
+        result = parse_subdomains(tmp_path)
+        assert result == []
+
+    def test_trash_diagram_in_subdomain_skipped(self, tmp_path):
+        """Diagrams inside trash subdirectories of a subdomain are skipped."""
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'channels_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+        sub = domain_dir / 'retail_sub'
+        _write_folder_xml(sub, 'Retail')
+        trash_in_sub = sub / 'old'
+        _write_folder_xml(trash_in_sub, 'Trash')
+        _write_diagram_with_components(
+            trash_in_sub / 'ArchimateDiagramModel_v1.xml',
+            'old view', component_ids=['sys-old'],
+        )
+        result = parse_subdomains(tmp_path)
+        assert len(result) == 1
+        assert result[0].component_ids == []
+
+    def test_non_dir_in_fa_skipped(self, tmp_path):
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        (fa_dir / 'file.txt').write_text('not a dir', encoding='utf-8')
+        result = parse_subdomains(tmp_path)
+        assert result == []
+
+    def test_domain_without_folder_xml_skipped(self, tmp_path):
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        no_fxml = fa_dir / 'no_fxml_domain'
+        no_fxml.mkdir(parents=True)
+        result = parse_subdomains(tmp_path)
+        assert result == []
+
+
+class TestParseLocationEdgeCases:
+    """Cover lines 659, 661, 672: folder.xml skip, trash, empty name."""
+
+    def test_folder_xml_in_other_skipped(self, tmp_path):
+        other_dir = tmp_path / 'other'
+        other_dir.mkdir()
+        (other_dir / 'folder.xml').write_text('<folder name="other"/>', encoding='utf-8')
+        result = parse_location_elements(tmp_path)
+        assert result == []
+
+    def test_trash_location_skipped(self, tmp_path):
+        other_dir = tmp_path / 'other'
+        trash = other_dir / 'old'
+        _write_folder_xml(trash, 'Trash')
+        (trash / 'Location_loc1.xml').write_text(
+            '<archimate:Location xmlns:archimate="http://www.archimatetool.com/archimate"'
+            ' name="OldDC" id="loc-1"/>', encoding='utf-8')
+        result = parse_location_elements(tmp_path)
+        assert result == []
+
+    def test_empty_name_skipped(self, tmp_path):
+        other_dir = tmp_path / 'other'
+        other_dir.mkdir()
+        (other_dir / 'Location_loc1.xml').write_text(
+            '<archimate:Location xmlns:archimate="http://www.archimatetool.com/archimate"'
+            ' name="" id="loc-1"/>', encoding='utf-8')
+        result = parse_location_elements(tmp_path)
+        assert result == []
+
+
+class TestParseSolutionViewsEdgeCases:
+    """Cover lines 700, 725-728, 732, 767-781, 806, 808."""
+
+    def test_no_diagrams_dir_returns_empty(self, tmp_path):
+        result = parse_solution_views(tmp_path)
+        assert result == []
+
+    def test_deployment_target_pattern(self, tmp_path):
+        """deployment_target.X is matched as deployment view."""
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_d1.xml',
+            'deployment_target.MyService',
+            elements=['n-1'],
+        )
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 1
+        assert result[0].view_type == 'deployment'
+
+    def test_empty_diagram_name_skipped(self, tmp_path):
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        _write_diagram(diagrams_dir / 'ArchimateDiagramModel_v1.xml', '')
+        result = parse_solution_views(tmp_path)
+        assert result == []
+
+    def test_duplicate_diagram_merged(self, tmp_path):
+        """Duplicate diagrams (same folder, type, name) get merged."""
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        diagrams_dir.mkdir(parents=True)
+        # First diagram
+        (diagrams_dir / 'ArchimateDiagramModel_f1.xml').write_text(
+            '<archimate:ArchimateDiagramModel '
+            'xmlns:archimate="http://www.archimatetool.com/archimate" '
+            'name="functional_architecture.Pay" id="v-1">'
+            '<child><archimateElement href="x.xml#sys-1"/></child>'
+            '<child><archimateRelationship href="r.xml#rel-1"/></child>'
+            '</archimate:ArchimateDiagramModel>', encoding='utf-8')
+        # Duplicate with different elements
+        (diagrams_dir / 'ArchimateDiagramModel_f2.xml').write_text(
+            '<archimate:ArchimateDiagramModel '
+            'xmlns:archimate="http://www.archimatetool.com/archimate" '
+            'name="functional_architecture.Pay" id="v-2">'
+            '<child><archimateElement href="x.xml#sys-2"/></child>'
+            '<child><archimateRelationship href="r.xml#rel-2"/></child>'
+            '</archimate:ArchimateDiagramModel>', encoding='utf-8')
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 1
+        assert 'sys-1' in result[0].element_archi_ids
+        assert 'sys-2' in result[0].element_archi_ids
+        assert 'rel-1' in result[0].relationship_archi_ids
+        assert 'rel-2' in result[0].relationship_archi_ids
+
+    def test_duplicate_deployment_nesting_merged(self, tmp_path):
+        """Duplicate deployment diagrams merge visual nesting too."""
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        diagrams_dir.mkdir(parents=True)
+        # First deployment diagram with nesting
+        (diagrams_dir / 'ArchimateDiagramModel_d1.xml').write_text(
+            '<archimate:ArchimateDiagramModel '
+            'xmlns:archimate="http://www.archimatetool.com/archimate" '
+            'name="deployment_architecture.Pay" id="v-1">'
+            '<children><archimateElement href="x.xml#parent-1"/>'
+            '<children><archimateElement href="x.xml#child-1"/></children>'
+            '</children>'
+            '</archimate:ArchimateDiagramModel>', encoding='utf-8')
+        # Duplicate deployment
+        (diagrams_dir / 'ArchimateDiagramModel_d2.xml').write_text(
+            '<archimate:ArchimateDiagramModel '
+            'xmlns:archimate="http://www.archimatetool.com/archimate" '
+            'name="deployment_architecture.Pay" id="v-2">'
+            '<children><archimateElement href="x.xml#parent-2"/>'
+            '<children><archimateElement href="x.xml#child-2"/></children>'
+            '</children>'
+            '</archimate:ArchimateDiagramModel>', encoding='utf-8')
+        result = parse_solution_views(tmp_path)
+        assert len(result) == 1
+        assert ('parent-1', 'child-1') in result[0].visual_nesting
+        assert ('parent-2', 'child-2') in result[0].visual_nesting
+
+    def test_all_malformed_solution_views_raises(self, tmp_path):
+        """All solution diagram XMLs malformed → ParseError."""
+        from archi2likec4.exceptions import ParseError as PE
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        diagrams_dir.mkdir(parents=True)
+        (diagrams_dir / 'ArchimateDiagramModel_bad.xml').write_text(
+            '<broken<xml', encoding='utf-8')
+        with pytest.raises(PE, match='solution diagram'):
+            parse_solution_views(tmp_path)
+
+    def test_partial_malformed_solution_views_ok(self, tmp_path, caplog):
+        """Some malformed + valid solution views → returns valid, logs warning."""
+        import logging
+        diagrams_dir = tmp_path / 'diagrams' / 'sub'
+        diagrams_dir.mkdir(parents=True)
+        (diagrams_dir / 'ArchimateDiagramModel_bad.xml').write_text(
+            '<broken<xml', encoding='utf-8')
+        _write_diagram(
+            diagrams_dir / 'ArchimateDiagramModel_ok.xml',
+            'functional_architecture.GoodService',
+            elements=['sys-1'],
+        )
+        with caplog.at_level(logging.WARNING):
+            result = parse_solution_views(tmp_path)
+        assert len(result) == 1
+        assert any('could not be parsed' in r.message for r in caplog.records)
+
+
+class TestFindFunctionalAreasDirEdgeCases:
+    """Cover lines 486, 489, 495-496: _find_functional_areas_dir edge cases."""
+
+    def test_non_dir_entries_skipped(self, tmp_path):
+        from archi2likec4.parsers import _find_functional_areas_dir
+        diagrams_dir = tmp_path / 'diagrams'
+        diagrams_dir.mkdir()
+        (diagrams_dir / 'some_file.txt').write_text('not a dir', encoding='utf-8')
+        assert _find_functional_areas_dir(diagrams_dir) is None
+
+    def test_dir_without_folder_xml_skipped(self, tmp_path):
+        from archi2likec4.parsers import _find_functional_areas_dir
+        diagrams_dir = tmp_path / 'diagrams'
+        no_fxml = diagrams_dir / 'no_folder_xml'
+        no_fxml.mkdir(parents=True)
+        assert _find_functional_areas_dir(diagrams_dir) is None
+
+    def test_malformed_folder_xml_skipped(self, tmp_path, caplog):
+        import logging
+
+        from archi2likec4.parsers import _find_functional_areas_dir
+        diagrams_dir = tmp_path / 'diagrams'
+        bad_dir = diagrams_dir / 'bad'
+        bad_dir.mkdir(parents=True)
+        (bad_dir / 'folder.xml').write_text('<broken<xml', encoding='utf-8')
+        with caplog.at_level(logging.WARNING):
+            assert _find_functional_areas_dir(diagrams_dir) is None

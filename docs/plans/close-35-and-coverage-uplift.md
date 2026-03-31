@@ -17,13 +17,13 @@
 
 ### Task 2: Improve parsers.py test coverage to 90%+
 `parsers.py` — 82% (557 statements, 102 uncovered). Непокрытые строки включают edge cases парсинга XML: пустые/отсутствующие атрибуты, nested elements, специфические ArchiMate типы.
-- [ ] Read uncovered lines in `archi2likec4/parsers.py` (lines 34-35, 92-114, 151-154, 237-291, 305-326, 366-394, 441-496, 525-555, 592-636, 659-672, 700-732, 767-808)
-- [ ] Add tests in `tests/test_parsers.py` covering XML edge cases: missing attributes, empty elements, unknown element types
-- [ ] Add tests for deployment parsing edge cases (lines 767-808)
-- [ ] Add tests for integration parsing edge cases (lines 592-636)
-- [ ] Verify `parsers.py` coverage ≥ 90% with `python -m pytest tests/test_parsers*.py --cov=archi2likec4.parsers --cov-report=term`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Read uncovered lines in `archi2likec4/parsers.py` (lines 34-35, 92-114, 151-154, 237-291, 305-326, 366-394, 441-496, 525-555, 592-636, 659-672, 700-732, 767-808)
+- [x] Add tests in `tests/test_parsers.py` covering XML edge cases: missing attributes, empty elements, unknown element types
+- [x] Add tests for deployment parsing edge cases (lines 767-808)
+- [x] Add tests for integration parsing edge cases (lines 592-636)
+- [x] Verify `parsers.py` coverage ≥ 90% with `python -m pytest tests/test_parsers*.py --cov=archi2likec4.parsers --cov-report=term`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ### Task 3: Improve pipeline.py test coverage to 90%+
 `pipeline.py` — 84% (490 statements, 78 uncovered). Непокрытые строки — CLI entry point (`main()`), error handling paths, file I/O в `_generate()`.
