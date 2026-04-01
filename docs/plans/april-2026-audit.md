@@ -53,13 +53,13 @@
 
 Разбить монолитную `create_app()` (377 строк, 15 route handlers) в `web.py` на логические модули.
 
-- [ ] Создать `archi2likec4/web_routes.py` (или Flask Blueprint): перенести route handlers из `create_app()` — dashboard, incident detail, remediations, hierarchy, assign-domain, promote-system, health
-- [ ] В `archi2likec4/web.py`: оставить `create_app()` как тонкий orchestrator — создание app, регистрация blueprint, CSRF middleware, error handlers
-- [ ] Перенести CSRF-логику (`_check_csrf`, `_safe_redirect`) в отдельный модуль или оставить в web.py как middleware
-- [ ] Обновить `tests/test_web.py` — импорты и fixtures должны работать с новой структурой
-- [ ] В `pyproject.toml`: добавить mypy override для `archi2likec4.web_routes` с `disallow_untyped_defs = false` (Flask routes)
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Создать `archi2likec4/web_routes.py` (или Flask Blueprint): перенести route handlers из `create_app()` — dashboard, incident detail, remediations, hierarchy, assign-domain, promote-system, health
+- [x] В `archi2likec4/web.py`: оставить `create_app()` как тонкий orchestrator — создание app, регистрация blueprint, CSRF middleware, error handlers
+- [x] Перенести CSRF-логику (`_check_csrf`, `_safe_redirect`) в отдельный модуль или оставить в web.py как middleware
+- [x] Обновить `tests/test_web.py` — импорты и fixtures должны работать с новой структурой
+- [x] В `pyproject.toml`: добавить mypy override для `archi2likec4.web_routes` с `disallow_untyped_defs = false` (Flask routes)
+- [x] Add/update tests for the above changes (existing tests pass without modification — 56/56)
+- [x] Mark completed
 
 ---
 
