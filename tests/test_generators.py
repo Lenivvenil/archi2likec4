@@ -16,6 +16,7 @@ from archi2likec4.generators import (
     generate_spec,
     generate_system_detail_c4,
 )
+from archi2likec4.generators._common import render_metadata, truncate_desc
 from archi2likec4.generators.views import (
     ViewContext,
     _generate_deployment_view,
@@ -1723,3 +1724,61 @@ class TestSystemPathFromC4:
     def test_single_part_path_returned_unchanged(self):
         """Single-segment path returned as-is (no dots)."""
         assert _system_path_from_c4('billing', None) == 'billing'
+
+
+# ── truncate_desc ────────────────────────────────────────────────────────
+
+class TestTruncateDesc:
+    def test_empty_string(self):
+        assert truncate_desc('') == ''
+
+    def test_short_string_unchanged(self):
+        assert truncate_desc('hello') == 'hello'
+
+    def test_string_at_boundary(self):
+        s = 'a' * 500
+        assert truncate_desc(s) == s
+
+    def test_long_string_truncated(self):
+        s = 'a' * 501
+        result = truncate_desc(s)
+        assert result.endswith('...')
+        assert len(result) == 500
+
+    def test_newlines_preserved(self):
+        s = 'line1\nline2\nline3'
+        assert truncate_desc(s) == s
+
+    def test_custom_max_len(self):
+        result = truncate_desc('abcdefghij', max_len=7)
+        assert result == 'abcd...'
+        assert len(result) == 7
+
+
+# ── render_metadata ──────────────────────────────────────────────────────
+
+class TestRenderMetadata:
+    def test_archi_id_only(self):
+        lines: list[str] = []
+        render_metadata(lines, 'id-123', '  ')
+        assert lines == [
+            "    metadata {",
+            "      archi_id 'id-123'",
+            "    }",
+        ]
+
+    def test_with_extra_fields(self):
+        lines: list[str] = []
+        render_metadata(lines, 'id-1', '', extra={'tech': 'Java', 'version': '17'})
+        assert "    tech 'Java'" in lines
+        assert "    version '17'" in lines
+
+    def test_empty_extra_dict(self):
+        lines: list[str] = []
+        render_metadata(lines, 'id-1', '', extra={})
+        assert len(lines) == 3  # metadata { + archi_id + }
+
+    def test_none_extra(self):
+        lines: list[str] = []
+        render_metadata(lines, 'id-1', '', extra=None)
+        assert len(lines) == 3

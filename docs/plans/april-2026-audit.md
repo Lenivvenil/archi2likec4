@@ -27,12 +27,12 @@
 
 Добавить тесты для непокрытых утилит и edge cases, чтобы закрыть пробелы до 98%+.
 
-- [ ] В `tests/test_generators.py`: добавить тесты для `truncate_desc()` из `generators/_common.py` — пустая строка, строка длиннее _MAX_DESC_LEN, строка с newlines, строка ровно на границе
-- [ ] В `tests/test_generators.py`: добавить тесты для `render_metadata()` из `generators/_common.py` — пустой metadata dict, metadata с несколькими полями, metadata с None значениями
-- [ ] В `tests/test_builders.py`: добавить тесты для `build_comp_c4_path()` из `builders/_paths.py` — простой путь, вложенный путь, путь с promoted parent
-- [ ] В `tests/test_builders.py`: добавить тесты для `build_deployment_path_index()` из `builders/_paths.py` — пустой список nodes, nodes с вложенной иерархией
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] В `tests/test_generators.py`: добавить тесты для `truncate_desc()` из `generators/_common.py` — пустая строка, строка длиннее _MAX_DESC_LEN, строка с newlines, строка ровно на границе
+- [x] В `tests/test_generators.py`: добавить тесты для `render_metadata()` из `generators/_common.py` — пустой metadata dict, metadata с несколькими полями, metadata с None значениями
+- [x] В `tests/test_builders.py`: добавить тесты для `build_comp_c4_path()` из `builders/_paths.py` — простой путь, вложенный путь, путь с promoted parent
+- [x] В `tests/test_builders.py`: добавить тесты для `build_deployment_path_index()` из `builders/_paths.py` — пустой список nodes, nodes с вложенной иерархией
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 
