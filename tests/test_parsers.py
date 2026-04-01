@@ -1258,7 +1258,7 @@ class TestFindParentComponentEdgeCases:
 class TestExtractAllElementRefsAndVisualNesting:
     """Cover lines 151-154, 160-165, 184-187: relationship refs and visual nesting."""
 
-    def test_relationship_refs_extracted(self, tmp_path):
+    def test_relationship_refs_extracted(self):
         """_extract_all_element_refs collects archimateRelationship hrefs."""
         import defusedxml.ElementTree as ET
 
@@ -1276,7 +1276,7 @@ class TestExtractAllElementRefsAndVisualNesting:
         assert 'elem-1' in elem_ids
         assert 'rel-1' in rel_ids
 
-    def test_visual_nesting_extracted(self, tmp_path):
+    def test_visual_nesting_extracted(self):
         """_extract_visual_nesting collects parent→child pairs from diagram."""
         import defusedxml.ElementTree as ET
 

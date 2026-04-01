@@ -447,15 +447,15 @@ class TestValidateEdgeCases:
 
     def test_strict_mode_with_criticals(self):
         """strict=True with critical QA incidents adds warnings."""
-        sys1 = System(c4_id='sys1', name='Sys1', archi_id='a-1', domain='dom')
+        sys1 = System(c4_id='sys1', name='Sys1', archi_id='a-1', domain='unassigned')
         built = _empty_built()._replace(
             systems=[sys1],
-            domain_systems={'dom': [sys1]},
+            domain_systems={'unassigned': [sys1]},
         )
         config = ConvertConfig(strict=True)
         warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
-        # With minimal data, there may be critical incidents (orphan systems etc)
-        # Just verify it doesn't crash
+        # QA-1 (unassigned systems) is Critical — strict mode should report it
+        assert warnings > 0
         assert errors == 0
 
 

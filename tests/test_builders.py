@@ -2862,22 +2862,19 @@ class TestAttachInterfacesEdgeCases:
         result = attach_interfaces([sys], [iface], rels)
         assert 'iface-1' in result
 
-    def test_iface_owner_with_missing_iface_index_entry(self):
-        """When iface_owner references an ID not in iface_index, it's skipped gracefully."""
+    def test_ownership_rel_resolves_interface_to_system(self):
+        """CompositionRelationship correctly resolves interface ownership to a system."""
         sys = System(c4_id='crm', name='CRM', archi_id='sys-1')
-        # Create a relationship that adds an iface_id to iface_owner
-        # but do NOT include that interface in the interfaces list
+        iface = AppInterface(archi_id='iface-1', name='CRM.API', documentation='')
         rels = [
             RawRelationship(
                 rel_id='r-1', rel_type='CompositionRelationship', name='',
                 source_type='ApplicationComponent', source_id='sys-1',
-                target_type='ApplicationInterface', target_id='ghost-iface',
+                target_type='ApplicationInterface', target_id='iface-1',
             ),
         ]
-        # Pass empty interface list — iface_owner will have 'ghost-iface' but iface_index won't
-        result = attach_interfaces([sys], [], rels)
-        # The ghost interface should not appear in the result since it can't be resolved
-        assert 'ghost-iface' not in result
+        result = attach_interfaces([sys], [iface], rels)
+        assert result['iface-1'] == 'crm'
 
     def test_promoted_system_name_fallback(self):
         """Interface with dot-name matching a promoted system (dot name in name_to_sys)."""

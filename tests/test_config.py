@@ -553,10 +553,9 @@ class TestUpdateConfigField:
 
     def test_creates_file(self, tmp_path):
         from archi2likec4.config import update_config_field
-        try:
-            import yaml
-        except ImportError:
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         f = tmp_path / '.archi2likec4.yaml'
         update_config_field(f, 'domain_overrides', {'CRM': 'products'})
         data = yaml.safe_load(f.read_text())
@@ -564,10 +563,9 @@ class TestUpdateConfigField:
 
     def test_preserves_other_keys(self, tmp_path):
         from archi2likec4.config import update_config_field
-        try:
-            import yaml
-        except ImportError:
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         f = tmp_path / '.archi2likec4.yaml'
         f.write_text('promote_warn_threshold: 15\n')
         update_config_field(f, 'reviewed_systems', ['Sys1'])
@@ -577,10 +575,9 @@ class TestUpdateConfigField:
 
     def test_removes_empty_dict(self, tmp_path):
         from archi2likec4.config import update_config_field
-        try:
-            import yaml
-        except ImportError:
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         f = tmp_path / '.archi2likec4.yaml'
         f.write_text('domain_overrides:\n  CRM: products\n')
         update_config_field(f, 'domain_overrides', {})
