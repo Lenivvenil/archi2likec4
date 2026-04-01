@@ -30,13 +30,6 @@ def _ui(lang: str = 'ru') -> dict[str, str]:
     return {k: v.get(lang, v.get('ru', k)) for k, v in WEB_MESSAGES.items()}
 
 
-def _get_columns(incident) -> list[str]:
-    """Determine table columns from affected items."""
-    if not incident.affected:
-        return []
-    return list(incident.affected[0].keys())
-
-
 def _metric_health(summary) -> dict[str, str]:
     """Compute CSS classes for metric cards based on risk thresholds."""
     h: dict[str, str] = {}

@@ -186,12 +186,12 @@ class TestRemediations:
 
 class TestHelperFunctions:
     def test_get_columns_empty(self):
-        from archi2likec4.web import _get_columns
+        from archi2likec4.web_routes import _get_columns
         inc = AuditIncident(qa_id='QA-1', severity='Critical', title='T', count=0)
         assert _get_columns(inc) == []
 
     def test_get_columns_with_affected(self):
-        from archi2likec4.web import _get_columns
+        from archi2likec4.web_routes import _get_columns
         inc = AuditIncident(qa_id='QA-1', severity='Critical', title='T', count=1,
                             affected=[{'name': 'A', 'domain': 'B'}])
         assert _get_columns(inc) == ['name', 'domain']

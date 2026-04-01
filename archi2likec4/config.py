@@ -554,7 +554,7 @@ def _apply_yaml(config: ConvertConfig, data: dict[str, Any]) -> None:
                 f"trash_folder: expected string, got {type(val).__name__}")
         if not val.strip():
             raise ConfigError("trash_folder: must not be empty")
-        config.trash_folder = val
+        config.trash_folder = val.strip()
 
     if 'sync_protected_top' in data:
         val = data['sync_protected_top']

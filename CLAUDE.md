@@ -45,7 +45,8 @@ parse  →  build  →  validate  →  generate
 | `archi2likec4/templates/` | Jinja2 HTML templates for Flask web UI |
 | `archi2likec4/exceptions.py` | Domain exceptions — `Archi2LikeC4Error`, `ConfigError`, `ParseError`, `ValidationError` |
 | `archi2likec4/audit_data.py` | QA incident computation |
-| `archi2likec4/web.py` | Flask audit dashboard (optional) |
+| `archi2likec4/web.py` | Flask app orchestrator — CSRF, error handlers, blueprint registration (optional) |
+| `archi2likec4/web_routes.py` | Flask Blueprint with audit dashboard route handlers |
 | `archi2likec4/utils.py` | Shared utilities — `make_id()`, `transliterate()`, `escape_str()` |
 | `archi2likec4/i18n.py` | ru/en message catalog |
 | `tests/helpers.py` | Shared test mocks — `MockConfig`, `MockBuilt` |
@@ -84,5 +85,5 @@ mypy archi2likec4/ --ignore-missing-imports
   - XML parse failures → `ParseError`
   - Validation gate failures → `ValidationError`
 - **Line length**: 120 characters (ruff).
-- **Typing**: `disallow_untyped_defs = true` for all modules except `web.py`, `parsers.py`, and `scripts/federate_template.py`.
+- **Typing**: `disallow_untyped_defs = true` for all modules except `web.py`, `web_routes.py`, `parsers.py`, and `scripts/federate_template.py`.
 - **NamedTuples**: `ParseResult` (pipeline.py) and `BuildResult` (_result.py) are the data contracts between phases — all fields must be fully typed.
