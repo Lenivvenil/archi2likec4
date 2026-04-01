@@ -40,12 +40,12 @@
 
 Разбить 3 крупнейших тестовых файла на логические модули для улучшения навигации и параллельного запуска.
 
-- [ ] Разбить `tests/test_builders.py` (3237 строк) на: `test_builders_systems.py`, `test_builders_domains.py`, `test_builders_deployment.py`, `test_builders_data.py`, `test_builders_integrations.py`, `test_builders_paths.py` — по одному на builder-модуль
-- [ ] Разбить `tests/test_parsers.py` (1967 строк) на: `test_parsers_components.py`, `test_parsers_relationships.py`, `test_parsers_views.py`, `test_parsers_deployment.py` — по логическим блокам parse-функций
-- [ ] Разбить `tests/test_generators.py` (1725 строк) на: `test_generators_spec.py`, `test_generators_views.py`, `test_generators_domains.py`, `test_generators_deployment.py`, `test_generators_entities.py` — по generator-модулям
-- [ ] Убедиться что общие fixtures/helpers вынесены в `tests/conftest.py` или остались в `tests/helpers.py`
-- [ ] Add/update tests for the above changes
-- [ ] Mark completed
+- [x] Разбить `tests/test_builders.py` (3237 строк) на: `test_builders_systems.py`, `test_builders_domains.py`, `test_builders_deployment.py`, `test_builders_data.py`, `test_builders_integrations.py`, `test_builders_paths.py` — по одному на builder-модуль
+- [x] Разбить `tests/test_parsers.py` (1967 строк) на: `test_parsers_components.py`, `test_parsers_relationships.py`, `test_parsers_views.py`, `test_parsers_deployment.py` — по логическим блокам parse-функций
+- [x] Разбить `tests/test_generators.py` (1725 строк) на: `test_generators_spec.py`, `test_generators_views.py`, `test_generators_domains.py`, `test_generators_deployment.py`, `test_generators_entities.py` — по generator-модулям
+- [x] Убедиться что общие fixtures/helpers вынесены в `tests/conftest.py` или остались в `tests/helpers.py`
+- [x] Add/update tests for the above changes
+- [x] Mark completed
 
 ---
 
