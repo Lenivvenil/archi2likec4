@@ -12,6 +12,8 @@ from .relationships import generate_relationships
 from .spec import generate_spec
 from .systems import generate_system_detail_c4
 from .views import (
+    ViewContext,
+    build_view_context,
     generate_domain_functional_view,
     generate_domain_integration_view,
     generate_landscape_view,
@@ -20,6 +22,8 @@ from .views import (
 )
 
 __all__ = [
+    'ViewContext',
+    'build_view_context',
     'generate_audit_md',
     'generate_datastore_mapping_c4',
     'generate_deployment_c4',

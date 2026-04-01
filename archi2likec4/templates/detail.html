@@ -42,6 +42,7 @@
         <td>
           {% if incident.qa_id == 'QA-1' and 'name' in item %}
           <form method="post" action="/assign-domain" style="display:inline">
+            {{ csrf_field() }}
             <input type="hidden" name="name" value="{{ item['name'] }}">
             <input type="hidden" name="redirect" value="/incident/QA-1">
             <select name="domain" class="btn">
@@ -51,12 +52,14 @@
           </form>
           {% elif incident.qa_id == 'QA-3' and 'name' in item %}
           <form method="post" action="/mark-reviewed" style="display:inline">
+            {{ csrf_field() }}
             <input type="hidden" name="name" value="{{ item['name'] }}">
             <input type="hidden" name="redirect" value="/incident/QA-3">
             <button type="submit" class="btn btn-success">{{ t.mark_reviewed }}</button>
           </form>
           {% elif incident.qa_id == 'QA-4' and 'name' in item %}
           <form method="post" action="/promote-system" style="display:inline">
+            {{ csrf_field() }}
             <input type="hidden" name="name" value="{{ item['name'] }}">
             <input type="hidden" name="redirect" value="/incident/QA-4">
             <select name="domain" class="btn">
@@ -67,6 +70,7 @@
           {% endif %}
           {% if 'name' in item %}
           <form method="post" action="/suppress/system" style="display:inline">
+            {{ csrf_field() }}
             <input type="hidden" name="name" value="{{ item['name'] }}">
             <input type="hidden" name="redirect" value="/incident/{{ incident.qa_id }}">
             <button type="submit" class="btn">{{ t.suppress }}</button>

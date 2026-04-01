@@ -116,7 +116,7 @@ def main():
                 if sp_sys == tp_sys:
                     self_loop_rels.append((rel, sp, tp))
 
-    print(f"\nTotal eligible relationships: {built.intg_total_eligible}")
+    print(f"\nTotal eligible relationships: {built.diagnostics.intg_total_eligible}")
     print(f"Lost (unresolvable): {len(lost_rels)}")
     print(f"Self-loops detected: {len(self_loop_rels)}")
 
@@ -335,8 +335,8 @@ def main():
     print("SUMMARY")
     print("=" * 80)
     print(f"""
-Eligible relationships:   {built.intg_total_eligible}
-Lost (unresolvable):      {len(lost_rels)}  ({len(lost_rels)*100/built.intg_total_eligible:.1f}%)
+Eligible relationships:   {built.diagnostics.intg_total_eligible}
+Lost (unresolvable):      {len(lost_rels)}  ({(len(lost_rels)*100/built.diagnostics.intg_total_eligible if built.diagnostics.intg_total_eligible else 0.0):.1f}%)
 Self-loops (filtered):    {len(self_loop_rels)}
 Successful integrations:  {len(built.integrations)} (deduplicated)
 

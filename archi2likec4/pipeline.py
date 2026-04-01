@@ -5,13 +5,16 @@ import copy
 import logging
 import shutil
 import sys
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import NamedTuple
 
 from .audit_data import compute_audit_incidents
 from .builders import (
+    BuildDiagnostics,
     BuildResult,
+    DeploymentMappingContext,
+    SystemBuildConfig,
     apply_domain_prefix,
     assign_domains,
     assign_subdomains,
@@ -33,6 +36,7 @@ from .config import ConvertConfig, load_config
 from .exceptions import ConfigError, ParseError, ValidationError
 from .federation import generate_federate_script, generate_federation_registry
 from .generators import (
+    build_view_context,
     generate_audit_md,
     generate_datastore_mapping_c4,
     generate_deployment_c4,
@@ -133,7 +137,7 @@ def _parse(model_root: Path, config: ConvertConfig) -> ParseResult:
         logger.info('%s: %d AppComponent refs on views', d.name, len(d.archi_ids))
 
     logger.info('Parsing solution views...')
-    solution_views = parse_solution_views(model_root)
+    solution_views = parse_solution_views(model_root, config.extra_view_patterns)
     func_views = sum(1 for v in solution_views if v.view_type == 'functional')
     integ_views = sum(1 for v in solution_views if v.view_type == 'integration')
     deploy_views = sum(1 for v in solution_views if v.view_type == 'deployment')
@@ -169,14 +173,15 @@ def _parse(model_root: Path, config: ConvertConfig) -> ParseResult:
 def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     """Phase 2: transform parsed elements into the output model."""
     logger.info('Building system hierarchy...')
-    systems, promoted_parents = build_systems(
-        parsed.components,
+    sys_build_cfg = SystemBuildConfig(
         promote_children=config.promote_children,
         promote_warn_threshold=config.promote_warn_threshold,
         reviewed_systems=config.reviewed_systems,
         prop_map=config.property_map,
         standard_keys=config.standard_keys,
+        trash_folder=config.trash_folder,
     )
+    systems, promoted_parents = build_systems(parsed.components, sys_build_cfg)
     total_subsystems = sum(len(s.subsystems) for s in systems)
     logger.info('%d systems, %d subsystems', len(systems), total_subsystems)
 
@@ -306,9 +311,13 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     logger.info('%d elements in tech archi→c4 map', len(tech_archi_to_c4))
 
     logger.info('Building deployment mapping...')
+    deploy_ctx = DeploymentMappingContext(
+        sys_domain=sys_domain,
+        sys_subdomain=sys_subdomain,
+        promoted_archi_to_c4=promoted_archi_to_c4,
+    )
     deployment_map = build_deployment_map(
-        systems, deployment_nodes, parsed.relationships, sys_domain, sys_subdomain,
-        promoted_archi_to_c4=promoted_archi_to_c4)
+        systems, deployment_nodes, parsed.relationships, deploy_ctx)
     logger.info('%d app→infrastructure deployment mappings', len(deployment_map))
 
     # Validate deployment mapping: check all infra paths resolve
@@ -333,16 +342,15 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
         promoted_archi_to_c4=promoted_archi_to_c4,
         promoted_parents=promoted_parents,
         iface_c4_path=iface_c4_path,
-        orphan_fns=orphan_fns,
-        solution_views=parsed.solution_views,
-        relationships=parsed.relationships,
-        domains_info=parsed.domains_info,
+        diagnostics=BuildDiagnostics(
+            orphan_fns=orphan_fns,
+            intg_skipped=intg_skipped,
+            intg_total_eligible=intg_total_eligible,
+        ),
         deployment_nodes=deployment_nodes,
         deployment_map=deployment_map,
         tech_archi_to_c4=tech_archi_to_c4,
         datastore_entity_links=datastore_entity_links,
-        intg_skipped=intg_skipped,
-        intg_total_eligible=intg_total_eligible,
         subdomains=subdomains,
         subdomain_systems=subdomain_systems,
     )
@@ -361,8 +369,9 @@ def _build_solution_view_index(built: BuildResult) -> dict[str, str]:
 def _validate(built: BuildResult, config: ConvertConfig, sv_unresolved: int, sv_total: int) -> tuple[int, int]:
     """Phase 3: quality gates. Returns (warnings, errors).
 
-    Solution views are generated separately in _generate so that this phase
-    remains purely diagnostic — it checks invariants but produces no artifacts.
+    Solution views are pre-generated in convert() before this phase runs.
+    This phase remains purely diagnostic — it checks invariants but produces
+    no artifacts.
     """
     warnings = 0
     errors = 0
@@ -384,9 +393,9 @@ def _validate(built: BuildResult, config: ConvertConfig, sv_unresolved: int, sv_
                         sv_unresolved, sv_total, sv_ratio * 100)
 
     # Gate 2: Orphan functions
-    if built.orphan_fns > config.max_orphan_functions_warn:
+    if built.diagnostics.orphan_fns > config.max_orphan_functions_warn:
         logger.warning('%d orphan functions (threshold: %d)',
-                       built.orphan_fns, config.max_orphan_functions_warn)
+                       built.diagnostics.orphan_fns, config.max_orphan_functions_warn)
         warnings += 1
 
     # Gate 3: Unassigned systems
@@ -410,19 +419,27 @@ def _validate(built: BuildResult, config: ConvertConfig, sv_unresolved: int, sv_
     return warnings, errors
 
 
+@dataclass
+class SolutionViewInfo:
+    """Groups pre-generated solution view data for _generate."""
+
+    files: dict[str, str] = field(default_factory=dict)
+    unresolved: int = 0
+    total: int = 0
+
+
 def _generate(
     built: BuildResult,
     output_dir: Path,
     config: ConvertConfig,
-    solution_view_files: dict[str, str] | None = None,
-    sv_unresolved: int = 0,
-    sv_total: int = 0,
+    domains_info: list[DomainInfo],
+    sv_info: SolutionViewInfo | None = None,
 ) -> int:
     """Phase 4: generate .c4 files."""
     logger.info('Generating files...')
 
-    if solution_view_files is None:
-        solution_view_files = {}
+    if sv_info is None:
+        sv_info = SolutionViewInfo()
 
     # Resolve once so all subsequent operations use the same absolute path
     output_dir = output_dir.resolve()
@@ -458,7 +475,7 @@ def _generate(
     file_count = 0
 
     # Root files
-    (output_dir / 'specification.c4').write_text(generate_spec(), encoding='utf-8')
+    (output_dir / 'specification.c4').write_text(generate_spec(config), encoding='utf-8')
     file_count += 1
     (output_dir / 'relationships.c4').write_text(
         generate_relationships(built.integrations), encoding='utf-8')
@@ -468,7 +485,7 @@ def _generate(
     file_count += 1
 
     # Domain files + views
-    all_domain_meta: dict[str, DomainInfo] = {d.c4_id: d for d in built.domains_info}
+    all_domain_meta: dict[str, DomainInfo] = {d.c4_id: d for d in domains_info}
     for extra in config.extra_domain_patterns:
         if extra['c4_id'] not in all_domain_meta:
             all_domain_meta[extra['c4_id']] = DomainInfo(
@@ -526,12 +543,12 @@ def _generate(
         file_count += 1
         view_count += 1
 
-    # Solution views (already generated in _validate)
-    for sol_slug, content in solution_view_files.items():
+    # Solution views (pre-generated in convert())
+    for sol_slug, content in sv_info.files.items():
         (views_solutions_dir / f'{sol_slug}.c4').write_text(content, encoding='utf-8')
         file_count += 1
         view_count += 1
-    logger.info('%d solution view files generated', len(solution_view_files))
+    logger.info('%d solution view files generated', len(sv_info.files))
 
     # Top-level views
     (views_dir / 'landscape.c4').write_text(generate_landscape_view(), encoding='utf-8')
@@ -561,7 +578,7 @@ def _generate(
                 encoding='utf-8')
             file_count += 1
         (views_dir / 'deployment-architecture.c4').write_text(
-            generate_deployment_overview_view(), encoding='utf-8')
+            generate_deployment_overview_view(env=config.deployment_env), encoding='utf-8')
         file_count += 1
         view_count += 1
         logger.info('  deployment/ (topology + view)')
@@ -574,7 +591,7 @@ def _generate(
     file_count += 1
 
     # Quality audit
-    audit = generate_audit_md(built, sv_unresolved, sv_total, config)
+    audit = generate_audit_md(built, sv_info.unresolved, sv_info.total, config)
     (output_dir / 'AUDIT.md').write_text(audit, encoding='utf-8')
     file_count += 1
 
@@ -649,6 +666,89 @@ def _sync_output(config: ConvertConfig) -> bool:
     return True
 
 
+# ── Config validation ────────────────────────────────────────────────────
+
+def _validate_config_runtime(config: ConvertConfig) -> None:
+    """Validate runtime-critical config fields.
+
+    Called from :func:`convert` to catch invalid values in pre-built configs
+    that bypassed the YAML loading path.  Silently skips validation when
+    *config* is not a real :class:`ConvertConfig` (e.g. test mocks).
+    """
+    if not isinstance(config, ConvertConfig):
+        return
+
+    import re as _re
+
+    _C4_ID_RE = _re.compile(r'^[a-z][a-z0-9_-]*$')
+
+    if config.deployment_env is None:
+        raise ConfigError("deployment_env: must not be None")
+    env = str(config.deployment_env).strip()
+    if not env:
+        raise ConfigError("deployment_env: must not be empty")
+    if not _C4_ID_RE.match(env):
+        raise ConfigError(
+            f"deployment_env: invalid C4 identifier {env!r} "
+            f"(must match [a-z][a-z0-9_-]*)")
+    config.deployment_env = env
+
+    if not isinstance(config.extra_view_patterns, list):
+        raise ConfigError(
+            f"extra_view_patterns: expected list, got {type(config.extra_view_patterns).__name__}")
+    for i, entry in enumerate(config.extra_view_patterns):
+        if not isinstance(entry, dict):
+            raise ConfigError(
+                f"extra_view_patterns[{i}]: expected mapping, got {type(entry).__name__}")
+        for key in ('pattern', 'view_type'):
+            if key not in entry:
+                raise ConfigError(
+                    f"extra_view_patterns[{i}]: missing required key '{key}'")
+        if not isinstance(entry['pattern'], str):
+            raise ConfigError(
+                f"extra_view_patterns[{i}]['pattern']: expected string, got {type(entry['pattern']).__name__}")
+        try:
+            _re.compile(entry['pattern'])
+        except _re.error as err:
+            raise ConfigError(
+                f"extra_view_patterns[{i}]['pattern']: invalid regex: {err}") from err
+        if entry.get('view_type') not in ('functional', 'integration', 'deployment'):
+            raise ConfigError(
+                f"extra_view_patterns[{i}]['view_type']: must be 'functional', "
+                f"'integration', or 'deployment', got '{entry.get('view_type')}'")
+
+    # Validate spec_colors
+    from .config import _DEFAULT_SPEC_SHAPES as _KNOWN_SHAPES
+    if not isinstance(config.spec_colors, dict):
+        raise ConfigError(f"spec_colors: expected mapping, got {type(config.spec_colors).__name__}")
+    for k, v in config.spec_colors.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            raise ConfigError(f"spec_colors: keys and values must be strings, got {k!r}: {v!r}")
+        if not _C4_ID_RE.match(k):
+            raise ConfigError(
+                f"spec_colors: invalid C4 identifier {k!r} "
+                f"(must match [a-z][a-z0-9_-]*)")
+
+    # Validate spec_shapes
+    if not isinstance(config.spec_shapes, dict):
+        raise ConfigError(f"spec_shapes: expected mapping, got {type(config.spec_shapes).__name__}")
+    for k, v in config.spec_shapes.items():
+        if not isinstance(k, str) or not isinstance(v, str):
+            raise ConfigError(f"spec_shapes: keys and values must be strings, got {k!r}: {v!r}")
+        if k not in _KNOWN_SHAPES:
+            raise ConfigError(
+                f"spec_shapes: unknown element kind {k!r} "
+                f"(must be one of: {', '.join(sorted(_KNOWN_SHAPES))})")
+
+    # Validate spec_tags
+    if not isinstance(config.spec_tags, list):
+        raise ConfigError(f"spec_tags: expected list, got {type(config.spec_tags).__name__}")
+    for item in config.spec_tags:
+        if not isinstance(item, str):
+            raise ConfigError(f"spec_tags: all items must be strings, got {type(item).__name__}: {item!r}")
+        if not _C4_ID_RE.match(item):
+            raise ConfigError(f"spec_tags: invalid C4 identifier {item!r} (must match [a-z][a-z0-9_-]*)")
+
 # ── Public API ───────────────────────────────────────────────────────────
 
 def convert(
@@ -700,25 +800,31 @@ def convert(
     if config is None:
         config = load_config(Path(config_path) if config_path else None)
 
-    config = copy.copy(config)
+    config = copy.deepcopy(config)
     config.model_root = model_root_path
     config.output_dir = output_dir_path
     config.dry_run = dry_run
+
+    _validate_config_runtime(config)
 
     parsed = _parse(model_root_path, config)
     built = _build(parsed, config)
 
     # Compute solution views once — metrics go to _validate, files go to _generate
     sys_subdomain = _build_solution_view_index(built)
-    sv_files, sv_unresolved, sv_total = generate_solution_views(
-        built.solution_views, built.archi_to_c4, built.sys_domain,
-        built.relationships,
+    view_ctx = build_view_context(
+        archi_to_c4=built.archi_to_c4,
+        sys_domain=built.sys_domain,
+        relationships=parsed.relationships,
         promoted_archi_to_c4=built.promoted_archi_to_c4,
         tech_archi_to_c4=built.tech_archi_to_c4,
         entity_archi_ids={e.archi_id for e in built.entities},
         deployment_map=built.deployment_map,
         sys_subdomain=sys_subdomain or None,
         deployment_env=config.deployment_env,
+    )
+    sv_files, sv_unresolved, sv_total = generate_solution_views(
+        parsed.solution_views, view_ctx,
     )
 
     gate_warnings, gate_errors = _validate(built, config, sv_unresolved, sv_total)
@@ -732,7 +838,10 @@ def convert(
     files_written = 0
     sync_ok = True
     if not config.dry_run:
-        files_written = _generate(built, output_dir_path, config, sv_files, sv_unresolved, sv_total)
+        sv_info = SolutionViewInfo(files=sv_files, unresolved=sv_unresolved, total=sv_total)
+        files_written = _generate(
+            built, output_dir_path, config, parsed.domains_info, sv_info,
+        )
         if config.sync_target is not None:
             sync_ok = _sync_output(config)
 

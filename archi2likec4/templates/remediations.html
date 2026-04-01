@@ -19,6 +19,7 @@
           <td>{{ domain }}</td>
           <td>
             <form method="post" action="/undo-assign-domain" style="display:inline">
+              {{ csrf_field() }}
               <input type="hidden" name="name" value="{{ name }}">
               <input type="hidden" name="redirect" value="/remediations">
               <button type="submit" class="btn btn-danger">{{ t.undo }}</button>
@@ -43,6 +44,7 @@
           <td>{{ name }}</td>
           <td>
             <form method="post" action="/undo-mark-reviewed" style="display:inline">
+              {{ csrf_field() }}
               <input type="hidden" name="name" value="{{ name }}">
               <input type="hidden" name="redirect" value="/remediations">
               <button type="submit" class="btn btn-danger">{{ t.undo }}</button>
@@ -68,6 +70,7 @@
           <td>{{ domain }}</td>
           <td>
             <form method="post" action="/undo-promote" style="display:inline">
+              {{ csrf_field() }}
               <input type="hidden" name="name" value="{{ name }}">
               <input type="hidden" name="redirect" value="/remediations">
               <button type="submit" class="btn btn-danger">{{ t.undo }}</button>
@@ -92,6 +95,7 @@
           <td>{{ name }}</td>
           <td>
             <form method="post" action="/unsuppress/system" style="display:inline">
+              {{ csrf_field() }}
               <input type="hidden" name="name" value="{{ name }}">
               <input type="hidden" name="redirect" value="/remediations">
               <button type="submit" class="btn btn-danger">{{ t.unsuppress }}</button>
@@ -116,6 +120,7 @@
           <td>{{ qid }}</td>
           <td>
             <form method="post" action="/unsuppress/incident" style="display:inline">
+              {{ csrf_field() }}
               <input type="hidden" name="qa_id" value="{{ qid }}">
               <input type="hidden" name="redirect" value="/remediations">
               <button type="submit" class="btn btn-danger">{{ t.unsuppress }}</button>

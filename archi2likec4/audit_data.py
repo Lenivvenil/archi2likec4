@@ -38,7 +38,7 @@ class AuditIncident:
     description: str = ''                # problem statement
     impact: str = ''                     # impact assessment
     remediation: str = ''                # step-by-step fix
-    affected: list[dict] = field(default_factory=list)   # table rows
+    affected: list[dict[str, str | int]] = field(default_factory=list)   # table rows
     suppressed_count: int = 0            # items hidden by suppress-list
     suppressed: bool = False             # entire incident suppressed by QA-ID
 
@@ -140,7 +140,7 @@ def compute_audit_incidents(
 
     # ── QA-2: Metadata gaps ──────────────────────────────────────────
     # Per-field completeness
-    field_stats: list[dict] = []
+    field_stats: list[dict[str, str | int]] = []
     for key in meta_check_keys:
         filled = sum(1 for s in all_sys if s.metadata.get(key, 'TBD') != 'TBD')
         field_stats.append({
@@ -152,7 +152,7 @@ def compute_audit_incidents(
         })
 
     # Systems with most TBD fields
-    sys_tbd: list[dict] = []
+    sys_tbd: list[dict[str, str | int]] = []
     for s in all_sys:
         if s.name in suppress:
             continue
@@ -161,7 +161,7 @@ def compute_audit_incidents(
             domain = s.domain if hasattr(s, 'domain') and s.domain else ''
             sys_tbd.append({'name': s.name, 'domain': domain, 'tbd_count': tbd_count,
                             'total_fields': len(meta_check_keys)})
-    sys_tbd.sort(key=lambda x: (-x['tbd_count'], x['name']))
+    sys_tbd.sort(key=lambda x: (-int(x['tbd_count']), x['name']))
 
     all_tbd_count = sum(1 for d in sys_tbd if d['tbd_count'] == len(meta_check_keys))
 
@@ -245,7 +245,7 @@ def compute_audit_incidents(
         ))
 
     # ── QA-6: Orphan functions ───────────────────────────────────────
-    orphan_fns: int = built.orphan_fns
+    orphan_fns: int = built.diagnostics.orphan_fns
     if orphan_fns > 0:
         incidents.append(AuditIncident(
             qa_id='QA-6',
@@ -259,8 +259,8 @@ def compute_audit_incidents(
         ))
 
     # ── QA-7: Lost integrations ──────────────────────────────────────
-    skipped_intg: int = built.intg_skipped
-    total_eligible: int = built.intg_total_eligible
+    skipped_intg: int = built.diagnostics.intg_skipped
+    total_eligible: int = built.diagnostics.intg_total_eligible
     if skipped_intg > 0 and total_eligible > 0:
         pct = round(skipped_intg / total_eligible * 100)
         incidents.append(AuditIncident(
@@ -293,7 +293,7 @@ def compute_audit_incidents(
 
     # ── QA-9: No infrastructure mapping ──────────────────────────────
     def _sys_c4_path(s: System) -> str:
-        sd = getattr(s, 'subdomain', '')
+        sd = s.subdomain
         if sd:
             return f'{s.domain}.{sd}.{s.c4_id}'
         return f'{s.domain}.{s.c4_id}'
@@ -340,7 +340,7 @@ def compute_audit_incidents(
         from .utils import flatten_deployment_nodes
         all_dn = flatten_deployment_nodes(deployment_nodes)
 
-        qa10_affected: list[dict] = []
+        qa10_affected: list[dict[str, str | int]] = []
 
         # Check 1: SystemSoftware as root node ("floating software")
         for dn in deployment_nodes:
@@ -388,12 +388,12 @@ def compute_audit_incidents(
                 })
 
         # Check 5: Excessive nesting depth (> 6 levels)
-        def _max_depth(nodes: list, depth: int = 1) -> int:
+        def _max_depth(nodes: list[DeploymentNode], depth: int = 1) -> int:
             if not nodes:
                 return depth - 1
             return max(_max_depth(n.children, depth + 1) for n in nodes)
 
-        def _nodes_at_depth(nodes: list, target: int, current: int = 1) -> list:
+        def _nodes_at_depth(nodes: list[DeploymentNode], target: int, current: int = 1) -> list[DeploymentNode]:
             result = []
             for n in nodes:
                 if current == target:

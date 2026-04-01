@@ -1,5 +1,6 @@
 """Tests for archi2likec4.config module."""
 
+import importlib.util
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,9 @@ import pytest
 from archi2likec4.config import (
     _DEFAULT_DOMAIN_RENAMES,
     _DEFAULT_PROMOTE_CHILDREN,
+    _DEFAULT_SPEC_COLORS,
+    _DEFAULT_SPEC_SHAPES,
+    _DEFAULT_SPEC_TAGS,
     _DEFAULT_SYNC_PROTECTED_PATHS,
     _DEFAULT_SYNC_PROTECTED_TOP,
     ConvertConfig,
@@ -63,9 +67,7 @@ class TestLoadConfig:
         """YAML file with list at root must raise ValueError."""
         config_file = tmp_path / 'bad.yaml'
         config_file.write_text('- item1\n- item2\n')
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
         with pytest.raises(ConfigError, match='expected YAML mapping at root'):
             load_config(config_file)
@@ -256,9 +258,7 @@ strict: true
         config_file = tmp_path / 'config.yaml'
         config_file.write_text(yaml_content)
 
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
 
         config = load_config(config_file)
@@ -370,11 +370,9 @@ class TestSaveSuppress:
 
     def test_creates_yaml(self, tmp_path):
         from archi2likec4.config import save_suppress
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
-            import pytest
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         config_file = tmp_path / '.archi2likec4.yaml'
         save_suppress(config_file, ['SystemA'], ['QA-5'])
         assert config_file.exists()
@@ -384,11 +382,9 @@ class TestSaveSuppress:
 
     def test_preserves_other_keys(self, tmp_path):
         from archi2likec4.config import save_suppress
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
-            import pytest
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         config_file = tmp_path / '.archi2likec4.yaml'
         config_file.write_text('promote_warn_threshold: 15\n')
         save_suppress(config_file, ['X'], [])
@@ -399,11 +395,9 @@ class TestSaveSuppress:
 
     def test_removes_empty_lists(self, tmp_path):
         from archi2likec4.config import save_suppress
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
-            import pytest
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         config_file = tmp_path / '.archi2likec4.yaml'
         config_file.write_text('audit_suppress:\n  - Old\n')
         save_suppress(config_file, [], [])
@@ -414,10 +408,9 @@ class TestSaveSuppress:
     def test_list_root_yaml_not_crash(self, tmp_path):
         """save_suppress should handle YAML file with list root gracefully."""
         from archi2likec4.config import save_suppress
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         config_file = tmp_path / '.archi2likec4.yaml'
         config_file.write_text('- item1\n- item2\n')
         save_suppress(config_file, ['Sys'], [])
@@ -452,6 +445,38 @@ class TestLanguageConfig:
         config = ConvertConfig()
         with pytest.raises(ConfigError, match="language.*expected 'ru' or 'en'"):
             _apply_yaml(config, {'language': 'fr'})
+
+
+class TestDeploymentEnvConfig:
+    """deployment_env config option."""
+
+    def test_default_prod(self):
+        config = ConvertConfig()
+        assert config.deployment_env == 'prod'
+
+    def test_yaml_override(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'deployment_env': 'staging'})
+        assert config.deployment_env == 'staging'
+
+    def test_empty_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='deployment_env.*must not be empty'):
+            _apply_yaml(config, {'deployment_env': '  '})
+
+    def test_invalid_c4_id_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='deployment_env.*invalid C4 identifier'):
+            _apply_yaml(config, {'deployment_env': 'prod west'})
+
+    def test_uppercase_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='deployment_env.*invalid C4 identifier'):
+            _apply_yaml(config, {'deployment_env': 'Prod'})
+
+    def test_in_known_keys(self):
+        from archi2likec4.config import _KNOWN_YAML_KEYS
+        assert 'deployment_env' in _KNOWN_YAML_KEYS
 
 
 class TestDomainOverrides:
@@ -528,10 +553,9 @@ class TestUpdateConfigField:
 
     def test_creates_file(self, tmp_path):
         from archi2likec4.config import update_config_field
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         f = tmp_path / '.archi2likec4.yaml'
         update_config_field(f, 'domain_overrides', {'CRM': 'products'})
         data = yaml.safe_load(f.read_text())
@@ -539,10 +563,9 @@ class TestUpdateConfigField:
 
     def test_preserves_other_keys(self, tmp_path):
         from archi2likec4.config import update_config_field
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         f = tmp_path / '.archi2likec4.yaml'
         f.write_text('promote_warn_threshold: 15\n')
         update_config_field(f, 'reviewed_systems', ['Sys1'])
@@ -552,10 +575,9 @@ class TestUpdateConfigField:
 
     def test_removes_empty_dict(self, tmp_path):
         from archi2likec4.config import update_config_field
-        try:
-            import yaml  # noqa: F401
-        except ImportError:
+        if importlib.util.find_spec('yaml') is None:
             pytest.skip('PyYAML not installed')
+        import yaml
         f = tmp_path / '.archi2likec4.yaml'
         f.write_text('domain_overrides:\n  CRM: products\n')
         update_config_field(f, 'domain_overrides', {})
@@ -851,6 +873,195 @@ class TestSyncProtectedConfig:
         from archi2likec4.config import _KNOWN_YAML_KEYS
         assert 'sync_protected_top' in _KNOWN_YAML_KEYS
         assert 'sync_protected_paths' in _KNOWN_YAML_KEYS
+
+
+# ── Spec config (Issue #29) ───────────────────────────────────────────────
+
+class TestSpecConfig:
+    """spec_colors, spec_shapes, spec_tags config options."""
+
+    def test_defaults_use_builtin_spec_values(self):
+        config = ConvertConfig()
+        assert config.spec_colors == _DEFAULT_SPEC_COLORS
+        assert config.spec_shapes == _DEFAULT_SPEC_SHAPES
+        assert config.spec_tags == _DEFAULT_SPEC_TAGS
+
+    def test_spec_colors_yaml_merge(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'spec_colors': {'archi-app': '#FF0000', 'custom': '#123456'}})
+        assert config.spec_colors['archi-app'] == '#FF0000'
+        assert config.spec_colors['custom'] == '#123456'
+        # Other defaults preserved
+        assert config.spec_colors['archi-data'] == '#F0D68A'
+
+    def test_spec_shapes_yaml_merge(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'spec_shapes': {'domain': 'hexagon'}})
+        assert config.spec_shapes['domain'] == 'hexagon'
+        # Other defaults preserved
+        assert config.spec_shapes['system'] == 'component'
+
+    def test_spec_tags_yaml_merge(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'spec_tags': ['custom_tag']})
+        # Merges with defaults (like colors/shapes), not replaces
+        for tag in _DEFAULT_SPEC_TAGS:
+            assert tag in config.spec_tags
+        assert 'custom_tag' in config.spec_tags
+
+    def test_spec_colors_not_dict_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_colors.*expected mapping'):
+            _apply_yaml(config, {'spec_colors': ['not', 'a', 'dict']})
+
+    def test_spec_shapes_not_dict_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_shapes.*expected mapping'):
+            _apply_yaml(config, {'spec_shapes': 'flat'})
+
+    def test_spec_tags_not_list_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_tags.*expected list'):
+            _apply_yaml(config, {'spec_tags': {'not': 'a list'}})
+
+    def test_spec_tags_non_string_item_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_tags.*must be strings'):
+            _apply_yaml(config, {'spec_tags': ['ok', 42]})
+
+    def test_spec_colors_non_string_value_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_colors.*must be strings'):
+            _apply_yaml(config, {'spec_colors': {'archi-app': 123}})
+
+    def test_spec_colors_invalid_key_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_colors.*invalid C4 identifier'):
+            _apply_yaml(config, {'spec_colors': {'my color': '#FF0000'}})
+
+    def test_spec_shapes_invalid_key_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_shapes.*unknown element kind'):
+            _apply_yaml(config, {'spec_shapes': {'My Shape': 'rectangle'}})
+
+    def test_spec_shapes_rejects_unknown_c4_identifier(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_shapes.*unknown element kind'):
+            _apply_yaml(config, {'spec_shapes': {'custom_kind': 'hexagon'}})
+
+    def test_spec_shapes_accepts_camelcase_element_kinds(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'spec_shapes': {'appFunction': 'hexagon', 'dataStore': 'rectangle'}})
+        assert config.spec_shapes['appFunction'] == 'hexagon'
+        assert config.spec_shapes['dataStore'] == 'rectangle'
+
+    def test_spec_tags_invalid_id_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='spec_tags.*invalid C4 identifier'):
+            _apply_yaml(config, {'spec_tags': ['needs review']})
+
+    def test_known_yaml_keys_include_spec(self):
+        from archi2likec4.config import _KNOWN_YAML_KEYS
+        assert 'spec_colors' in _KNOWN_YAML_KEYS
+        assert 'spec_shapes' in _KNOWN_YAML_KEYS
+        assert 'spec_tags' in _KNOWN_YAML_KEYS
+
+
+# ── Bank-specific defaults (Issue #6) ────────────────────────────────────
+
+class TestBankSpecificDefaults:
+    """Issue #6: organization-specific defaults must be empty; values go in .archi2likec4.yaml."""
+
+    def test_default_domain_renames_is_empty(self):
+        assert _DEFAULT_DOMAIN_RENAMES == {}
+
+    def test_default_promote_children_is_empty(self):
+        assert _DEFAULT_PROMOTE_CHILDREN == {}
+
+    def test_default_extra_domain_patterns_is_empty(self):
+        from archi2likec4.config import _DEFAULT_EXTRA_DOMAIN_PATTERNS
+        assert _DEFAULT_EXTRA_DOMAIN_PATTERNS == []
+
+
+class TestExtraViewPatterns:
+    """extra_view_patterns config loading and validation."""
+
+    def test_default_has_three_russian_patterns(self):
+        config = ConvertConfig()
+        assert len(config.extra_view_patterns) == 3
+        types = [p['view_type'] for p in config.extra_view_patterns]
+        assert 'functional' in types
+        assert 'integration' in types
+        assert 'deployment' in types
+
+    def test_load_from_yaml(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'extra_view_patterns': [
+            {'pattern': r'^Custom\.(.+)$', 'view_type': 'functional'},
+        ]})
+        assert len(config.extra_view_patterns) == 1
+        assert config.extra_view_patterns[0]['view_type'] == 'functional'
+
+    def test_empty_list_clears_patterns(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'extra_view_patterns': []})
+        assert config.extra_view_patterns == []
+
+    def test_invalid_type_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='expected list'):
+            _apply_yaml(config, {'extra_view_patterns': 'bad'})
+
+    def test_missing_key_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match="missing required key 'view_type'"):
+            _apply_yaml(config, {'extra_view_patterns': [{'pattern': r'^X$'}]})
+
+    def test_invalid_view_type_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match="must be 'functional'"):
+            _apply_yaml(config, {'extra_view_patterns': [
+                {'pattern': r'^X$', 'view_type': 'unknown'},
+            ]})
+
+    def test_invalid_regex_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='invalid regex'):
+            _apply_yaml(config, {'extra_view_patterns': [
+                {'pattern': r'[invalid', 'view_type': 'functional'},
+            ]})
+
+    def test_entry_not_mapping_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='expected mapping'):
+            _apply_yaml(config, {'extra_view_patterns': ['bad']})
+
+
+class TestTrashFolderConfig:
+    """trash_folder config option."""
+
+    def test_default_value(self):
+        config = ConvertConfig()
+        assert config.trash_folder == '!РАЗБОР'
+
+    def test_yaml_override(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'trash_folder': '!REVIEW'})
+        assert config.trash_folder == '!REVIEW'
+
+    def test_not_string_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='trash_folder.*expected string'):
+            _apply_yaml(config, {'trash_folder': 123})
+
+    def test_empty_string_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='trash_folder.*must not be empty'):
+            _apply_yaml(config, {'trash_folder': '  '})
+
+    def test_known_yaml_keys(self):
+        from archi2likec4.config import _KNOWN_YAML_KEYS
+        assert 'trash_folder' in _KNOWN_YAML_KEYS
 
 
 class TestExceptionHierarchy:

@@ -5,6 +5,8 @@ from __future__ import annotations
 import argparse
 import html
 import logging
+import os
+import secrets
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
@@ -14,14 +16,7 @@ if TYPE_CHECKING:
 
 from .exceptions import Archi2LikeC4Error, ConfigError
 
-logger = logging.getLogger('archi2likec4.web')
-
-_SEVERITY_COLORS = {
-    'Critical': '#dc3545',
-    'High': '#fd7e14',
-    'Medium': '#ffc107',
-    'Low': '#28a745',
-}
+logger = logging.getLogger(__name__)
 
 _HEALTH_DOMAIN_OK = 0.8
 _HEALTH_DOMAIN_WARN = 0.5
@@ -33,13 +28,6 @@ def _ui(lang: str = 'ru') -> dict[str, str]:
     """Build a flat dict of UI strings for the given language."""
     from .i18n import WEB_MESSAGES
     return {k: v.get(lang, v.get('ru', k)) for k, v in WEB_MESSAGES.items()}
-
-
-def _get_columns(incident) -> list[str]:
-    """Determine table columns from affected items."""
-    if not incident.affected:
-        return []
-    return list(incident.affected[0].keys())
 
 
 def _metric_health(summary) -> dict[str, str]:
@@ -64,7 +52,7 @@ def create_app(
 ) -> Flask:
     """Create Flask app for quality audit dashboard (without starting the server)."""
     try:
-        from flask import Flask, redirect, render_template, request
+        from flask import Flask, abort, request, session
     except ImportError as err:
         raise SystemExit(
             'Flask is required for web UI: pip install "archi2likec4[web]"'
@@ -73,6 +61,7 @@ def create_app(
     from . import __version__
     from .audit_data import compute_audit_incidents
     from .config import _VALID_C4_ID, load_config, save_suppress, update_config_field
+    from .web_routes import init_routes
 
     if config_path is not None and not config_path.exists():
         raise SystemExit(f'Config file not found: {config_path}')
@@ -85,6 +74,13 @@ def create_app(
 
     template_dir = Path(__file__).parent / 'templates'
     app = Flask(__name__, template_folder=str(template_dir))
+    explicit_key = os.environ.get('FLASK_SECRET_KEY')
+    if explicit_key:
+        app.secret_key = explicit_key
+    else:
+        logger.warning('FLASK_SECRET_KEY not set — using random secret; '
+                       'sessions will not survive restarts or multi-worker deployments')
+        app.secret_key = secrets.token_hex(32)
 
     def _safe_redirect(url: str) -> str:
         """Validate redirect URL to prevent open redirect attacks."""
@@ -92,11 +88,30 @@ def create_app(
             return '/'
         return url
 
+    # ── CSRF middleware ──────────────────────────────────────────────────
+
+    @app.context_processor
+    def inject_csrf():
+        """Inject CSRF token into all templates and provide csrf_field() helper."""
+        if '_csrf' not in session:
+            session['_csrf'] = secrets.token_hex(32)
+        token = session['_csrf']
+
+        from markupsafe import Markup
+        def csrf_field():
+            return Markup(f'<input type="hidden" name="_csrf_token" value="{html.escape(token)}">')
+
+        return {'csrf_token': token, 'csrf_field': csrf_field}
+
     @app.before_request
     def _csrf_check():
-        """Reject cross-origin POST requests (Origin/Referer check)."""
+        """Reject POST requests without valid CSRF token, with Origin/Referer as secondary check."""
         if request.method != 'POST':
             return None
+        form_token = request.form.get('_csrf_token', '')
+        session_token = session.get('_csrf', '')
+        if not session_token or not form_token or form_token != session_token:
+            abort(403)
         host_parsed = urlparse(request.host_url)
         host_netloc = host_parsed.netloc
         origin = request.headers.get('Origin') or ''
@@ -104,12 +119,14 @@ def create_app(
         if origin:
             origin_parsed = urlparse(origin)
             if origin_parsed.netloc != host_netloc:
-                return 'Forbidden: cross-origin POST', 403
+                abort(403)
         elif referer:
             referer_parsed = urlparse(referer)
             if referer_parsed.netloc != host_netloc:
-                return 'Forbidden: cross-origin POST', 403
+                abort(403)
         return None
+
+    # ── Data loading with cache ─────────────────────────────────────────
 
     _cache: dict[str, object] = {}
     _CACHE_TTL = 30  # seconds
@@ -121,7 +138,8 @@ def create_app(
         if '_data' in _cache and now - _cache.get('_ts', 0) < _CACHE_TTL:
             return _cache['_data']
 
-        from .pipeline import _build, _parse, _validate
+        from .generators.views import build_view_context, generate_solution_views
+        from .pipeline import _build, _build_solution_view_index, _parse, _validate
         try:
             config = load_config(config_path)
         except (FileNotFoundError, ConfigError, OSError) as e:
@@ -135,7 +153,22 @@ def create_app(
             raise
         except Exception as e:
             raise Archi2LikeC4Error(f'Pipeline error: {e}') from e
-        _, _, _, sv_unresolved, sv_total = _validate(built, config)
+        sys_subdomain = _build_solution_view_index(built)
+        view_ctx = build_view_context(
+            archi_to_c4=built.archi_to_c4,
+            sys_domain=built.sys_domain,
+            relationships=parsed.relationships,
+            promoted_archi_to_c4=built.promoted_archi_to_c4,
+            tech_archi_to_c4=built.tech_archi_to_c4,
+            entity_archi_ids={e.archi_id for e in built.entities},
+            deployment_map=built.deployment_map,
+            sys_subdomain=sys_subdomain or None,
+            deployment_env=config.deployment_env,
+        )
+        _, sv_unresolved, sv_total = generate_solution_views(
+            parsed.solution_views, view_ctx,
+        )
+        warnings, errors = _validate(built, config, sv_unresolved=sv_unresolved, sv_total=sv_total)
         summary, incidents = compute_audit_incidents(built, sv_unresolved, sv_total, config)
         available_domains = sorted(
             d for d in built.domain_systems
@@ -150,6 +183,15 @@ def create_app(
         """Clear cached data (called after config modifications)."""
         _cache.clear()
 
+    def _load_config_safe():
+        """Load config with error handling for web routes."""
+        try:
+            return load_config(config_path)
+        except (FileNotFoundError, ConfigError, OSError) as e:
+            raise ConfigError(str(e)) from e
+
+    # ── After-request and error handlers ────────────────────────────────
+
     @app.after_request
     def _after_request(response):
         """Invalidate cache after any POST (config-modifying) request."""
@@ -161,232 +203,21 @@ def create_app(
     def _handle_runtime_error(error):
         return f'<h1>Configuration Error</h1><pre>{html.escape(str(error))}</pre>', 500
 
-    @app.route('/')
-    def dashboard():
-        config, summary, incidents, available_domains, built = _load_data()
-        lang = getattr(config, 'language', 'ru')
-        active_count = sum(1 for i in incidents if not i.suppressed)
-        suppressed_count = sum(1 for i in incidents if i.suppressed)
-        remed_domain = len(config.domain_overrides)
-        remed_reviewed = len(config.reviewed_systems)
-        remed_total = remed_domain + remed_reviewed
-        return render_template(
-            'dashboard.html',
-            t=_ui(lang), lang=lang,
-            version=__version__,
-            summary=summary,
-            incidents=incidents,
-            severity_colors=_SEVERITY_COLORS,
-            health=_metric_health(summary),
-            suppress_names=sorted(config.audit_suppress),
-            suppress_incidents_list=sorted(config.audit_suppress_incidents),
-            config_path=str(resolved_config_path),
-            active_count=active_count,
-            suppressed_count=suppressed_count,
-            remed_domain=remed_domain,
-            remed_reviewed=remed_reviewed,
-            remed_total=remed_total,
-        )
+    # ── Register route blueprint ────────────────────────────────────────
 
-    @app.route('/incident/<qa_id>')
-    def incident_detail(qa_id):
-        config, summary, incidents, available_domains, built = _load_data()
-        lang = getattr(config, 'language', 'ru')
-        incident = next((i for i in incidents if i.qa_id == qa_id), None)
-        if incident is None:
-            return redirect('/')
-        columns = _get_columns(incident)
-        return render_template(
-            'detail.html',
-            t=_ui(lang), lang=lang,
-            incident=incident,
-            columns=columns,
-            severity_colors=_SEVERITY_COLORS,
-            available_domains=available_domains,
-        )
-
-    def _load_config_safe():
-        """Load config with error handling for web routes."""
-        try:
-            return load_config(config_path)
-        except (FileNotFoundError, ConfigError, OSError) as e:
-            raise ConfigError(str(e)) from e
-
-    @app.route('/remediations')
-    def remediations():
-        config = _load_config_safe()
-        lang = getattr(config, 'language', 'ru')
-        return render_template(
-            'remediations.html',
-            t=_ui(lang), lang=lang,
-            domain_overrides=config.domain_overrides,
-            reviewed_systems=sorted(config.reviewed_systems),
-            promote_children=config.promote_children,
-            suppress_names=sorted(config.audit_suppress),
-            suppress_incidents_list=sorted(config.audit_suppress_incidents),
-        )
-
-    # ── Suppress / Unsuppress routes ──────────────────────────────────
-
-    @app.route('/suppress/system', methods=['POST'])
-    def suppress_system():
-        name = request.form.get('name', '').strip()
-        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
-        if name:
-            config = _load_config_safe()
-            names = list(set(config.audit_suppress + [name]))
-            save_suppress(resolved_config_path, names, config.audit_suppress_incidents)
-            logger.info('Suppressed system: %s', name)
-        return redirect(redirect_to)
-
-    @app.route('/unsuppress/system', methods=['POST'])
-    def unsuppress_system():
-        name = request.form.get('name', '').strip()
-        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
-        if name:
-            config = _load_config_safe()
-            names = [n for n in config.audit_suppress if n != name]
-            save_suppress(resolved_config_path, names, config.audit_suppress_incidents)
-            logger.info('Unsuppressed system: %s', name)
-        return redirect(redirect_to)
-
-    @app.route('/suppress/incident', methods=['POST'])
-    def suppress_incident():
-        qa_id = request.form.get('qa_id', '').strip()
-        if qa_id:
-            config = _load_config_safe()
-            ids = list(set(config.audit_suppress_incidents + [qa_id]))
-            save_suppress(resolved_config_path, config.audit_suppress, ids)
-            logger.info('Suppressed incident: %s', qa_id)
-        return redirect('/')
-
-    @app.route('/unsuppress/incident', methods=['POST'])
-    def unsuppress_incident():
-        qa_id = request.form.get('qa_id', '').strip()
-        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
-        if qa_id:
-            config = _load_config_safe()
-            ids = [i for i in config.audit_suppress_incidents if i != qa_id]
-            save_suppress(resolved_config_path, config.audit_suppress, ids)
-            logger.info('Unsuppressed incident: %s', qa_id)
-        return redirect(redirect_to)
-
-    # ── Remediation routes ────────────────────────────────────────────
-
-    @app.route('/assign-domain', methods=['POST'])
-    def assign_domain():
-        name = request.form.get('name', '').strip()
-        domain = request.form.get('domain', '').strip()
-        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
-        if name and domain:
-            if not _VALID_C4_ID.match(domain):
-                return f'Invalid domain identifier: {html.escape(domain)}', 400
-            config = _load_config_safe()
-            overrides = dict(config.domain_overrides)
-            overrides[name] = domain
-            update_config_field(resolved_config_path, 'domain_overrides', overrides)
-            logger.info('Assigned domain %s to system %s', domain, name)
-        return redirect(redirect_to)
-
-    @app.route('/undo-assign-domain', methods=['POST'])
-    def undo_assign_domain():
-        name = request.form.get('name', '').strip()
-        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
-        if name:
-            config = _load_config_safe()
-            overrides = dict(config.domain_overrides)
-            overrides.pop(name, None)
-            update_config_field(resolved_config_path, 'domain_overrides', overrides)
-            logger.info('Undone domain override for %s', name)
-        return redirect(redirect_to)
-
-    @app.route('/mark-reviewed', methods=['POST'])
-    def mark_reviewed():
-        name = request.form.get('name', '').strip()
-        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
-        if name:
-            config = _load_config_safe()
-            reviewed = list(set(config.reviewed_systems + [name]))
-            update_config_field(resolved_config_path, 'reviewed_systems', sorted(reviewed))
-            logger.info('Marked system as reviewed: %s', name)
-        return redirect(redirect_to)
-
-    @app.route('/undo-mark-reviewed', methods=['POST'])
-    def undo_mark_reviewed():
-        name = request.form.get('name', '').strip()
-        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
-        if name:
-            config = _load_config_safe()
-            reviewed = [s for s in config.reviewed_systems if s != name]
-            update_config_field(resolved_config_path, 'reviewed_systems', reviewed)
-            logger.info('Undone reviewed mark for %s', name)
-        return redirect(redirect_to)
-
-    @app.route('/promote-system', methods=['POST'])
-    def promote_system():
-        name = request.form.get('name', '').strip()
-        domain = request.form.get('domain', '').strip()
-        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
-        if name and domain:
-            if not _VALID_C4_ID.match(domain):
-                return f'Invalid domain identifier: {html.escape(domain)}', 400
-            config = _load_config_safe()
-            promote = dict(config.promote_children)
-            promote[name] = domain
-            update_config_field(resolved_config_path, 'promote_children', promote)
-            logger.info('Promoted system %s with fallback domain %s', name, domain)
-        return redirect(redirect_to)
-
-    @app.route('/undo-promote', methods=['POST'])
-    def undo_promote():
-        name = request.form.get('name', '').strip()
-        redirect_to = _safe_redirect(request.form.get('redirect', '/'))
-        if name:
-            config = _load_config_safe()
-            promote = dict(config.promote_children)
-            promote.pop(name, None)
-            update_config_field(resolved_config_path, 'promote_children', promote)
-            logger.info('Undone promote for %s', name)
-        return redirect(redirect_to)
-
-    @app.route('/hierarchy')
-    def hierarchy():
-        config, summary, incidents, available_domains, built = _load_data()
-        lang = getattr(config, 'language', 'ru')
-
-        subdomain_names: dict[str, str] = {}
-        for sd in getattr(built, 'subdomains', []):
-            subdomain_names[sd.c4_id] = sd.name
-
-        domain_groups: dict[str, dict[str, list]] = {}
-        domain_totals: dict[str, int] = {}
-        for domain_id, sys_list in sorted(built.domain_systems.items()):
-            if sys_list:
-                sd_map: dict[str, list] = {}
-                for sys in sorted(sys_list, key=lambda s: s.name):
-                    sd_key = getattr(sys, 'subdomain', '') or ''
-                    sd_map.setdefault(sd_key, []).append(sys)
-                ordered: dict[str, list] = {}
-                if '' in sd_map:
-                    ordered[''] = sd_map['']
-                for k in sorted(k for k in sd_map if k):
-                    ordered[k] = sd_map[k]
-                domain_groups[domain_id] = ordered
-                domain_totals[domain_id] = len(sys_list)
-
-        promoted_parents = set(config.promote_children.keys())
-
-        return render_template(
-            'hierarchy.html',
-            t=_ui(lang), lang=lang,
-            version=__version__,
-            domain_groups=domain_groups,
-            domain_totals=domain_totals,
-            subdomain_names=subdomain_names,
-            promoted_parents=promoted_parents,
-            total_systems=summary.total_systems,
-            total_subsystems=summary.total_subsystems,
-        )
+    init_routes(
+        app,
+        load_data=_load_data,
+        load_config_safe=_load_config_safe,
+        safe_redirect=_safe_redirect,
+        resolved_config_path=resolved_config_path,
+        metric_health=_metric_health,
+        ui_func=_ui,
+        version=__version__,
+        save_suppress=save_suppress,
+        update_config_field=update_config_field,
+        valid_c4_id=_VALID_C4_ID,
+    )
 
     return app
 

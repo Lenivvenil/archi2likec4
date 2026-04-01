@@ -92,7 +92,7 @@ class TestPipelineE2E:
         assert len(built.systems) >= 2
         assert len(built.integrations) >= 1
 
-        _generate(built, output, config, {})
+        _generate(built, output, config, parsed.domains_info)
 
         # Verify output files exist
         assert (output / 'specification.c4').exists()
@@ -125,7 +125,7 @@ class TestPipelineE2E:
 
         parsed = _parse(model, config)
         built = _build(parsed, config)
-        _generate(built, output, config, {})
+        _generate(built, output, config, parsed.domains_info)
 
         # The custom domain file must be generated (not silently skipped)
         assert (output / 'domains' / 'custom_domain.c4').exists(), \
@@ -156,6 +156,7 @@ class TestPipelineE2E:
 
 def _make_empty_built() -> BuildResult:
     """Create a minimal BuildResult with all-empty data for _validate() tests."""
+    from archi2likec4.builders._result import BuildDiagnostics
     return BuildResult(
         systems=[],
         integrations=[],
@@ -167,16 +168,11 @@ def _make_empty_built() -> BuildResult:
         promoted_archi_to_c4={},
         promoted_parents={},
         iface_c4_path={},
-        orphan_fns=0,
-        solution_views=[],
-        relationships=[],
-        domains_info=[],
+        diagnostics=BuildDiagnostics(orphan_fns=0, intg_skipped=0, intg_total_eligible=0),
         deployment_nodes=[],
         deployment_map=[],
         tech_archi_to_c4={},
         datastore_entity_links=[],
-        intg_skipped=0,
-        intg_total_eligible=0,
         subdomains=[],
         subdomain_systems={},
     )
@@ -193,7 +189,9 @@ class TestValidate:
 
     def test_orphan_fns_above_threshold_produces_warning(self):
         """orphan_fns exceeding max_orphan_functions_warn triggers a warning."""
-        built = _make_empty_built()._replace(orphan_fns=10)
+        from archi2likec4.builders._result import BuildDiagnostics
+        built = _make_empty_built()._replace(
+            diagnostics=BuildDiagnostics(orphan_fns=10, intg_skipped=0, intg_total_eligible=0))
         config = ConvertConfig(max_orphan_functions_warn=5)
         warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
         assert warnings >= 1
@@ -201,7 +199,9 @@ class TestValidate:
 
     def test_orphan_fns_at_threshold_no_warning(self):
         """orphan_fns exactly at threshold does NOT trigger a warning."""
-        built = _make_empty_built()._replace(orphan_fns=5)
+        from archi2likec4.builders._result import BuildDiagnostics
+        built = _make_empty_built()._replace(
+            diagnostics=BuildDiagnostics(orphan_fns=5, intg_skipped=0, intg_total_eligible=0))
         config = ConvertConfig(max_orphan_functions_warn=5)
         warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
         assert warnings == 0
@@ -232,6 +232,14 @@ class TestValidate:
         config = ConvertConfig(max_unassigned_systems_warn=20)
         warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
         assert warnings == 0
+
+    def test_deployment_env_passed_through(self):
+        """deployment_env from config should not cause errors during validation."""
+        built = _make_empty_built()
+        config = ConvertConfig(deployment_env='staging')
+        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
+        assert warnings == 0
+        assert errors == 0
 
     def test_strict_mode_no_criticals_no_extra_warnings(self):
         """strict=True with no critical incidents does not add warnings."""

@@ -24,6 +24,10 @@ class TestGetMsg:
     def test_unknown_field_returns_field_key(self):
         assert get_msg('QA-1', 'nonexistent', 'ru') == 'nonexistent'
 
+    def test_unknown_lang_falls_back_to_ru(self):
+        """Unknown language code falls back to 'ru' (issue #23)."""
+        assert get_msg('QA-1', 'title', 'de') == get_msg('QA-1', 'title', 'ru')
+
     def test_all_qa_ids_have_both_langs(self):
         for qa_id in [f'QA-{i}' for i in range(1, 11)]:
             for field in ('title', 'description', 'impact', 'remediation'):
@@ -42,6 +46,12 @@ class TestGetQa10Issue:
 
     def test_unknown_returns_key(self):
         assert get_qa10_issue('unknown_key', 'en') == 'unknown_key'
+
+    def test_unknown_lang_falls_back_to_ru(self):
+        """Unknown language code falls back to 'ru' (issue #23)."""
+        ru_label = get_qa10_issue('floating_sw', 'ru')
+        de_label = get_qa10_issue('floating_sw', 'de')
+        assert de_label == ru_label
 
 
 class TestGetAuditLabel:
@@ -134,12 +144,12 @@ class TestFormatErrorHandling:
     def test_get_msg_bad_kwarg_returns_template(self):
         # QA-1 description template uses {count}; passing wrong kwarg triggers KeyError
         result = get_msg('QA-1', 'description', 'en', wrong_key='x')
-        # Should return the raw template string (not raise)
+        # Should return the raw template string with unformatted placeholders
         assert isinstance(result, str)
-        assert result != ''
+        assert '{count}' in result
 
     def test_get_audit_label_bad_kwarg_returns_template(self):
         # auto_generated uses {version} and {date}; wrong kwarg triggers KeyError
         result = get_audit_label('auto_generated', 'en', bad_key='x')
         assert isinstance(result, str)
-        assert result != ''
+        assert '{version}' in result

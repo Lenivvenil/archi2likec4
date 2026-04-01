@@ -28,6 +28,14 @@ _DEFAULT_EXTRA_DOMAIN_PATTERNS: list[dict[str, Any]] = []
 
 _DEFAULT_PROMOTE_CHILDREN: dict[str, str] = {}
 
+# Russian-language view-name patterns shipped as defaults.
+# Users can override via extra_view_patterns in .archi2likec4.yaml.
+_DEFAULT_EXTRA_VIEW_PATTERNS: list[dict[str, str]] = [
+    {'pattern': r'^Функциональная архитектура[.\s]+(.+)$', 'view_type': 'functional'},
+    {'pattern': r'^Интеграционная архитектура[.\s]+(.+)$', 'view_type': 'integration'},
+    {'pattern': r'^Схема разв[её]ртывания[.\s]+(.+)$', 'view_type': 'deployment'},
+]
+
 # Top-level names (files or entire dirs) never overwritten in sync target by default.
 # These protect common companion-repo artefacts that must survive a re-sync.
 # Can be overridden via sync_protected_top in .archi2likec4.yaml.
@@ -55,6 +63,35 @@ _DEFAULT_SYNC_PROTECTED_PATHS: frozenset[str] = frozenset({
     'scripts/check_staleness.py',
     'scripts/validate_domains.py',
 })
+
+# Defaults for spec.py — custom color definitions, element shapes, and tags.
+_DEFAULT_SPEC_COLORS: dict[str, str] = {
+    'archi-app': '#7EB8DA',
+    'archi-app-light': '#BDE0F0',
+    'archi-data': '#F0D68A',
+    'archi-store': '#B0B0B0',
+    'archi-tech': '#93D275',
+    'archi-tech-light': '#C5E6B8',
+}
+
+_DEFAULT_SPEC_SHAPES: dict[str, str] = {
+    'domain': 'rectangle',
+    'subdomain': 'rectangle',
+    'system': 'component',
+    'subsystem': 'component',
+    'appFunction': 'rectangle',
+    'dataEntity': 'document',
+    'dataStore': 'cylinder',
+    'infraNode': 'rectangle',
+    'infraSoftware': 'cylinder',
+    'infraZone': 'rectangle',
+    'infraLocation': 'rectangle',
+}
+
+_DEFAULT_SPEC_TAGS: list[str] = [
+    'to_review', 'external', 'entity', 'store',
+    'infrastructure', 'cluster', 'device', 'network',
+]
 
 
 @dataclass
@@ -96,6 +133,10 @@ class ConvertConfig:
     # i18n: language for AUDIT.md and Web UI ('ru' or 'en')
     language: str = 'ru'
 
+    # Extra view-name regex patterns (locale-specific, e.g. Russian)
+    extra_view_patterns: list[dict[str, str]] = field(
+        default_factory=lambda: [dict(d) for d in _DEFAULT_EXTRA_VIEW_PATTERNS])
+
     # Deployment environment name used in LikeC4 deployment views
     deployment_env: str = 'prod'
 
@@ -111,6 +152,17 @@ class ConvertConfig:
         default_factory=lambda: frozenset(_DEFAULT_SYNC_PROTECTED_TOP))
     sync_protected_paths: frozenset[str] = field(
         default_factory=lambda: frozenset(_DEFAULT_SYNC_PROTECTED_PATHS))
+
+    # Specification: custom colors, element shapes, tags
+    spec_colors: dict[str, str] = field(
+        default_factory=lambda: dict(_DEFAULT_SPEC_COLORS))
+    spec_shapes: dict[str, str] = field(
+        default_factory=lambda: dict(_DEFAULT_SPEC_SHAPES))
+    spec_tags: list[str] = field(
+        default_factory=lambda: list(_DEFAULT_SPEC_TAGS))
+
+    # Folder name treated as "trash / to-review" in coArchi source tree
+    trash_folder: str = '!РАЗБОР'
 
     # CLI flags
     strict: bool = False
@@ -139,7 +191,7 @@ def load_config(config_path: Path | None) -> ConvertConfig:
                     f'Config file not found: {config_path}')
             return config  # auto-detect miss — return defaults
         try:
-            import yaml  # type: ignore[import-untyped]
+            import yaml
         except ImportError as err:
             raise ConfigError(
                 f'Config file {config_path} requires PyYAML: pip install pyyaml') from err
@@ -163,13 +215,15 @@ _KNOWN_YAML_KEYS: set[str] = {
     'quality_gates',
     'audit_suppress', 'audit_suppress_incidents',
     'domain_overrides', 'subdomain_overrides', 'reviewed_systems',
-    'language', 'deployment_env', 'strict', 'sync_target',
+    'language', 'deployment_env', 'extra_view_patterns', 'strict', 'sync_target',
     'property_map', 'standard_keys',
     'sync_protected_top', 'sync_protected_paths',
+    'spec_colors', 'spec_shapes', 'spec_tags',
+    'trash_folder',
 }
 
 
-def _apply_yaml(config: ConvertConfig, data: dict) -> None:
+def _apply_yaml(config: ConvertConfig, data: dict[str, Any]) -> None:
     """Merge *data* from YAML into *config*, overriding only supplied keys."""
     unknown = set(data.keys()) - _KNOWN_YAML_KEYS
     if unknown:
@@ -357,7 +411,41 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
         env_val = str(data['deployment_env']).strip()
         if not env_val:
             raise ConfigError("deployment_env: must not be empty")
+        if not _VALID_C4_ID.match(env_val):
+            raise ConfigError(
+                f"deployment_env: invalid C4 identifier {env_val!r} "
+                f"(must match [a-z][a-z0-9_-]*)")
         config.deployment_env = env_val
+
+    if 'extra_view_patterns' in data:
+        val = data['extra_view_patterns']
+        if not isinstance(val, list):
+            raise ConfigError(
+                f"extra_view_patterns: expected list, got {type(val).__name__}")
+        validated_vp: list[dict[str, str]] = []
+        for i, entry in enumerate(val):
+            if not isinstance(entry, dict):
+                raise ConfigError(
+                    f"extra_view_patterns[{i}]: expected mapping, got {type(entry).__name__}")
+            for key in ('pattern', 'view_type'):
+                if key not in entry:
+                    raise ConfigError(
+                        f"extra_view_patterns[{i}]: missing required key '{key}'")
+                if not isinstance(entry[key], str):
+                    raise ConfigError(
+                        f"extra_view_patterns[{i}]['{key}']: expected string, "
+                        f"got {type(entry[key]).__name__}")
+            if entry['view_type'] not in ('functional', 'integration', 'deployment'):
+                raise ConfigError(
+                    f"extra_view_patterns[{i}]['view_type']: must be 'functional', "
+                    f"'integration', or 'deployment', got '{entry['view_type']}'")
+            try:
+                re.compile(entry['pattern'])
+            except re.error as err:
+                raise ConfigError(
+                    f"extra_view_patterns[{i}]['pattern']: invalid regex: {err}") from err
+            validated_vp.append({'pattern': entry['pattern'], 'view_type': entry['view_type']})
+        config.extra_view_patterns = validated_vp
 
     if 'strict' in data:
         val = data['strict']
@@ -414,6 +502,60 @@ def _apply_yaml(config: ConvertConfig, data: dict) -> None:
                     f"standard_keys: all items must be strings, got {type(item).__name__}: {item!r}")
         config.standard_keys = list(val)
 
+    if 'spec_colors' in data:
+        val = data['spec_colors']
+        if not isinstance(val, dict):
+            raise ConfigError(
+                f"spec_colors: expected mapping, got {type(val).__name__}")
+        for k, v in val.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                raise ConfigError(
+                    f"spec_colors: keys and values must be strings, got {k!r}: {v!r}")
+            if not _VALID_C4_ID.match(k):
+                raise ConfigError(
+                    f"spec_colors: invalid C4 identifier {k!r} "
+                    f"(must match [a-z][a-z0-9_-]*)")
+        config.spec_colors = {**config.spec_colors, **val}
+
+    if 'spec_shapes' in data:
+        val = data['spec_shapes']
+        if not isinstance(val, dict):
+            raise ConfigError(
+                f"spec_shapes: expected mapping, got {type(val).__name__}")
+        for k, v in val.items():
+            if not isinstance(k, str) or not isinstance(v, str):
+                raise ConfigError(
+                    f"spec_shapes: keys and values must be strings, got {k!r}: {v!r}")
+            if k not in _DEFAULT_SPEC_SHAPES:
+                raise ConfigError(
+                    f"spec_shapes: unknown element kind {k!r} "
+                    f"(must be one of: {', '.join(sorted(_DEFAULT_SPEC_SHAPES))})")
+        config.spec_shapes = {**config.spec_shapes, **val}
+
+    if 'spec_tags' in data:
+        val = data['spec_tags']
+        if not isinstance(val, list):
+            raise ConfigError(
+                f"spec_tags: expected list, got {type(val).__name__}")
+        for item in val:
+            if not isinstance(item, str):
+                raise ConfigError(
+                    f"spec_tags: all items must be strings, got {type(item).__name__}: {item!r}")
+            if not _VALID_C4_ID.match(item):
+                raise ConfigError(
+                    f"spec_tags: invalid C4 identifier {item!r} "
+                    f"(must match [a-z][a-z0-9_-]*)")
+        config.spec_tags = list(dict.fromkeys(config.spec_tags + list(val)))
+
+    if 'trash_folder' in data:
+        val = data['trash_folder']
+        if not isinstance(val, str):
+            raise ConfigError(
+                f"trash_folder: expected string, got {type(val).__name__}")
+        if not val.strip():
+            raise ConfigError("trash_folder: must not be empty")
+        config.trash_folder = val.strip()
+
     if 'sync_protected_top' in data:
         val = data['sync_protected_top']
         if not isinstance(val, list):
@@ -447,9 +589,9 @@ def save_suppress(
 
     Creates the file if it does not exist.  Preserves all other keys.
     """
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 
-    data: dict = {}
+    data: dict[str, Any] = {}
     if config_path.exists():
         with open(config_path, encoding='utf-8') as fh:
             raw = yaml.safe_load(fh)
@@ -472,16 +614,16 @@ def save_suppress(
 def update_config_field(
     config_path: Path,
     field_name: str,
-    value: dict | list | str | int | float | bool | None,
+    value: dict[str, Any] | list[Any] | str | int | float | bool | None,
 ) -> None:
     """Update a single field in YAML config file.
 
     Creates the file if it does not exist.  Preserves all other keys.
     If *value* is an empty dict/list or ``None``, removes the key.
     """
-    import yaml  # type: ignore[import-untyped]
+    import yaml
 
-    data: dict = {}
+    data: dict[str, Any] = {}
     if config_path.exists():
         with open(config_path, encoding='utf-8') as fh:
             raw = yaml.safe_load(fh)

@@ -29,7 +29,7 @@ def build_data_entities(data_objects: list[DataObject], used_ids: set[str]) -> l
     return sorted(entities, key=lambda e: e.name)
 
 
-def build_data_access(  # noqa: C901
+def build_data_access(
     systems: list[System],
     entities: list[DataEntity],
     relationships: list[RawRelationship],
