@@ -179,6 +179,7 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
         reviewed_systems=config.reviewed_systems,
         prop_map=config.property_map,
         standard_keys=config.standard_keys,
+        trash_folder=config.trash_folder,
     )
     systems, promoted_parents = build_systems(parsed.components, sys_build_cfg)
     total_subsystems = sum(len(s.subsystems) for s in systems)

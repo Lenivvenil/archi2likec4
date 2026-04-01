@@ -934,6 +934,22 @@ class TestExtractUrlAndAssignTags:
         from archi2likec4.builders.systems import _assign_tags
         assert _assign_tags('some_folder') == []
 
+    def test_assign_tags_custom_trash_folder(self):
+        from archi2likec4.builders.systems import _assign_tags
+        assert _assign_tags('!REVIEW', trash_folder='!REVIEW') == ['to_review']
+        assert _assign_tags('!РАЗБОР', trash_folder='!REVIEW') == []
+
+    def test_build_systems_custom_trash_folder(self):
+        """Systems in a custom trash folder get to_review tag."""
+        comps = [
+            AppComponent(archi_id='id-1', name='Legacy', source_folder='!REVIEW'),
+            AppComponent(archi_id='id-2', name='Normal', source_folder='some_folder'),
+        ]
+        systems, _ = build_systems(comps, SystemBuildConfig(trash_folder='!REVIEW'))
+        by_name = {s.name: s for s in systems}
+        assert 'to_review' in by_name['Legacy'].tags
+        assert by_name['Normal'].tags == []
+
 
 class TestBuildDataAccessMissingEntity:
     """Tests for data.py edge cases — missing entity, empty relationships."""

@@ -1037,6 +1037,33 @@ class TestExtraViewPatterns:
             _apply_yaml(config, {'extra_view_patterns': ['bad']})
 
 
+class TestTrashFolderConfig:
+    """trash_folder config option."""
+
+    def test_default_value(self):
+        config = ConvertConfig()
+        assert config.trash_folder == '!РАЗБОР'
+
+    def test_yaml_override(self):
+        config = ConvertConfig()
+        _apply_yaml(config, {'trash_folder': '!REVIEW'})
+        assert config.trash_folder == '!REVIEW'
+
+    def test_not_string_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='trash_folder.*expected string'):
+            _apply_yaml(config, {'trash_folder': 123})
+
+    def test_empty_string_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='trash_folder.*must not be empty'):
+            _apply_yaml(config, {'trash_folder': '  '})
+
+    def test_known_yaml_keys(self):
+        from archi2likec4.config import _KNOWN_YAML_KEYS
+        assert 'trash_folder' in _KNOWN_YAML_KEYS
+
+
 class TestExceptionHierarchy:
     """Verify exception class relationships."""
 

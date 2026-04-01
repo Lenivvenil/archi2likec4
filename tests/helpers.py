@@ -39,6 +39,7 @@ class MockConfig:
         spec_colors=None,
         spec_shapes=None,
         spec_tags=None,
+        trash_folder='!РАЗБОР',
     ):
         self.promote_children = promote_children or {}
         self.promote_warn_threshold = promote_warn_threshold
@@ -72,6 +73,7 @@ class MockConfig:
         self.spec_colors = spec_colors if spec_colors is not None else dict(_DEFAULT_SPEC_COLORS)
         self.spec_shapes = spec_shapes if spec_shapes is not None else dict(_DEFAULT_SPEC_SHAPES)
         self.spec_tags = spec_tags if spec_tags is not None else list(_DEFAULT_SPEC_TAGS)
+        self.trash_folder = trash_folder
 
 
 class MockBuilt:

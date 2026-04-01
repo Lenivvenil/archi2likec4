@@ -26,6 +26,7 @@ class SystemBuildConfig:
     reviewed_systems: list[str] = field(default_factory=list)
     prop_map: dict[str, str] | None = None
     standard_keys: list[str] | None = None
+    trash_folder: str = '!РАЗБОР'
 
 logger = logging.getLogger(__name__)
 
@@ -40,9 +41,9 @@ def _extract_url(documentation: str) -> str | None:
     return None
 
 
-def _assign_tags(source_folder: str) -> list[str]:
+def _assign_tags(source_folder: str, trash_folder: str = '!РАЗБОР') -> list[str]:
     """Derive element tags from the coArchi source folder name."""
-    if source_folder == '!РАЗБОР':
+    if source_folder == trash_folder:
         return ['to_review']
     if source_folder == '!External_services':
         return ['external']
@@ -79,7 +80,7 @@ def _attach_subsystems(
             c4_id=sub_c4_id, name=ac.name, archi_id=ac.archi_id,
             documentation=ac.documentation,
             metadata=build_metadata(ac, prop_map=prop_map, standard_keys=standard_keys),
-            tags=_assign_tags(ac.source_folder),
+            tags=_assign_tags(ac.source_folder, trash_folder=build_cfg.trash_folder if build_cfg else '!РАЗБОР'),
         ))
 
 
@@ -234,7 +235,7 @@ def build_systems(
         c4_id = make_unique_id(make_id(name), used_ids)
         used_ids.add(c4_id)
 
-        tags = _assign_tags(ac.source_folder)
+        tags = _assign_tags(ac.source_folder, trash_folder=build_cfg.trash_folder)
 
         if build_cfg.reviewed_systems and name in build_cfg.reviewed_systems and 'to_review' in tags:
             tags.remove('to_review')

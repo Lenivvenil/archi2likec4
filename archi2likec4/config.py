@@ -161,6 +161,9 @@ class ConvertConfig:
     spec_tags: list[str] = field(
         default_factory=lambda: list(_DEFAULT_SPEC_TAGS))
 
+    # Folder name treated as "trash / to-review" in coArchi source tree
+    trash_folder: str = '!РАЗБОР'
+
     # CLI flags
     strict: bool = False
     verbose: bool = False
@@ -216,6 +219,7 @@ _KNOWN_YAML_KEYS: set[str] = {
     'property_map', 'standard_keys',
     'sync_protected_top', 'sync_protected_paths',
     'spec_colors', 'spec_shapes', 'spec_tags',
+    'trash_folder',
 }
 
 
@@ -542,6 +546,15 @@ def _apply_yaml(config: ConvertConfig, data: dict[str, Any]) -> None:
                     f"spec_tags: invalid C4 identifier {item!r} "
                     f"(must match [a-z][a-z0-9_-]*)")
         config.spec_tags = list(dict.fromkeys(config.spec_tags + list(val)))
+
+    if 'trash_folder' in data:
+        val = data['trash_folder']
+        if not isinstance(val, str):
+            raise ConfigError(
+                f"trash_folder: expected string, got {type(val).__name__}")
+        if not val.strip():
+            raise ConfigError("trash_folder: must not be empty")
+        config.trash_folder = val
 
     if 'sync_protected_top' in data:
         val = data['sync_protected_top']

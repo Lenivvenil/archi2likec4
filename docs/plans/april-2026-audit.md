@@ -67,9 +67,9 @@
 
 Параметризовать оставшиеся hardcoded значения и добавить OSS-документацию.
 
-- [ ] В `archi2likec4/builders/systems.py`: заменить hardcoded `'!РАЗБОР'` на `config.trash_folder` с дефолтом `'!РАЗБОР'`; добавить поле `trash_folder: str = '!РАЗБОР'` в `ConvertConfig` (`config.py`)
-- [ ] В `pyproject.toml`: добавить upper bounds для зависимостей: `defusedxml>=0.7,<1.0`, `flask>=2.3,<4.0`, `pyyaml>=6.0,<7.0`
-- [ ] Создать `SECURITY.md` с политикой responsible disclosure (GitHub Security Advisories)
-- [ ] В `pyproject.toml`: добавить classifiers `Environment :: Console` и `Topic :: Software Development :: Code Generators`
-- [ ] Add/update tests for the above changes (тест для trash_folder config field + builder behaviour)
-- [ ] Mark completed
+- [x] В `archi2likec4/builders/systems.py`: заменить hardcoded `'!РАЗБОР'` на `config.trash_folder` с дефолтом `'!РАЗБОР'`; добавить поле `trash_folder: str = '!РАЗБОР'` в `ConvertConfig` (`config.py`)
+- [x] В `pyproject.toml`: добавить upper bounds для зависимостей: `defusedxml>=0.7,<1.0`, `flask>=2.3,<4.0`, `pyyaml>=6.0,<7.0`
+- [x] Создать `SECURITY.md` с политикой responsible disclosure (GitHub Security Advisories)
+- [x] В `pyproject.toml`: добавить classifiers `Environment :: Console` и `Topic :: Software Development :: Code Generators`
+- [x] Add/update tests for the above changes (тест для trash_folder config field + builder behaviour)
+- [x] Mark completed
