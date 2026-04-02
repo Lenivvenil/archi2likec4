@@ -9,6 +9,7 @@ from archi2likec4.generators import (
 )
 from archi2likec4.generators.views import (
     ViewContext,
+    _detect_env,
     _generate_deployment_view,
     _generate_functional_view,
     _generate_integration_view,
@@ -159,25 +160,26 @@ class TestGenerateDeploymentView:
         assert _generate_deployment_view(vd, ctx) == []
 
     def test_app_only_no_infra_returns_empty(self):
-        """App paths without infra mapping → generates view with include env.** and exclude rule for system."""
+        """App paths without infra mapping → generates view with unified exclude rule."""
         vd = self._vd('deployment_apponly', 'App Only', ['channels.efs'])
         ctx = ViewContext(archi_to_c4={}, sys_domain={}, tech_archi_to_c4={'infra-1': 'loc.cluster.node1'})
         lines = _generate_deployment_view(vd, ctx)
         content = '\n'.join(lines)
-        # App path (channels.efs) has system_id 'efs', which generates exclude rule
         assert 'include prod.**' in content
-        assert 'exclude * where kind is host and tag is not #system_efs' in content
+        # Unified exclude: one rule covers deployment nodes AND instances
+        assert 'exclude * where tag is not #system_efs' in content
+        exclude_lines = [ln for ln in lines if 'exclude' in ln]
+        assert len(exclude_lines) == 1
 
     def test_enrichment_from_deploy_targets(self):
-        """Infra paths enriched from deploy_targets; include env.** with exclude rule for system."""
+        """Infra paths enriched from deploy_targets; unified exclude rule."""
         vd = self._vd('deployment_enrich', 'Enriched', ['channels.efs'])
         ctx = ViewContext(archi_to_c4={}, sys_domain={}, tech_archi_to_c4={},
                           deploy_targets={'channels.efs': {'loc.server1'}})
         lines = _generate_deployment_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'include prod.**' in content
-        # App path 'channels.efs' has system_id 'efs'
-        assert 'exclude * where kind is host and tag is not #system_efs' in content
+        assert 'exclude * where tag is not #system_efs' in content
 
     def test_prefix_match_enrichment(self):
         """Subsystem deploy mappings picked up via prefix match; uses deployment_env."""
@@ -187,8 +189,7 @@ class TestGenerateDeploymentView:
         lines = _generate_deployment_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'include staging.**' in content
-        # App path 'channels.efs' has system_id 'efs'
-        assert 'exclude * where kind is host and tag is not #system_efs' in content
+        assert 'exclude * where tag is not #system_efs' in content
 
     def test_ancestor_dedup(self):
         """Ancestor dedup: 'loc' subsumes 'loc.cluster.node1'; include env.** (infra-only, no excludes)."""
@@ -201,7 +202,7 @@ class TestGenerateDeploymentView:
         assert 'exclude' not in content
 
     def test_qa11_warning(self):
-        """Multiple systems generate multiple exclude rules with sorted system IDs."""
+        """Multiple systems produce single unified exclude with all system tags."""
         many_apps = [f'dom.sys{i}' for i in range(45)]
         deploy = {f'dom.sys{i}': {f'dc{i}.rack.node{i}'} for i in range(45)}
         vd = self._vd('deployment_big', 'Big', many_apps)
@@ -210,22 +211,25 @@ class TestGenerateDeploymentView:
         lines = _generate_deployment_view(vd, ctx)
         content = '\n'.join(lines)
         assert 'include prod.**' in content
-        # Check that multiple exclude rules are generated and sorted
-        assert 'exclude * where kind is host and tag is not #system_sys0' in content
-        assert 'exclude * where kind is host and tag is not #system_sys44' in content
-        # Verify count of exclude lines matches number of unique systems
-        exclude_count = sum(1 for line in lines if 'exclude' in line)
-        assert exclude_count == 45
+        # Unified: one exclude rule with all system tags AND'd
+        exclude_lines = [ln for ln in lines if 'exclude' in ln]
+        assert len(exclude_lines) == 1
+        assert 'tag is not #system_sys0' in exclude_lines[0]
+        assert 'tag is not #system_sys44' in exclude_lines[0]
 
-    def test_no_trailing_comma(self):
-        """Last exclude line should not have trailing comma."""
-        vd = self._vd('deployment_comma', 'Comma', ['dom.sys1', 'dom.sys2'])
+    def test_multi_system_combined_predicate(self):
+        """Two systems produce single unified exclude (union logic)."""
+        vd = self._vd('deployment_multi', 'Multi', ['dom.sys1', 'dom.sys2'])
         ctx = ViewContext(archi_to_c4={}, sys_domain={}, tech_archi_to_c4={},
                           deploy_targets={'dom.sys1': {'dc.node1'}, 'dom.sys2': {'dc.node2'}})
         lines = _generate_deployment_view(vd, ctx)
-        # All lines end with } or no comma since these are single-line includes/excludes
+        content = '\n'.join(lines)
+        # Combined: "tag is not #system_sys1 and tag is not #system_sys2"
+        expected_preds = 'tag is not #system_sys1 and tag is not #system_sys2'
+        assert f'exclude * where {expected_preds}' in content
+        # Exactly 1 unified exclude line
         exclude_lines = [ln for ln in lines if 'exclude' in ln]
-        assert exclude_lines[-1].rstrip().endswith('#system_sys2')
+        assert len(exclude_lines) == 1
 
 
 # ── _generate_functional_view ────────────────────────────────────────────
@@ -684,9 +688,9 @@ class TestGenerateSolutionViews:
         files, _, _ = generate_solution_views([sv], ctx)
         assert 'app_only' in files
         content = files['app_only']
-        # New format: include env.** with exclude rule for system
+        # Unified exclude: covers deployment nodes and instances
         assert 'include prod.**' in content
-        assert 'exclude * where kind is host and tag is not #system_efs' in content
+        assert 'exclude * where tag is not #system_efs' in content
         assert 'deployment view' in content
 
     def test_dispatcher_all_three_view_types_in_one_solution(self):
@@ -726,9 +730,9 @@ class TestGenerateSolutionViews:
         assert "Functional Architecture: Pay" in content
         # Integration view has relationship
         assert 'channels.efs -> products.abs' in content
-        # New format: include prod.** with exclude rule for system
+        # Unified exclude
         assert 'include prod.**' in content
-        assert 'exclude * where kind is host and tag is not #system_efs' in content
+        assert 'exclude * where tag is not #system_efs' in content
         assert unresolved == 0
         assert total > 0
 
@@ -782,13 +786,14 @@ class TestSolutionViewDeployment:
         files, unresolved, total = generate_solution_views([sv], ctx)
         assert 'payment_deploy' in files
         content = files['payment_deploy']
-        # New format: include prod.** with exclude rules for both systems
+        # Unified exclude: both systems in one rule (no kind restriction)
         assert 'include prod.**' in content
-        assert 'exclude * where kind is host and tag is not #system_efs' in content
-        assert 'exclude * where kind is host and tag is not #system_abs' in content
+        expected_preds = 'tag is not #system_abs and tag is not #system_efs'
+        assert f'exclude * where {expected_preds}' in content
         assert 'deployment view' in content
 
-    def test_deployment_view_with_infra_paths(self):
+    def test_deployment_view_with_infra_paths_no_deploy_map(self):
+        """Infra-only view without deploy_map has no exclude (no reverse lookup possible)."""
         sv = SolutionView(
             name='deployment_architecture.InfraOnly',
             view_type='deployment',
@@ -800,9 +805,60 @@ class TestSolutionViewDeployment:
         files, _, _ = generate_solution_views([sv], ctx)
         assert 'infra_only' in files
         content = files['infra_only']
-        # Infra-only (no app paths): include prod.** with no excludes
         assert 'include prod.**' in content
         assert 'exclude' not in content
+
+    def test_infra_only_derives_exclude_from_deploy_targets(self):
+        """Infra-only diagram derives system_ids via reverse deploy_targets lookup."""
+        sv = SolutionView(
+            name='deployment_architecture.CiscoProd',
+            view_type='deployment',
+            solution='cisco_prod',
+            element_archi_ids=['n-1', 'n-2'],
+        )
+        tech_archi_to_c4 = {'n-1': 'dc.switch1', 'n-2': 'dc.switch2'}
+        deploy_map = [
+            ('channels.pbx', 'dc.switch1'),
+            ('platform.voip', 'dc.switch2'),
+        ]
+        ctx = build_view_context(
+            {}, {'pbx': 'channels', 'voip': 'platform'},
+            tech_archi_to_c4=tech_archi_to_c4,
+            deployment_map=deploy_map,
+        )
+        files, _, _ = generate_solution_views([sv], ctx)
+        content = files['cisco_prod']
+        assert 'include prod.**' in content
+        assert 'tag is not #system_pbx' in content
+        assert 'tag is not #system_voip' in content
+
+    def test_deployment_view_env_detected_from_name(self):
+        """Deployment view detects environment from solution view name suffix."""
+        sv = SolutionView(
+            name='deployment_architecture.EFS (Dev)',
+            view_type='deployment',
+            solution='efs_dev',
+            element_archi_ids=['ac-1'],
+        )
+        archi_to_c4 = {'ac-1': 'channels.efs'}
+        ctx = build_view_context(archi_to_c4, {'efs': 'channels'})
+        files, _, _ = generate_solution_views([sv], ctx)
+        content = files['efs_dev']
+        assert 'include dev.**' in content
+
+    def test_deployment_view_env_default_when_no_suffix(self):
+        """No environment suffix → uses default (prod)."""
+        sv = SolutionView(
+            name='deployment_architecture.EFS',
+            view_type='deployment',
+            solution='efs_prod',
+            element_archi_ids=['ac-1'],
+        )
+        archi_to_c4 = {'ac-1': 'channels.efs'}
+        ctx = build_view_context(archi_to_c4, {'efs': 'channels'})
+        files, _, _ = generate_solution_views([sv], ctx)
+        content = files['efs_prod']
+        assert 'include prod.**' in content
 
 
 # ── generate_solution_views: subdomain-aware paths ───────────────────────
@@ -1045,3 +1101,36 @@ class TestSystemPathFromC4:
     def test_single_part_path_returned_unchanged(self):
         """Single-segment path returned as-is (no dots)."""
         assert _system_path_from_c4('billing', None) == 'billing'
+
+
+# ── _detect_env ──────────────────────────────────────────────────────────
+
+class TestDetectEnv:
+    """Unit tests for _detect_env environment name extraction."""
+
+    def test_dev_suffix(self):
+        assert _detect_env('EFS (Dev)', 'prod') == 'dev'
+
+    def test_dev_uppercase(self):
+        assert _detect_env('DonoCRM (DEV)', 'prod') == 'dev'
+
+    def test_test_suffix(self):
+        assert _detect_env('AIM (TEST)', 'prod') == 'test'
+
+    def test_stage_suffix(self):
+        assert _detect_env('EFS_BRS (STAGE)', 'prod') == 'stage'
+
+    def test_pre_prod_suffix(self):
+        assert _detect_env('AIM (Pre Prod)', 'prod') == 'pre_prod'
+
+    def test_prod_suffix(self):
+        assert _detect_env('AIM (Prod)', 'prod') == 'prod'
+
+    def test_no_suffix_returns_default(self):
+        assert _detect_env('AIM', 'prod') == 'prod'
+
+    def test_unknown_suffix_returns_default(self):
+        assert _detect_env('AIM (QA)', 'prod') == 'prod'
+
+    def test_cyrillic_name_with_suffix(self):
+        assert _detect_env('Схема развертывания EFS (Dev)', 'prod') == 'dev'

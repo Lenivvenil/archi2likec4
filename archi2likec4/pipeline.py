@@ -295,13 +295,16 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
         deployment_nodes, all_visual_nesting)
     if reparented:
         logger.info('Visual nesting enrichment: %d nodes re-parented', reparented)
+        # Re-run context-dependent kind resolution after enrichment added new children
+        from .builders.deployment import _resolve_context_kinds
+        _resolve_context_kinds(deployment_nodes)
 
     all_dn = flatten_deployment_nodes(deployment_nodes)
     logger.info('%d top-level deployment nodes, %d total',
                 len(deployment_nodes), len(all_dn))
 
-    # Diagnostic: report orphan nodes (non-Location roots) — candidates for missing visual nesting
-    orphan_roots = [dn for dn in deployment_nodes if dn.kind != 'infraLocation']
+    # Diagnostic: report orphan nodes (non-Location/site roots) — candidates for missing visual nesting
+    orphan_roots = [dn for dn in deployment_nodes if dn.kind != 'site']
     if orphan_roots:
         orphan_names = ', '.join(dn.name for dn in orphan_roots)
         logger.info('Orphan root nodes (no Location parent): %s', orphan_names)

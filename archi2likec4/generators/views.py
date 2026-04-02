@@ -3,13 +3,36 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass, field
+import re
+from dataclasses import dataclass, field, replace
 from typing import NamedTuple
 
 from ..models import RawRelationship, SolutionView
-from ..utils import escape_str
+from ..utils import escape_str, extract_system_id, system_path_from_c4
 
 logger = logging.getLogger(__name__)
+
+# ── Environment detection from solution view names ────────────────────────
+_ENV_PATTERN = re.compile(r'\(([^)]+)\)\s*$')
+_ENV_MAP: dict[str, str] = {
+    'dev': 'dev', 'development': 'dev',
+    'test': 'test', 'testing': 'test',
+    'stage': 'stage', 'staging': 'stage',
+    'pre prod': 'pre_prod', 'pre-prod': 'pre_prod', 'preprod': 'pre_prod',
+    'prod': 'prod', 'production': 'prod',
+}
+
+
+def _detect_env(name: str, default: str) -> str:
+    """Extract deployment environment from solution view name suffix like ``(Dev)``.
+
+    Returns *default* when no known environment suffix is found.
+    """
+    m = _ENV_PATTERN.search(name)
+    if m:
+        raw = m.group(1).strip().lower()
+        return _ENV_MAP.get(raw, default)
+    return default
 
 
 @dataclass
@@ -124,42 +147,11 @@ def _system_path_from_c4(
     sys_ids: set[str] | None = None,
     sys_domain: dict[str, str] | None = None,
 ) -> str:
-    """Extract the domain-qualified system path from a full c4 element path.
+    """Thin wrapper kept for backwards compatibility with tests.
 
-    Handles both 2-part (domain.system) and 3-part (domain.subdomain.system)
-    paths as well as deeper paths (subsystems, functions).  When sys_subdomain
-    is provided it is used to detect whether the second segment is a subdomain
-    rather than the system itself.
-
-    ``sys_ids`` is the set of all known system c4_ids.  When provided, the
-    3-part path is only returned if parts[2] is a known system, preventing a
-    false match when parts[2] is a subsystem whose archi_id coincidentally
-    equals a system that has parts[1] as its subdomain.
-
-    ``sys_domain`` maps system c4_id → domain name.  When provided, the
-    3-part path is only returned if parts[2] belongs to the same domain as
-    parts[0], preventing a false match when a same-named system exists in a
-    different domain.
+    Delegates to :func:`archi2likec4.utils.system_path_from_c4`.
     """
-    parts = path.split('.')
-    # parts[2] is the system if its mapped subdomain equals parts[1]
-    # (authoritative via sys_subdomain lookup),
-    # AND parts[2] is a known system id (not a subsystem),
-    # AND parts[2] belongs to the same domain as parts[0].
-    # Note: parts[1] may itself also be a system id in the same domain
-    # (subdomain name collision); that does NOT change the interpretation
-    # because sys_subdomain.get(parts[2]) == parts[1] is definitive.
-    if (
-        sys_subdomain
-        and len(parts) >= 3
-        and sys_subdomain.get(parts[2]) == parts[1]
-        and (sys_ids is None or parts[2] in sys_ids)
-        and (sys_domain is None or sys_domain.get(parts[2]) == parts[0])
-    ):
-        return f'{parts[0]}.{parts[1]}.{parts[2]}'
-    if len(parts) >= 2:
-        return f'{parts[0]}.{parts[1]}'
-    return path
+    return system_path_from_c4(path, sys_subdomain, sys_ids, sys_domain)
 
 
 def _resolve_elements(
@@ -276,19 +268,29 @@ def _generate_deployment_view(vd: _ViewData, ctx: ViewContext) -> list[str]:
     # Extract system IDs from app paths for tag-based scoping
     system_ids: set[str] = set()
     for ap in app_paths:
-        parts = ap.split('.')
-        if len(parts) >= 2:
-            system_ids.add(parts[1])
+        system_ids.add(extract_system_id(ap, ctx.sys_subdomain, ctx.sys_ids, ctx.sys_domain))
+
+    # Fallback: infra-only diagrams — derive system_ids via reverse deploy_targets lookup
+    if not system_ids and infra_paths and ctx.deploy_targets:
+        infra_set = set(infra_paths)
+        for app_path, targets in ctx.deploy_targets.items():
+            for t in targets:
+                if t in infra_set or any(t.startswith(ip + '.') or ip.startswith(t + '.') for ip in infra_set):
+                    system_ids.add(extract_system_id(app_path, ctx.sys_subdomain, ctx.sys_ids, ctx.sys_domain))
+                    break
 
     env = ctx.deployment_env
     lines: list[str] = []
     lines.append(f"  deployment view {vd.view_id} {{")
     lines.append(f"    title '{escape_str(vd.title)}'")
-    # Include full environment, then exclude non-matching hosts by tag
+    # Include full environment, then exclude everything not tagged for this system.
+    # Unified rule: covers deployment nodes AND instances (which inherit model tags).
+    # Combined predicate: "tag is not #A and tag is not #B" excludes elements
+    # lacking ALL listed tags → keeps elements with ANY matching tag.
     lines.append(f"    include {env}.**")
     if system_ids:
-        for sys_id in sorted(system_ids):
-            lines.append(f"    exclude * where kind is host and tag is not #system_{sys_id}")
+        tag_preds = ' and '.join(f'tag is not #system_{sid}' for sid in sorted(system_ids))
+        lines.append(f"    exclude * where {tag_preds}")
     lines.append("  }")
     return lines
 
@@ -563,7 +565,9 @@ def _dispatch_view(
     elif sv.view_type == 'integration':
         lines = _generate_integration_view(vd, ctx)
     else:  # deployment
-        lines = _generate_deployment_view(vd, ctx)
+        detected_env = _detect_env(sv.name, ctx.deployment_env)
+        view_ctx = replace(ctx, deployment_env=detected_env) if detected_env != ctx.deployment_env else ctx
+        lines = _generate_deployment_view(vd, view_ctx)
 
     return lines, unresolved, non_entity_count
 

@@ -106,10 +106,8 @@ def _resolve_context_kinds(
     - TechnologyCollaboration inside cluster with namespace keywords → namespace
     """
     for node in nodes:
-        # Hypervisor: SystemSoftware containing VMs
-        if node.tech_type == 'SystemSoftware' and any(
-            c.tech_type in ('Node', 'Device') for c in node.children
-        ):
+        # Hypervisor/container host: SystemSoftware with any children → cluster
+        if node.tech_type == 'SystemSoftware' and node.children:
             node.kind = 'cluster'
 
         # Node: context-dependent vm vs server

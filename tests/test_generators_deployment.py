@@ -400,6 +400,24 @@ class TestKindResolution:
         assert hypervisor.kind == 'cluster'
         assert hypervisor.children[0].kind == 'vm'
 
+    def test_system_software_with_software_children_becomes_cluster(self):
+        """Container host: SystemSoftware containing other SystemSoftware → cluster."""
+        from archi2likec4.builders.deployment import build_deployment_topology
+        from archi2likec4.models import RawRelationship, TechElement
+        elements = [
+            TechElement(archi_id='t-1', name='Linux', tech_type='SystemSoftware'),
+            TechElement(archi_id='t-2', name='nginx', tech_type='SystemSoftware'),
+        ]
+        rels = [RawRelationship(
+            rel_id='r-1', rel_type='AggregationRelationship', name='',
+            source_id='t-1', target_id='t-2',
+            source_type='SystemSoftware', target_type='SystemSoftware',
+        )]
+        nodes = build_deployment_topology(elements, rels)
+        container = nodes[0]
+        assert container.kind == 'cluster'
+        assert container.children[0].kind == 'infraSoftware'
+
     def test_system_software_without_children_stays_infra_software(self):
         """Plain SystemSoftware stays infraSoftware."""
         from archi2likec4.builders.deployment import build_deployment_topology
