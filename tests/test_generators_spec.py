@@ -54,10 +54,13 @@ class TestGenerateSpec:
             'appFunction': 'rectangle',
             'dataEntity': 'document',
             'dataStore': 'cylinder',
-            'infraNode': 'rectangle',
+            'site': 'rectangle',
+            'segment': 'rectangle',
+            'cluster': 'rectangle',
+            'server': 'rectangle',
+            'vm': 'rectangle',
+            'namespace': 'rectangle',
             'infraSoftware': 'cylinder',
-            'infraZone': 'rectangle',
-            'infraLocation': 'rectangle',
         })
         spec = generate_spec(cfg)
         # domain should use hexagon now
@@ -99,20 +102,36 @@ class TestGenerateSpec_InfraKinds:
         spec = generate_spec()
         assert 'deploymentNode environment' in spec
 
-    def test_spec_includes_infra_node(self):
+    def test_spec_includes_deployment_kinds(self):
         spec = generate_spec()
-        assert 'deploymentNode infraNode' in spec
-        assert 'deploymentNode infraZone' in spec
+        assert 'deploymentNode site' in spec
+        assert 'deploymentNode segment' in spec
+        assert 'deploymentNode cluster' in spec
+        assert 'deploymentNode server' in spec
+        assert 'deploymentNode vm' in spec
+        assert 'deploymentNode namespace' in spec
         assert 'deploymentNode infraSoftware' in spec
-        assert 'deploymentNode infraLocation' in spec
-        assert 'archi-tech' in spec
 
-    def test_spec_infra_zone_style(self):
+    def test_spec_excludes_old_kinds(self):
         spec = generate_spec()
-        # infraZone should have dotted border
-        zone_idx = spec.index('deploymentNode infraZone')
-        zone_block = spec[zone_idx:spec.index('}', spec.index('}', zone_idx) + 1) + 1]
-        assert 'border dotted' in zone_block
+        assert 'deploymentNode infraNode' not in spec
+        assert 'deploymentNode infraZone' not in spec
+        assert 'deploymentNode infraLocation' not in spec
+        assert 'deploymentNode host' not in spec
+
+    def test_spec_segment_style(self):
+        spec = generate_spec()
+        # segment should have dotted border
+        seg_idx = spec.index('deploymentNode segment')
+        seg_block = spec[seg_idx:spec.index('}', spec.index('}', seg_idx) + 1) + 1]
+        assert 'border dotted' in seg_block
+
+    def test_spec_site_style(self):
+        spec = generate_spec()
+        # site should have dashed border
+        site_idx = spec.index('deploymentNode site')
+        site_block = spec[site_idx:spec.index('}', spec.index('}', site_idx) + 1) + 1]
+        assert 'border dashed' in site_block
 
     def test_spec_no_deployed_on(self):
         spec = generate_spec()

@@ -110,10 +110,10 @@ class TestDataStoreDetection:
         assert roots[0].kind == 'infraSoftware'
 
     def test_node_never_datastore(self):
-        """Even if Node name contains 'database', it stays infraNode."""
+        """Even if Node name contains 'database', it stays a compute kind (server)."""
         elems = [TechElement(archi_id='n-1', name='Database Server', tech_type='Node')]
         roots = build_deployment_topology(elems, [])
-        assert roots[0].kind == 'infraNode'
+        assert roots[0].kind == 'server'
 
     def test_stage_db_becomes_infrasoftware(self):
         elems = [TechElement(archi_id='sw-1', name='Stage DB', tech_type='SystemSoftware')]
@@ -121,25 +121,30 @@ class TestDataStoreDetection:
         assert roots[0].kind == 'infraSoftware'
 
     def test_unknown_tech_type_fallback_kind(self):
-        """Element with unknown tech_type (e.g. TechnologyFunction) gets infraSoftware."""
+        """Elements with known tech_types get their mapped kinds."""
         elems = [
             TechElement(archi_id='tf-1', name='Backup Job', tech_type='TechnologyFunction'),
             TechElement(archi_id='tp-1', name='ETL Process', tech_type='TechnologyProcess'),
             TechElement(archi_id='ti-1', name='Sync', tech_type='TechnologyInteraction'),
         ]
         roots = build_deployment_topology(elems, [])
-        for node in roots:
-            assert node.kind == 'infraSoftware', f'{node.name} should be infraSoftware'
+        by_name = {r.name: r for r in roots}
+        # TechnologyFunction/TechnologyProcess → vm (mapped kind)
+        assert by_name['Backup Job'].kind == 'vm'
+        assert by_name['ETL Process'].kind == 'vm'
+        # TechnologyInteraction → cluster
+        assert by_name['Sync'].kind == 'cluster'
 
-    def test_node_named_like_db_stays_infranode(self):
-        """Node with DB-like name stays infraNode — Node/Device are always containers."""
+    def test_node_named_like_db_stays_compute(self):
+        """Node with DB-like name stays a compute kind — Node/Device are always containers."""
         elems = [
             TechElement(archi_id='n-1', name='PostgreSQL Cluster', tech_type='Node'),
             TechElement(archi_id='d-1', name='Oracle Database Server', tech_type='Device'),
         ]
         roots = build_deployment_topology(elems, [])
-        for node in roots:
-            assert node.kind == 'infraNode', f'{node.name} should be infraNode'
+        by_name = {r.name: r for r in roots}
+        assert by_name['PostgreSQL Cluster'].kind == 'server'  # top-level Node → server
+        assert by_name['Oracle Database Server'].kind == 'server'  # Device → server
 
     def test_db_named_systemsoftware_becomes_infrasoftware(self):
         """DB-named SystemSoftware elements become infraSoftware regardless of name."""

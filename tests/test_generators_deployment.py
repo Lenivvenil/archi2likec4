@@ -13,12 +13,12 @@ class TestGenerateDeploymentC4:
         nodes = [
             DeploymentNode(
                 c4_id='srv_1', name='Server 1', archi_id='n-1',
-                tech_type='Node', kind='infraNode',
+                tech_type='Node', kind='server',
                 documentation='vCPU: 8',
             ),
         ]
         content = generate_deployment_c4(nodes)
-        assert "srv_1 = infraNode 'Server 1'" in content
+        assert "srv_1 = server 'Server 1'" in content
         assert "archi_id 'n-1'" in content
         assert "tech_type 'Node'" in content
         assert "description 'vCPU: 8'" in content
@@ -32,15 +32,15 @@ class TestGenerateDeploymentC4:
         )
         parent = DeploymentNode(
             c4_id='srv_1', name='Server 1', archi_id='n-1',
-            tech_type='Node', kind='infraNode',
+            tech_type='Node', kind='server',
             children=[child],
         )
         content = generate_deployment_c4([parent])
-        assert "srv_1 = infraNode 'Server 1'" in content
+        assert "srv_1 = server 'Server 1'" in content
         assert "pg = infraSoftware 'PostgreSQL'" in content
         # Child should be indented more than parent
         lines = content.split('\n')
-        parent_line = next(ln for ln in lines if 'srv_1 = infraNode' in ln)
+        parent_line = next(ln for ln in lines if 'srv_1 = server' in ln)
         child_line = next(ln for ln in lines if 'pg = infraSoftware' in ln)
         assert len(child_line) - len(child_line.lstrip()) > len(parent_line) - len(parent_line.lstrip())
 
@@ -48,7 +48,7 @@ class TestGenerateDeploymentC4:
         """instanceOf is added for apps mapped to a node via deployment_map."""
         node = DeploymentNode(
             c4_id='srv_1', name='Server 1', archi_id='n-1',
-            tech_type='Node', kind='infraNode',
+            tech_type='Node', kind='server',
         )
         deployment_map = [('channels.efs', 'srv_1'), ('products.mls', 'srv_1')]
         content = generate_deployment_c4([node], deployment_map=deployment_map)
@@ -58,12 +58,12 @@ class TestGenerateDeploymentC4:
     def test_instance_of_duplicate_base_name_aliased(self):
         """Two instanceOf with same last segment get unique aliases."""
         node = DeploymentNode(
-            c4_id='wan', name='WAN', archi_id='n-1',
-            tech_type='Path', kind='infraZone',
+            c4_id='vm1', name='VM-1', archi_id='n-1',
+            tech_type='Node', kind='vm',
         )
         deployment_map = [
-            ('customer_service.collection.ras.mib', 'wan'),
-            ('products.loan.mib', 'wan'),
+            ('customer_service.collection.ras.mib', 'vm1'),
+            ('products.loan.mib', 'vm1'),
         ]
         content = generate_deployment_c4([node], deployment_map=deployment_map)
         assert 'instanceOf customer_service.collection.ras.mib' in content
@@ -77,7 +77,7 @@ class TestGenerateDeploymentC4:
         )
         parent = DeploymentNode(
             c4_id='srv_1', name='Server 1', archi_id='n-1',
-            tech_type='Node', kind='infraNode',
+            tech_type='Node', kind='server',
             children=[child],
         )
         deployment_map = [('channels.donocrm.nginx', 'srv_1')]
@@ -90,7 +90,7 @@ class TestGenerateDeploymentC4:
         """instanceOf without name conflicts renders without alias."""
         node = DeploymentNode(
             c4_id='srv_1', name='Server 1', archi_id='n-1',
-            tech_type='Node', kind='infraNode',
+            tech_type='Node', kind='server',
         )
         deployment_map = [('channels.efs', 'srv_1')]
         content = generate_deployment_c4([node], deployment_map=deployment_map)
@@ -99,23 +99,332 @@ class TestGenerateDeploymentC4:
 
     def test_instance_of_nested_path(self):
         """instanceOf is placed inside the correct nested node by full path."""
-        child = DeploymentNode(
-            c4_id='pg', name='PostgreSQL', archi_id='sw-1',
+        vm_child = DeploymentNode(
+            c4_id='vm1', name='VM-1', archi_id='n-2',
+            tech_type='Node', kind='vm',
+        )
+        srv = DeploymentNode(
+            c4_id='srv_1', name='Server 1', archi_id='n-1',
+            tech_type='Node', kind='server',
+            children=[vm_child],
+        )
+        deployment_map = [('channels.aim.aim', 'srv_1.vm1')]
+        content = generate_deployment_c4([srv], deployment_map=deployment_map)
+        assert 'instanceOf channels.aim.aim' in content
+        lines = content.split('\n')
+        vm_idx = next(i for i, ln in enumerate(lines) if "vm1 = vm" in ln)
+        instance_idx = next(i for i, ln in enumerate(lines) if 'instanceOf channels.aim.aim' in ln)
+        assert instance_idx > vm_idx
+
+    def test_host_system_tags(self):
+        """Hosts get #system_X tags from their instanceOf app paths."""
+        node = DeploymentNode(
+            c4_id='vm1', name='VM-1', archi_id='n-1',
+            tech_type='Node', kind='vm',
+        )
+        deployment_map = [('channels.efs', 'vm1'), ('products.abs', 'vm1')]
+        content = generate_deployment_c4([node], deployment_map=deployment_map)
+        assert "#system_abs #system_efs" in content
+        assert "vm1 = vm 'VM-1'" in content
+
+    def test_ancestor_tag_propagation(self):
+        """Ancestor structural nodes get system tags propagated from descendant hosts."""
+        vm = DeploymentNode(
+            c4_id='vm1', name='VM-1', archi_id='n-3',
+            tech_type='Node', kind='vm',
+        )
+        cluster = DeploymentNode(
+            c4_id='cluster1', name='Cluster-1', archi_id='n-2',
+            tech_type='TechnologyCollaboration', kind='cluster',
+            children=[vm],
+        )
+        site = DeploymentNode(
+            c4_id='site1', name='Site-1', archi_id='n-1',
+            tech_type='Location', kind='site',
+            children=[cluster],
+        )
+        deployment_map = [('channels.efs', 'site1.cluster1.vm1')]
+        content = generate_deployment_c4([site], deployment_map=deployment_map)
+        lines = content.split('\n')
+        # Host (vm1) gets system tag
+        vm_line = next(i for i, ln in enumerate(lines) if "vm1 = vm" in ln)
+        assert '#system_efs' in lines[vm_line + 1]
+        # Ancestors (site1, cluster1) also get system tag
+        site_line = next(i for i, ln in enumerate(lines) if "site1 = site" in ln)
+        assert '#system_efs' in lines[site_line + 1]
+        cluster_line = next(i for i, ln in enumerate(lines) if "cluster1 = cluster" in ln)
+        assert '#system_efs' in lines[cluster_line + 1]
+
+    def test_orphan_nodes_no_tags(self):
+        """Structural nodes without descendant hosts get no system tags."""
+        orphan = DeploymentNode(
+            c4_id='site2', name='Site-2', archi_id='n-4',
+            tech_type='Location', kind='site',
+        )
+        host = DeploymentNode(
+            c4_id='vm1', name='VM-1', archi_id='n-3',
+            tech_type='Node', kind='vm',
+        )
+        site1 = DeploymentNode(
+            c4_id='site1', name='Site-1', archi_id='n-1',
+            tech_type='Location', kind='site',
+            children=[host],
+        )
+        deployment_map = [('channels.efs', 'site1.vm1')]
+        content = generate_deployment_c4([site1, orphan], deployment_map=deployment_map)
+        lines = content.split('\n')
+        # site2 should NOT have any system tags
+        site2_idx = next(i for i, ln in enumerate(lines) if "site2 = site" in ln)
+        assert '#system' not in lines[site2_idx + 1]
+
+
+# ── instanceOf filtering ────────────────────────────────────────────────
+
+class TestInstanceOfFiltering:
+    """instanceOf is only allowed on leaf compute kinds (vm, server, namespace)."""
+
+    def test_no_instance_on_segment(self):
+        """WAN (Path/segment) must not contain instanceOf."""
+        wan = DeploymentNode(
+            c4_id='wan', name='WAN', archi_id='n-1',
+            tech_type='Path', kind='segment',
+        )
+        deployment_map = [('channels.aim.aim', 'wan')]
+        content = generate_deployment_c4([wan], deployment_map=deployment_map)
+        assert 'instanceOf' not in content
+
+    def test_no_instance_on_cluster(self):
+        """Cluster must not contain instanceOf directly."""
+        cluster = DeploymentNode(
+            c4_id='k8s', name='K8s', archi_id='n-1',
+            tech_type='TechnologyCollaboration', kind='cluster',
+        )
+        deployment_map = [('channels.aim.aim', 'k8s')]
+        content = generate_deployment_c4([cluster], deployment_map=deployment_map)
+        assert 'instanceOf' not in content
+
+    def test_no_instance_on_site(self):
+        """Site must not contain instanceOf."""
+        site = DeploymentNode(
+            c4_id='dc1', name='DC-1', archi_id='n-1',
+            tech_type='Location', kind='site',
+        )
+        deployment_map = [('channels.aim.aim', 'dc1')]
+        content = generate_deployment_c4([site], deployment_map=deployment_map)
+        assert 'instanceOf' not in content
+
+    def test_instance_on_vm(self):
+        """VM gets instanceOf."""
+        vm = DeploymentNode(
+            c4_id='vm1', name='VM-1', archi_id='n-1',
+            tech_type='Node', kind='vm',
+        )
+        cluster = DeploymentNode(
+            c4_id='cluster1', name='K8s', archi_id='n-2',
+            tech_type='TechnologyCollaboration', kind='cluster',
+            children=[vm],
+        )
+        deployment_map = [('channels.aim.aim', 'cluster1.vm1')]
+        content = generate_deployment_c4([cluster], deployment_map=deployment_map)
+        assert 'instanceOf channels.aim.aim' in content
+        assert "vm1 = vm 'VM-1'" in content
+
+    def test_instance_on_server(self):
+        """Server (bare-metal) gets instanceOf."""
+        srv = DeploymentNode(
+            c4_id='srv1', name='Lenovo SN550', archi_id='n-1',
+            tech_type='Device', kind='server',
+        )
+        deployment_map = [('platform.ibm_mq', 'srv1')]
+        content = generate_deployment_c4([srv], deployment_map=deployment_map)
+        assert 'instanceOf platform.ibm_mq' in content
+
+    def test_instance_on_namespace(self):
+        """Namespace gets instanceOf."""
+        ns = DeploymentNode(
+            c4_id='ns_prod', name='ns-prod', archi_id='n-1',
+            tech_type='TechnologyCollaboration', kind='namespace',
+        )
+        deployment_map = [('channels.efs', 'ns_prod')]
+        content = generate_deployment_c4([ns], deployment_map=deployment_map)
+        assert 'instanceOf channels.efs' in content
+
+    def test_mixed_filtering(self):
+        """Only placements on leaf kinds survive, structural ones are filtered."""
+        wan = DeploymentNode(
+            c4_id='wan', name='WAN', archi_id='n-1',
+            tech_type='Path', kind='segment',
+        )
+        vm = DeploymentNode(
+            c4_id='vm1', name='VM-1', archi_id='n-2',
+            tech_type='Node', kind='vm',
+        )
+        deployment_map = [
+            ('channels.aim.aim', 'wan'),       # filtered
+            ('channels.aim.aim', 'vm1'),        # kept
+        ]
+        content = generate_deployment_c4([wan, vm], deployment_map=deployment_map)
+        assert 'instanceOf channels.aim.aim' in content
+        # instanceOf should be inside vm1, not wan
+        lines = content.split('\n')
+        vm_idx = next(i for i, ln in enumerate(lines) if "vm1 = vm" in ln)
+        instance_idx = next(i for i, ln in enumerate(lines) if 'instanceOf channels.aim.aim' in ln)
+        assert instance_idx > vm_idx
+
+
+# ── orphan infraSoftware dropping ────────────────────────────────────────
+
+class TestOrphanDropping:
+    """Orphan infraSoftware (top-level, no parent) is not rendered."""
+
+    def test_orphan_infra_software_dropped(self):
+        """Top-level infraSoftware without parent is not rendered."""
+        orphan = DeploymentNode(
+            c4_id='winrar', name='WinRAR 6.02', archi_id='n-1',
             tech_type='SystemSoftware', kind='infraSoftware',
         )
-        parent = DeploymentNode(
-            c4_id='srv_1', name='Server 1', archi_id='n-1',
-            tech_type='Node', kind='infraNode',
-            children=[child],
+        content = generate_deployment_c4([orphan])
+        assert 'winrar' not in content
+        assert 'WinRAR' not in content
+
+    def test_nested_infra_software_kept(self):
+        """infraSoftware inside a VM is rendered."""
+        sw = DeploymentNode(
+            c4_id='rhel', name='RHEL 8', archi_id='n-2',
+            tech_type='SystemSoftware', kind='infraSoftware',
         )
-        deployment_map = [('channels.aim.aim', 'srv_1.pg')]
-        content = generate_deployment_c4([parent], deployment_map=deployment_map)
-        assert 'instanceOf channels.aim.aim' in content
-        # Should NOT be at root level
-        lines = content.split('\n')
-        pg_idx = next(i for i, ln in enumerate(lines) if 'pg = host' in ln)
-        instance_idx = next(i for i, ln in enumerate(lines) if 'instanceOf channels.aim.aim' in ln)
-        assert instance_idx > pg_idx
+        vm = DeploymentNode(
+            c4_id='vm1', name='VM-1', archi_id='n-1',
+            tech_type='Node', kind='vm',
+            children=[sw],
+        )
+        content = generate_deployment_c4([vm])
+        assert "rhel = infraSoftware 'RHEL 8'" in content
+
+    def test_orphan_dropped_with_others_kept(self):
+        """Orphan is dropped while valid nodes are kept."""
+        orphan = DeploymentNode(
+            c4_id='gitea', name='gitea-postgresql', archi_id='n-1',
+            tech_type='SystemSoftware', kind='infraSoftware',
+        )
+        server = DeploymentNode(
+            c4_id='srv1', name='Server 1', archi_id='n-2',
+            tech_type='Device', kind='server',
+        )
+        content = generate_deployment_c4([orphan, server])
+        assert 'gitea' not in content
+        assert "srv1 = server 'Server 1'" in content
+
+
+# ── kind resolution (builders) ──────────────────────────────────────────
+
+class TestKindResolution:
+    """Test ArchiMate type → LikeC4 kind mapping via builders."""
+
+    def test_location_becomes_site(self):
+        from archi2likec4.builders.deployment import build_deployment_topology
+        from archi2likec4.models import TechElement
+        nodes = build_deployment_topology(
+            [TechElement(archi_id='t-1', name='DC-1', tech_type='Location')], [])
+        assert nodes[0].kind == 'site'
+
+    def test_path_becomes_segment(self):
+        from archi2likec4.builders.deployment import build_deployment_topology
+        from archi2likec4.models import TechElement
+        nodes = build_deployment_topology(
+            [TechElement(archi_id='t-1', name='WAN', tech_type='Path')], [])
+        assert nodes[0].kind == 'segment'
+
+    def test_communication_network_becomes_segment(self):
+        from archi2likec4.builders.deployment import build_deployment_topology
+        from archi2likec4.models import TechElement
+        nodes = build_deployment_topology(
+            [TechElement(archi_id='t-1', name='LAN', tech_type='CommunicationNetwork')], [])
+        assert nodes[0].kind == 'segment'
+
+    def test_technology_collaboration_becomes_cluster(self):
+        from archi2likec4.builders.deployment import build_deployment_topology
+        from archi2likec4.models import TechElement
+        nodes = build_deployment_topology(
+            [TechElement(archi_id='t-1', name='K8s-Prod', tech_type='TechnologyCollaboration')], [])
+        assert nodes[0].kind == 'cluster'
+
+    def test_device_becomes_server(self):
+        from archi2likec4.builders.deployment import build_deployment_topology
+        from archi2likec4.models import TechElement
+        nodes = build_deployment_topology(
+            [TechElement(archi_id='t-1', name='Lenovo SN550', tech_type='Device')], [])
+        assert nodes[0].kind == 'server'
+
+    def test_node_at_top_level_becomes_server(self):
+        """Top-level Node (no parent) becomes server."""
+        from archi2likec4.builders.deployment import build_deployment_topology
+        from archi2likec4.models import TechElement
+        nodes = build_deployment_topology(
+            [TechElement(archi_id='t-1', name='SRV-1', tech_type='Node')], [])
+        assert nodes[0].kind == 'server'
+
+    def test_node_inside_cluster_becomes_vm(self):
+        """Node inside TechnologyCollaboration (cluster) becomes vm."""
+        from archi2likec4.builders.deployment import build_deployment_topology
+        from archi2likec4.models import RawRelationship, TechElement
+        elements = [
+            TechElement(archi_id='t-1', name='K8s', tech_type='TechnologyCollaboration'),
+            TechElement(archi_id='t-2', name='Worker-1', tech_type='Node'),
+        ]
+        rels = [RawRelationship(
+            rel_id='r-1', rel_type='AggregationRelationship', name='',
+            source_id='t-1', target_id='t-2',
+            source_type='TechnologyCollaboration', target_type='Node',
+        )]
+        nodes = build_deployment_topology(elements, rels)
+        cluster = nodes[0]
+        assert cluster.kind == 'cluster'
+        assert cluster.children[0].kind == 'vm'
+
+    def test_system_software_with_node_children_becomes_cluster(self):
+        """Hypervisor pattern: SystemSoftware containing Nodes → cluster."""
+        from archi2likec4.builders.deployment import build_deployment_topology
+        from archi2likec4.models import RawRelationship, TechElement
+        elements = [
+            TechElement(archi_id='t-1', name='ESXi 7.0', tech_type='SystemSoftware'),
+            TechElement(archi_id='t-2', name='VM-1', tech_type='Node'),
+        ]
+        rels = [RawRelationship(
+            rel_id='r-1', rel_type='AggregationRelationship', name='',
+            source_id='t-1', target_id='t-2',
+            source_type='SystemSoftware', target_type='Node',
+        )]
+        nodes = build_deployment_topology(elements, rels)
+        hypervisor = nodes[0]
+        assert hypervisor.kind == 'cluster'
+        assert hypervisor.children[0].kind == 'vm'
+
+    def test_system_software_without_children_stays_infra_software(self):
+        """Plain SystemSoftware stays infraSoftware."""
+        from archi2likec4.builders.deployment import build_deployment_topology
+        from archi2likec4.models import TechElement
+        nodes = build_deployment_topology(
+            [TechElement(archi_id='t-1', name='PostgreSQL', tech_type='SystemSoftware')], [])
+        assert nodes[0].kind == 'infraSoftware'
+
+    def test_nested_collaboration_with_namespace_keyword(self):
+        """TechnologyCollaboration inside cluster with 'namespace' in name → namespace."""
+        from archi2likec4.builders.deployment import build_deployment_topology
+        from archi2likec4.models import RawRelationship, TechElement
+        elements = [
+            TechElement(archi_id='t-1', name='K8s', tech_type='TechnologyCollaboration'),
+            TechElement(archi_id='t-2', name='namespace-prod', tech_type='TechnologyCollaboration'),
+        ]
+        rels = [RawRelationship(
+            rel_id='r-1', rel_type='AggregationRelationship', name='',
+            source_id='t-1', target_id='t-2',
+            source_type='TechnologyCollaboration', target_type='TechnologyCollaboration',
+        )]
+        nodes = build_deployment_topology(elements, rels)
+        cluster = nodes[0]
+        assert cluster.kind == 'cluster'
+        assert cluster.children[0].kind == 'namespace'
 
 
 # ── generate_deployment_overview_view ────────────────────────────────────

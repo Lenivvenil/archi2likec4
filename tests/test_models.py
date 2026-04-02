@@ -214,7 +214,7 @@ class TestDeploymentNode:
             c4_id='node1', name='Server 1', archi_id='n-1', tech_type='Node',
         )
         assert dn.c4_id == 'node1'
-        assert dn.kind == 'infraNode'
+        assert dn.kind == 'vm'
         assert dn.children == []
 
     def test_nested_children(self):
@@ -227,7 +227,7 @@ class TestDeploymentNode:
         assert parent.children[0].c4_id == 'child1'
 
     def test_kind_options(self):
-        for kind in ('infraNode', 'infraZone', 'infraSoftware', 'infraLocation'):
+        for kind in ('site', 'segment', 'cluster', 'server', 'vm', 'namespace', 'infraSoftware'):
             dn = DeploymentNode(
                 c4_id='n', name='N', archi_id='a', tech_type='Node', kind=kind,
             )

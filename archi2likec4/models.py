@@ -199,6 +199,32 @@ class SolutionView:
 
 # ── Technology / Deployment ─────────────────────────────────────────────
 
+# ArchiMate tech_type → LikeC4 deployment kind (initial, context-unaware)
+ARCHIMATE_TYPE_TO_KIND: dict[str, str] = {
+    'Location': 'site',
+    'Path': 'segment',
+    'CommunicationNetwork': 'segment',
+    'TechnologyCollaboration': 'cluster',
+    'Device': 'server',
+    'Node': 'vm',
+    'SystemSoftware': 'infraSoftware',
+    'TechnologyService': 'infraSoftware',
+    'Artifact': 'infraSoftware',
+    'TechnologyProcess': 'vm',
+    'TechnologyFunction': 'vm',
+    'TechnologyInteraction': 'cluster',
+    'TechnologyInterface': 'segment',
+}
+
+DEFAULT_DEPLOYMENT_KIND = 'vm'
+
+# Kinds that can host instanceOf (leaf compute nodes)
+INSTANCE_ALLOWED_KINDS = frozenset({'vm', 'server', 'namespace'})
+
+# Kinds that are structural context (no instanceOf allowed)
+STRUCTURAL_KINDS = frozenset({'site', 'segment', 'cluster', 'environment'})
+
+
 @dataclass
 class TechElement:
     """Parsed ArchiMate technology element (Node, SystemSoftware, Device, etc.)."""
@@ -210,11 +236,14 @@ class TechElement:
 
 @dataclass
 class DeploymentNode:
-    """A node in the deployment topology tree."""
+    """A node in the deployment topology tree.
+
+    Valid kinds: site, segment, cluster, server, vm, namespace, infraSoftware.
+    """
     c4_id: str
     name: str
     archi_id: str
     tech_type: str          # ArchiMate type
-    kind: str = 'infraNode' # LikeC4 element kind: infraNode | infraZone | infraSoftware | infraLocation
+    kind: str = 'vm'        # LikeC4 deployment node kind
     documentation: str = ''
     children: list['DeploymentNode'] = field(default_factory=list)

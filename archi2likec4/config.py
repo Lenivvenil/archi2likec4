@@ -82,10 +82,13 @@ _DEFAULT_SPEC_SHAPES: dict[str, str] = {
     'appFunction': 'rectangle',
     'dataEntity': 'document',
     'dataStore': 'cylinder',
-    'infraNode': 'rectangle',
+    'site': 'rectangle',
+    'segment': 'rectangle',
+    'cluster': 'rectangle',
+    'server': 'rectangle',
+    'vm': 'rectangle',
+    'namespace': 'rectangle',
     'infraSoftware': 'cylinder',
-    'infraZone': 'rectangle',
-    'infraLocation': 'rectangle',
 }
 
 _DEFAULT_SPEC_TAGS: list[str] = [

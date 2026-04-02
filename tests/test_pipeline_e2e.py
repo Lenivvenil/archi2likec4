@@ -103,7 +103,7 @@ class TestPipelineE2E:
         # Verify spec content
         spec = (output / 'specification.c4').read_text()
         assert 'element system' in spec
-        assert 'deploymentNode infraNode' in spec
+        assert 'deploymentNode vm' in spec
 
         # Verify relationships content
         rels = (output / 'relationships.c4').read_text()

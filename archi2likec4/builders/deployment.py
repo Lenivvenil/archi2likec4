@@ -4,6 +4,8 @@ import logging
 from dataclasses import dataclass, field
 
 from ..models import (
+    ARCHIMATE_TYPE_TO_KIND,
+    DEFAULT_DEPLOYMENT_KIND,
     DeploymentNode,
     RawRelationship,
     System,
@@ -24,12 +26,6 @@ class DeploymentMappingContext:
 logger = logging.getLogger(__name__)
 
 
-_INFRA_NODE_TYPES = frozenset({
-    'Node', 'Device', 'TechnologyCollaboration',
-})
-_INFRA_ZONE_TYPES = frozenset({
-    'CommunicationNetwork', 'Path',
-})
 _INFRA_SW_TYPES = frozenset({
     'SystemSoftware', 'TechnologyService', 'Artifact',
 })
@@ -59,20 +55,10 @@ def build_deployment_topology(
         c4_id = make_unique_id(make_id(te.name), used_ids)
         used_ids.add(c4_id)
 
-        if te.tech_type == 'Location':
-            kind = 'infraLocation'
-        elif te.tech_type in _INFRA_ZONE_TYPES:
-            kind = 'infraZone'
-        elif te.tech_type in _INFRA_NODE_TYPES:
-            kind = 'infraNode'
-        else:
-            # All remaining types (_INFRA_SW_TYPES: SystemSoftware, TechnologyService, Artifact,
-            # and unknown types: TechnologyFunction, TechnologyProcess, etc.) become infraSoftware.
-            # infraNode is reserved for explicit Node/Device/TechnologyCollaboration (containers).
-            kind = 'infraSoftware'
-            if te.tech_type not in _INFRA_SW_TYPES:
-                logger.debug('Unknown tech_type %r for %r — defaulting to infraSoftware',
-                             te.tech_type, te.name)
+        kind = ARCHIMATE_TYPE_TO_KIND.get(te.tech_type, DEFAULT_DEPLOYMENT_KIND)
+        if te.tech_type not in ARCHIMATE_TYPE_TO_KIND and te.tech_type not in _INFRA_SW_TYPES:
+            logger.debug('Unknown tech_type %r for %r — defaulting to %s',
+                         te.tech_type, te.name, DEFAULT_DEPLOYMENT_KIND)
 
         dn = DeploymentNode(
             c4_id=c4_id,
@@ -100,9 +86,46 @@ def build_deployment_topology(
     roots = [dn for aid, dn in node_by_archi.items() if aid not in children_set]
     roots.sort(key=lambda n: n.name)
 
+    # 4. Post-build pass: resolve context-dependent kinds
+    _resolve_context_kinds(roots)
+
     logger.debug('%d tech elements → %d root deployment nodes',
                  len(tech_elements), len(roots))
     return roots
+
+
+def _resolve_context_kinds(
+    nodes: list[DeploymentNode],
+    parent_kind: str | None = None,
+) -> None:
+    """Resolve context-dependent kinds after parent-child linking.
+
+    Mutates nodes in-place:
+    - SystemSoftware with Node/Device children → cluster (hypervisor)
+    - Node inside cluster/server/segment → vm; at site/root → server
+    - TechnologyCollaboration inside cluster with namespace keywords → namespace
+    """
+    for node in nodes:
+        # Hypervisor: SystemSoftware containing VMs
+        if node.tech_type == 'SystemSoftware' and any(
+            c.tech_type in ('Node', 'Device') for c in node.children
+        ):
+            node.kind = 'cluster'
+
+        # Node: context-dependent vm vs server
+        if node.tech_type == 'Node':
+            if parent_kind in ('cluster', 'server', 'segment'):
+                node.kind = 'vm'
+            elif parent_kind in ('site', None, 'environment'):
+                node.kind = 'server'
+
+        # Nested TechnologyCollaboration inside cluster → namespace if name matches
+        if node.tech_type == 'TechnologyCollaboration' and parent_kind == 'cluster':
+            name_lower = node.name.lower()
+            if any(kw in name_lower for kw in ('namespace', 'ns-', 'ns_')):
+                node.kind = 'namespace'
+
+        _resolve_context_kinds(node.children, parent_kind=node.kind)
 
 
 def enrich_deployment_from_visual_nesting(

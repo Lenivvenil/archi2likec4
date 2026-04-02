@@ -42,7 +42,7 @@ class TestDeploymentTopology:
         roots = build_deployment_topology(elems, rels)
         assert len(roots) == 1
         assert roots[0].name == 'Server 1'
-        assert roots[0].kind == 'infraNode'
+        assert roots[0].kind == 'server'
         assert len(roots[0].children) == 1
         assert roots[0].children[0].name == 'PostgreSQL'
         assert roots[0].children[0].kind == 'infraSoftware'
@@ -98,13 +98,13 @@ class TestDeploymentTopology:
         ]
         roots = build_deployment_topology(elems, [])
         by_name = {r.name: r for r in roots}
-        assert by_name['Srv'].kind == 'infraNode'
-        assert by_name['Power'].kind == 'infraNode'
+        assert by_name['Srv'].kind == 'server'
+        assert by_name['Power'].kind == 'server'
         assert by_name['Nginx'].kind == 'infraSoftware'
         assert by_name['Eureka'].kind == 'infraSoftware'
         assert by_name['app.war'].kind == 'infraSoftware'
-        assert by_name['LAN_Segment'].kind == 'infraZone'
-        assert by_name['WAN_Link'].kind == 'infraZone'
+        assert by_name['LAN_Segment'].kind == 'segment'
+        assert by_name['WAN_Link'].kind == 'segment'
 
     def test_id_collision_resolved(self):
         """Two elements with same name get unique c4_ids."""
@@ -345,25 +345,25 @@ class TestReviewedSystemsInBuild:
 
 class TestInfraZoneKind:
     def test_communication_network_becomes_infra_zone(self):
-        """CommunicationNetwork tech_type should produce infraZone kind."""
+        """CommunicationNetwork tech_type should produce segment kind."""
         elems = [
             TechElement(archi_id='cn-1', name='LAN Segment', tech_type='CommunicationNetwork'),
         ]
         roots = build_deployment_topology(elems, [])
         assert len(roots) == 1
-        assert roots[0].kind == 'infraZone'
+        assert roots[0].kind == 'segment'
 
-    def test_path_becomes_infra_zone(self):
-        """Path tech_type should produce infraZone kind."""
+    def test_path_becomes_segment(self):
+        """Path tech_type should produce segment kind."""
         elems = [
             TechElement(archi_id='p-1', name='WAN Link', tech_type='Path'),
         ]
         roots = build_deployment_topology(elems, [])
         assert len(roots) == 1
-        assert roots[0].kind == 'infraZone'
+        assert roots[0].kind == 'segment'
 
-    def test_infra_zone_with_child_node(self):
-        """infraZone → infraNode aggregation creates proper hierarchy."""
+    def test_segment_with_child_node(self):
+        """segment → vm aggregation creates proper hierarchy."""
         elems = [
             TechElement(archi_id='cn-1', name='VLAN_10', tech_type='CommunicationNetwork'),
             TechElement(archi_id='n-1', name='Server 1', tech_type='Node'),
@@ -377,22 +377,22 @@ class TestInfraZoneKind:
         ]
         roots = build_deployment_topology(elems, rels)
         assert len(roots) == 1
-        assert roots[0].kind == 'infraZone'
+        assert roots[0].kind == 'segment'
         assert len(roots[0].children) == 1
-        assert roots[0].children[0].kind == 'infraNode'
+        assert roots[0].children[0].kind == 'vm'  # Node inside segment → vm
 
 
 # ── Location → infraLocation ────────────────────────────────────────────
 
 class TestLocationKind:
-    def test_location_becomes_infra_location(self):
-        """Location tech_type should produce infraLocation kind."""
+    def test_location_becomes_site(self):
+        """Location tech_type should produce site kind."""
         elems = [
             TechElement(archi_id='loc-1', name='HQ Datacenter', tech_type='Location'),
         ]
         roots = build_deployment_topology(elems, [])
         assert len(roots) == 1
-        assert roots[0].kind == 'infraLocation'
+        assert roots[0].kind == 'site'
 
     def test_location_with_child_node(self):
         """Location → Node aggregation creates proper hierarchy."""
@@ -409,9 +409,9 @@ class TestLocationKind:
         ]
         roots = build_deployment_topology(elems, rels)
         assert len(roots) == 1
-        assert roots[0].kind == 'infraLocation'
+        assert roots[0].kind == 'site'
         assert len(roots[0].children) == 1
-        assert roots[0].children[0].kind == 'infraNode'
+        assert roots[0].children[0].kind == 'server'  # Node inside site → server
 
 
 # ── build_tech_archi_to_c4_map ──────────────────────────────────────────

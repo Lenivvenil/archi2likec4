@@ -2,9 +2,55 @@
 
 from __future__ import annotations
 
-from ..models import DeploymentNode
-from ..utils import escape_str
+import logging
+
+from ..models import DEFAULT_DEPLOYMENT_KIND, INSTANCE_ALLOWED_KINDS, DeploymentNode
+from ..utils import escape_str, extract_system_id
 from ._common import render_metadata, truncate_desc
+
+logger = logging.getLogger(__name__)
+
+
+def _build_node_kind_map(
+    nodes: list[DeploymentNode],
+    prefix: str = '',
+) -> dict[str, str]:
+    """Build mapping of node paths to their resolved kinds."""
+    result: dict[str, str] = {}
+    for node in nodes:
+        path = f'{prefix}.{node.c4_id}' if prefix else node.c4_id
+        result[path] = node.kind
+        result.update(_build_node_kind_map(node.children, prefix=path))
+    return result
+
+
+def _compute_ancestor_tags(
+    instances: dict[str, list[str]],
+    sys_subdomain: dict[str, str] | None = None,
+    sys_ids: set[str] | None = None,
+    sys_domain: dict[str, str] | None = None,
+) -> dict[str, set[str]]:
+    """Propagate system tags from host nodes up to all ancestor paths.
+
+    For each host path in *instances*, extracts ``system_<id>`` tags from the
+    app paths and assigns them to every ancestor prefix.  This lets structural
+    nodes (racks, hypervisors, DCs) carry the same tags so deployment views can
+    ``exclude`` empty branches.
+    """
+    ancestor_tags: dict[str, set[str]] = {}
+    for infra_path, app_paths in instances.items():
+        sys_tags: set[str] = set()
+        for ap in app_paths:
+            sid = extract_system_id(ap, sys_subdomain, sys_ids, sys_domain)
+            sys_tags.add(f'system_{sid}')
+        if not sys_tags:
+            continue
+        # Walk up the path: dc1.rack1.esxi → dc1.rack1 → dc1
+        path_parts = infra_path.split('.')
+        for i in range(len(path_parts) - 1):  # exclude the host itself (tagged separately)
+            prefix = '.'.join(path_parts[: i + 1])
+            ancestor_tags.setdefault(prefix, set()).update(sys_tags)
+    return ancestor_tags
 
 
 def _render_deployment_node(
@@ -13,27 +59,38 @@ def _render_deployment_node(
     indent: int,
     current_path: str,
     instances: dict[str, list[str]],
+    ancestor_tags: dict[str, set[str]],
+    sys_subdomain: dict[str, str] | None = None,
+    sys_ids: set[str] | None = None,
+    sys_domain: dict[str, str] | None = None,
+    parent_kind: str | None = None,
 ) -> None:
     """Recursively render a DeploymentNode and its children.
 
     Appends ``instanceOf <app_path>`` for each application mapped to this node
     via the deployment_map passed to :func:`generate_deployment_c4`.
+
+    Orphan infraSoftware (top-level, no parent except environment) is dropped.
     """
+    # Drop orphan infraSoftware at top level
+    if node.kind == 'infraSoftware' and parent_kind in (None, 'environment'):
+        logger.warning("Dropping orphan infraSoftware '%s' (%s)", node.name, node.archi_id)
+        return
+
     pad = ' ' * indent
     title = escape_str(node.name)
     node_instances = instances.get(current_path, [])
-    # Nodes with instanceOf are deployment targets (hosts) — use 'host' kind
-    effective_kind = 'host' if node_instances else node.kind
-    lines.append(f"{pad}{node.c4_id} = {effective_kind} '{title}' {{")
+    lines.append(f"{pad}{node.c4_id} = {node.kind} '{title}' {{")
     # System tags FIRST (LikeC4 grammar: tags before properties)
     if node_instances:
         system_tags: set[str] = set()
         for app_path in node_instances:
-            parts = app_path.split('.')
-            if len(parts) >= 2:
-                system_tags.add(f'system_{parts[1]}')
+            sid = extract_system_id(app_path, sys_subdomain, sys_ids, sys_domain)
+            system_tags.add(f'system_{sid}')
         if system_tags:
             lines.append(f"{pad}  #{' #'.join(sorted(system_tags))}")
+    elif current_path in ancestor_tags:
+        lines.append(f"{pad}  #{' #'.join(sorted(ancestor_tags[current_path]))}")
     if node.documentation:
         desc = truncate_desc(escape_str(node.documentation))
         lines.append(f"{pad}  description '{desc}'")
@@ -56,7 +113,8 @@ def _render_deployment_node(
     for child in sorted(node.children, key=lambda c: c.name):
         lines.append('')
         child_path = f'{current_path}.{child.c4_id}'
-        _render_deployment_node(child, lines, indent + 2, child_path, instances)
+        _render_deployment_node(child, lines, indent + 2, child_path, instances, ancestor_tags,
+                                sys_subdomain, sys_ids, sys_domain, parent_kind=node.kind)
     lines.append(f'{pad}}}')
 
 
@@ -64,28 +122,66 @@ def generate_deployment_c4(
     nodes: list[DeploymentNode],
     deployment_map: list[tuple[str, str]] | None = None,
     env: str = 'prod',
+    *,
+    sys_subdomain: dict[str, str] | None = None,
+    sys_ids: set[str] | None = None,
+    sys_domain: dict[str, str] | None = None,
 ) -> str:
     """Generate deployment/topology.c4 using the LikeC4 Deployment Model.
 
     Wraps the topology in ``deployment { environment <env> { ... } }`` and
     adds ``instanceOf <app_c4_path>`` inside each infrastructure node that has
     application components deployed to it (as per deployment_map).
+
+    instanceOf is only placed on leaf compute nodes (vm, server, namespace).
+    Placements on structural nodes (site, segment, cluster) are filtered out.
     """
+    # Build node kind map for instanceOf filtering
+    node_kinds = _build_node_kind_map(nodes)
+
     # Build inverse index: full infra path → [app c4 paths]
+    # Filter: only allow instanceOf on leaf compute kinds
     instances: dict[str, list[str]] = {}
+    skipped = 0
     if deployment_map:
         for app_path, infra_path in deployment_map:
+            node_kind = node_kinds.get(infra_path, DEFAULT_DEPLOYMENT_KIND)
+            if node_kind not in INSTANCE_ALLOWED_KINDS:
+                skipped += 1
+                continue
             instances.setdefault(infra_path, []).append(app_path)
+
+    if skipped:
+        logger.info(
+            "Filtered %d instanceOf placements on structural nodes "
+            "(only %s can host instances)",
+            skipped, ', '.join(sorted(INSTANCE_ALLOWED_KINDS)),
+        )
+
+    ancestor_tags = _compute_ancestor_tags(instances, sys_subdomain, sys_ids, sys_domain)
+
+    # Collect ALL system tags for the environment node (must survive all exclude rules)
+    all_sys_tags: set[str] = set()
+    for tags in ancestor_tags.values():
+        all_sys_tags.update(tags)
+    for app_paths in instances.values():
+        for ap in app_paths:
+            sid = extract_system_id(ap, sys_subdomain, sys_ids, sys_domain)
+            all_sys_tags.add(f'system_{sid}')
 
     lines = [
         '// ── Deployment Topology ──────────────────────────────────',
         'deployment {',
         '',
         f'  environment {env} {{',
-        '',
     ]
+    if all_sys_tags:
+        lines.append(f"    #{' #'.join(sorted(all_sys_tags))}")
+    lines.append('')
     for node in sorted(nodes, key=lambda n: n.name):
-        _render_deployment_node(node, lines, indent=4, current_path=node.c4_id, instances=instances)
+        _render_deployment_node(node, lines, indent=4, current_path=node.c4_id, instances=instances,
+                                ancestor_tags=ancestor_tags, sys_subdomain=sys_subdomain,
+                                sys_ids=sys_ids, sys_domain=sys_domain, parent_kind='environment')
         lines.append('')
     lines.append('  }')
     lines.append('}')

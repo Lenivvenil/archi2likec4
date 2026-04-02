@@ -475,14 +475,10 @@ def _generate(
     file_count = 0
 
     # Root files
-    # Collect system tag IDs from deployment_map app paths (parts[1])
-    _deploy_sys_ids: set[str] = set()
-    if built.deployment_map:
-        for app_path, _ in built.deployment_map:
-            parts = app_path.split('.')
-            if len(parts) >= 2:
-                _deploy_sys_ids.add(parts[1])
-    system_ids = sorted(_deploy_sys_ids)
+    # Collect system tag IDs from ALL systems (needed for model element tags)
+    _sys_ids = set(built.sys_domain.keys())
+    _sys_subdomain: dict[str, str] = {s.c4_id: s.subdomain for s in built.systems if s.subdomain}
+    system_ids = sorted({s.c4_id.replace('-', '_') for s in built.systems})
     (output_dir / 'specification.c4').write_text(
         generate_spec(config, system_ids=system_ids), encoding='utf-8')
     file_count += 1
@@ -573,7 +569,9 @@ def _generate(
         deployment_dir.mkdir(exist_ok=True)
         (deployment_dir / 'topology.c4').write_text(
             generate_deployment_c4(built.deployment_nodes, built.deployment_map,
-                                   env=config.deployment_env),
+                                   env=config.deployment_env,
+                                   sys_subdomain=_sys_subdomain, sys_ids=_sys_ids,
+                                   sys_domain=built.sys_domain),
             encoding='utf-8')
         file_count += 1
 

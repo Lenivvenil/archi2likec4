@@ -20,22 +20,24 @@ _DEFAULT_ELEMENT_COLORS: dict[str, str] = {
     'dataEntity': 'archi-data',
     'dataStore': 'archi-store',
     'environment': 'muted',
-    'infraNode': 'archi-tech',
+    'site': 'green',
+    'segment': 'amber',
+    'cluster': 'blue',
+    'server': 'slate',
+    'vm': 'indigo',
+    'namespace': 'sky',
     'infraSoftware': 'archi-tech-light',
-    'infraZone': 'archi-tech',
-    'infraLocation': 'archi-tech',
-    'host': 'archi-tech',
 }
 
 # Deployment-node kinds (use `deploymentNode` keyword instead of `element`).
 _DEPLOYMENT_KINDS: frozenset[str] = frozenset({
-    'environment', 'infraNode', 'infraSoftware', 'infraZone', 'infraLocation', 'host',
+    'environment', 'site', 'segment', 'cluster', 'server', 'vm', 'namespace', 'infraSoftware',
 })
 
 # Extra border styles per element kind.
 _BORDER_OVERRIDES: dict[str, str] = {
-    'infraZone': 'dotted',
-    'infraLocation': 'dashed',
+    'segment': 'dotted',
+    'site': 'dashed',
 }
 
 # Element kinds in output order.
@@ -43,7 +45,7 @@ _ELEMENT_ORDER: list[str] = [
     'domain', 'subdomain',
     'system', 'subsystem', 'appFunction',
     'dataEntity', 'dataStore',
-    'environment', 'infraNode', 'infraSoftware', 'infraZone', 'infraLocation', 'host',
+    'environment', 'site', 'segment', 'cluster', 'server', 'vm', 'namespace', 'infraSoftware',
 ]
 
 
