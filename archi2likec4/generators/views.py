@@ -4,11 +4,11 @@ from __future__ import annotations
 
 import logging
 import re
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from typing import NamedTuple
 
 from ..models import RawRelationship, SolutionView
-from ..utils import escape_str, extract_system_id, system_path_from_c4
+from ..utils import escape_str, system_path_from_c4
 
 logger = logging.getLogger(__name__)
 
@@ -265,32 +265,26 @@ def _generate_deployment_view(vd: _ViewData, ctx: ViewContext) -> list[str]:
     if not infra_paths and not app_paths:
         return []
 
-    # Extract system IDs from app paths for tag-based scoping
-    system_ids: set[str] = set()
-    for ap in app_paths:
-        system_ids.add(extract_system_id(ap, ctx.sys_subdomain, ctx.sys_ids, ctx.sys_domain))
-
-    # Fallback: infra-only diagrams — derive system_ids via reverse deploy_targets lookup
-    if not system_ids and infra_paths and ctx.deploy_targets:
+    # Enrich infra from reverse deploy_targets when only infra paths present
+    if not app_paths and infra_paths and ctx.deploy_targets:
         infra_set = set(infra_paths)
-        for app_path, targets in ctx.deploy_targets.items():
+        for _app_path, targets in ctx.deploy_targets.items():
             for t in targets:
                 if t in infra_set or any(t.startswith(ip + '.') or ip.startswith(t + '.') for ip in infra_set):
-                    system_ids.add(extract_system_id(app_path, ctx.sys_subdomain, ctx.sys_ids, ctx.sys_domain))
-                    break
+                    infra_set.add(t)
+        infra_paths = list(infra_set)
 
     env = ctx.deployment_env
     lines: list[str] = []
     lines.append(f"  deployment view {vd.view_id} {{")
     lines.append(f"    title '{escape_str(vd.title)}'")
-    # Include full environment, then exclude everything not tagged for this system.
-    # Unified rule: covers deployment nodes AND instances (which inherit model tags).
-    # Combined predicate: "tag is not #A and tag is not #B" excludes elements
-    # lacking ALL listed tags → keeps elements with ANY matching tag.
-    lines.append(f"    include {env}.**")
-    if system_ids:
-        tag_preds = ' and '.join(f'tag is not #system_{sid}' for sid in sorted(system_ids))
-        lines.append(f"    exclude * where {tag_preds}")
+    # LikeC4 deployment views: tag-based where clauses don't work reliably,
+    # so we use targeted path includes instead.
+    if infra_paths:
+        for ip in sorted(set(infra_paths)):
+            lines.append(f"    include {env}.{ip}.**")
+    else:
+        lines.append(f"    include {env}.**")
     lines.append("  }")
     return lines
 
