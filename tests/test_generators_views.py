@@ -832,8 +832,8 @@ class TestSolutionViewDeployment:
         assert 'tag is not #system_pbx' in content
         assert 'tag is not #system_voip' in content
 
-    def test_deployment_view_env_detected_from_name(self):
-        """Deployment view detects environment from solution view name suffix."""
+    def test_deployment_view_uses_default_env(self):
+        """Deployment views use default env (env detection deferred until multi-env support)."""
         sv = SolutionView(
             name='deployment_architecture.EFS (Dev)',
             view_type='deployment',
@@ -844,20 +844,7 @@ class TestSolutionViewDeployment:
         ctx = build_view_context(archi_to_c4, {'efs': 'channels'})
         files, _, _ = generate_solution_views([sv], ctx)
         content = files['efs_dev']
-        assert 'include dev.**' in content
-
-    def test_deployment_view_env_default_when_no_suffix(self):
-        """No environment suffix → uses default (prod)."""
-        sv = SolutionView(
-            name='deployment_architecture.EFS',
-            view_type='deployment',
-            solution='efs_prod',
-            element_archi_ids=['ac-1'],
-        )
-        archi_to_c4 = {'ac-1': 'channels.efs'}
-        ctx = build_view_context(archi_to_c4, {'efs': 'channels'})
-        files, _, _ = generate_solution_views([sv], ctx)
-        content = files['efs_prod']
+        # Until multi-env is supported, all views use default env
         assert 'include prod.**' in content
 
 

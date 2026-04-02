@@ -565,9 +565,10 @@ def _dispatch_view(
     elif sv.view_type == 'integration':
         lines = _generate_integration_view(vd, ctx)
     else:  # deployment
-        detected_env = _detect_env(sv.name, ctx.deployment_env)
-        view_ctx = replace(ctx, deployment_env=detected_env) if detected_env != ctx.deployment_env else ctx
-        lines = _generate_deployment_view(vd, view_ctx)
+        # NOTE: _detect_env is available but not activated until the deployment
+        # model declares multiple environments (dev/test/stage/prod).
+        # Currently all topology lives under a single environment (config.deployment_env).
+        lines = _generate_deployment_view(vd, ctx)
 
     return lines, unresolved, non_entity_count
 
