@@ -55,6 +55,48 @@ class TestGenerateDeploymentC4:
         assert 'instanceOf channels.efs' in content
         assert 'instanceOf products.mls' in content
 
+    def test_instance_of_duplicate_base_name_aliased(self):
+        """Two instanceOf with same last segment get unique aliases."""
+        node = DeploymentNode(
+            c4_id='wan', name='WAN', archi_id='n-1',
+            tech_type='Path', kind='infraZone',
+        )
+        deployment_map = [
+            ('customer_service.collection.ras.mib', 'wan'),
+            ('products.loan.mib', 'wan'),
+        ]
+        content = generate_deployment_c4([node], deployment_map=deployment_map)
+        assert 'instanceOf customer_service.collection.ras.mib' in content
+        assert 'mib_2 = instanceOf products.loan.mib' in content
+
+    def test_instance_of_conflicts_with_child_node(self):
+        """instanceOf whose base name matches a child node c4_id gets aliased."""
+        child = DeploymentNode(
+            c4_id='nginx', name='Nginx', archi_id='sw-1',
+            tech_type='SystemSoftware', kind='infraSoftware',
+        )
+        parent = DeploymentNode(
+            c4_id='srv_1', name='Server 1', archi_id='n-1',
+            tech_type='Node', kind='infraNode',
+            children=[child],
+        )
+        deployment_map = [('channels.donocrm.nginx', 'srv_1')]
+        content = generate_deployment_c4([parent], deployment_map=deployment_map)
+        # Should be aliased because child node already uses 'nginx'
+        assert 'nginx_2 = instanceOf channels.donocrm.nginx' in content
+        assert "nginx = infraSoftware 'Nginx'" in content
+
+    def test_instance_of_no_conflict_no_alias(self):
+        """instanceOf without name conflicts renders without alias."""
+        node = DeploymentNode(
+            c4_id='srv_1', name='Server 1', archi_id='n-1',
+            tech_type='Node', kind='infraNode',
+        )
+        deployment_map = [('channels.efs', 'srv_1')]
+        content = generate_deployment_c4([node], deployment_map=deployment_map)
+        assert 'instanceOf channels.efs' in content
+        assert '= instanceOf channels.efs' not in content
+
     def test_instance_of_nested_path(self):
         """instanceOf is placed inside the correct nested node by full path."""
         child = DeploymentNode(
@@ -71,7 +113,7 @@ class TestGenerateDeploymentC4:
         assert 'instanceOf channels.aim.aim' in content
         # Should NOT be at root level
         lines = content.split('\n')
-        pg_idx = next(i for i, ln in enumerate(lines) if 'pg = infraSoftware' in ln)
+        pg_idx = next(i for i, ln in enumerate(lines) if 'pg = host' in ln)
         instance_idx = next(i for i, ln in enumerate(lines) if 'instanceOf channels.aim.aim' in ln)
         assert instance_idx > pg_idx
 

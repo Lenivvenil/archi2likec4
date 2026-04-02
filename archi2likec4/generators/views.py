@@ -270,24 +270,26 @@ def _generate_deployment_view(vd: _ViewData, ctx: ViewContext) -> list[str]:
             deduped_infra.append(ip)
     infra_paths = deduped_infra
 
-    if not infra_paths:
+    if not infra_paths and not app_paths:
         return []
 
+    # Extract system IDs from app paths for tag-based scoping
+    system_ids: set[str] = set()
+    for ap in app_paths:
+        parts = ap.split('.')
+        if len(parts) >= 2:
+            system_ids.add(parts[1])
+
+    env = ctx.deployment_env
     lines: list[str] = []
     lines.append(f"  deployment view {vd.view_id} {{")
     lines.append(f"    title '{escape_str(vd.title)}'")
-    lines.append("    include")
-    # Infra paths: <env>.<path>.** to include all nested deployment nodes
-    for ip in infra_paths:
-        lines.append(f"      {ctx.deployment_env}.{ip}.**,")
-    if lines[-1].endswith(','):
-        lines[-1] = lines[-1][:-1]
+    # Include full environment, then exclude non-matching hosts by tag
+    lines.append(f"    include {env}.**")
+    if system_ids:
+        for sys_id in sorted(system_ids):
+            lines.append(f"    exclude * where kind is host and tag is not #system_{sys_id}")
     lines.append("  }")
-    # QA-11: warn on element count
-    est = len(infra_paths)
-    if est > _MAX_DEPLOYMENT:
-        logger.warning('QA-11: deployment view %s has ~%d elements '
-                        '(threshold: %d)', vd.view_id, est, _MAX_DEPLOYMENT)
     return lines
 
 

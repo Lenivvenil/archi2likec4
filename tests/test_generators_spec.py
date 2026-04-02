@@ -95,6 +95,10 @@ class TestGenerateSpec:
 # ── generate_spec_infra_kinds ────────────────────────────────────────────
 
 class TestGenerateSpec_InfraKinds:
+    def test_spec_includes_environment_kind(self):
+        spec = generate_spec()
+        assert 'deploymentNode environment' in spec
+
     def test_spec_includes_infra_node(self):
         spec = generate_spec()
         assert 'deploymentNode infraNode' in spec

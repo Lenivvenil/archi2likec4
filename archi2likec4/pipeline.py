@@ -475,7 +475,16 @@ def _generate(
     file_count = 0
 
     # Root files
-    (output_dir / 'specification.c4').write_text(generate_spec(config), encoding='utf-8')
+    # Collect system tag IDs from deployment_map app paths (parts[1])
+    _deploy_sys_ids: set[str] = set()
+    if built.deployment_map:
+        for app_path, _ in built.deployment_map:
+            parts = app_path.split('.')
+            if len(parts) >= 2:
+                _deploy_sys_ids.add(parts[1])
+    system_ids = sorted(_deploy_sys_ids)
+    (output_dir / 'specification.c4').write_text(
+        generate_spec(config, system_ids=system_ids), encoding='utf-8')
     file_count += 1
     (output_dir / 'relationships.c4').write_text(
         generate_relationships(built.integrations), encoding='utf-8')

@@ -21,13 +21,38 @@ def _render_deployment_node(
     """
     pad = ' ' * indent
     title = escape_str(node.name)
-    lines.append(f"{pad}{node.c4_id} = {node.kind} '{title}' {{")
+    node_instances = instances.get(current_path, [])
+    # Nodes with instanceOf are deployment targets (hosts) — use 'host' kind
+    effective_kind = 'host' if node_instances else node.kind
+    lines.append(f"{pad}{node.c4_id} = {effective_kind} '{title}' {{")
+    # System tags FIRST (LikeC4 grammar: tags before properties)
+    if node_instances:
+        system_tags: set[str] = set()
+        for app_path in node_instances:
+            parts = app_path.split('.')
+            if len(parts) >= 2:
+                system_tags.add(f'system_{parts[1]}')
+        if system_tags:
+            lines.append(f"{pad}  #{' #'.join(sorted(system_tags))}")
     if node.documentation:
         desc = truncate_desc(escape_str(node.documentation))
         lines.append(f"{pad}  description '{desc}'")
     render_metadata(lines, node.archi_id, pad, extra={'tech_type': node.tech_type})
-    for app_path in instances.get(current_path, []):
-        lines.append(f'{pad}  instanceOf {app_path}')
+    # Collect used names from children to avoid instanceOf name collisions
+    used_names: set[str] = {child.c4_id for child in node.children}
+    for app_path in node_instances:
+        base_name = app_path.rsplit('.', 1)[-1]
+        if base_name in used_names:
+            suffix = 2
+            alias = f'{base_name}_{suffix}'
+            while alias in used_names:
+                suffix += 1
+                alias = f'{base_name}_{suffix}'
+            used_names.add(alias)
+            lines.append(f'{pad}  {alias} = instanceOf {app_path}')
+        else:
+            used_names.add(base_name)
+            lines.append(f'{pad}  instanceOf {app_path}')
     for child in sorted(node.children, key=lambda c: c.name):
         lines.append('')
         child_path = f'{current_path}.{child.c4_id}'

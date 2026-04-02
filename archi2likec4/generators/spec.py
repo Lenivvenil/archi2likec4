@@ -19,15 +19,17 @@ _DEFAULT_ELEMENT_COLORS: dict[str, str] = {
     'appFunction': 'archi-app-light',
     'dataEntity': 'archi-data',
     'dataStore': 'archi-store',
+    'environment': 'muted',
     'infraNode': 'archi-tech',
     'infraSoftware': 'archi-tech-light',
     'infraZone': 'archi-tech',
     'infraLocation': 'archi-tech',
+    'host': 'archi-tech',
 }
 
 # Deployment-node kinds (use `deploymentNode` keyword instead of `element`).
 _DEPLOYMENT_KINDS: frozenset[str] = frozenset({
-    'infraNode', 'infraSoftware', 'infraZone', 'infraLocation',
+    'environment', 'infraNode', 'infraSoftware', 'infraZone', 'infraLocation', 'host',
 })
 
 # Extra border styles per element kind.
@@ -41,11 +43,14 @@ _ELEMENT_ORDER: list[str] = [
     'domain', 'subdomain',
     'system', 'subsystem', 'appFunction',
     'dataEntity', 'dataStore',
-    'infraNode', 'infraSoftware', 'infraZone', 'infraLocation',
+    'environment', 'infraNode', 'infraSoftware', 'infraZone', 'infraLocation', 'host',
 ]
 
 
-def generate_spec(config: ConvertConfig | None = None) -> str:
+def generate_spec(
+    config: ConvertConfig | None = None,
+    system_ids: list[str] | None = None,
+) -> str:
     """Build the LikeC4 ``specification { … }`` block.
 
     When *config* is supplied, ``spec_colors``, ``spec_shapes``, and
@@ -135,6 +140,12 @@ def generate_spec(config: ConvertConfig | None = None) -> str:
     lines.append('  // ── Tags ───────────────────────────────────────────────')
     for tag in tags:
         lines.append(f'  tag {tag}')
+    # System tags for deployment view scoping
+    if system_ids:
+        lines.append('')
+        lines.append('  // ── System tags (deployment scoping) ────────────────────')
+        for sys_id in sorted(set(system_ids)):
+            lines.append(f'  tag system_{sys_id}')
 
     lines.append('}')
     lines.append('')
