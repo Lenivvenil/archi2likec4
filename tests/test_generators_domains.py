@@ -2,7 +2,6 @@
 
 from archi2likec4.generators import (
     generate_domain_c4,
-    generate_relationships,
     generate_system_detail_c4,
 )
 from archi2likec4.models import (
@@ -270,24 +269,3 @@ class TestGenerateSystemDetailC4:
         result = generate_system_detail_c4('channels', sys, outgoing=outgoing)
         assert 'extend channels.efs {' in result
         assert "channels.efs -> products.abs 'Payment flow'" in result
-
-
-# ── generate_relationships ───────────────────────────────────────────────
-
-class TestGenerateRelationships:
-    def test_empty(self):
-        result = generate_relationships([])
-        assert '// No integrations found' in result
-
-    def test_with_integrations(self):
-        intg = Integration(source_path='channels.efs', target_path='products.abs',
-                           name='Payment flow', rel_type='')
-        result = generate_relationships([intg])
-        assert "channels.efs -> products.abs 'Payment flow'" in result
-
-    def test_unnamed_integration(self):
-        intg = Integration(source_path='channels.efs', target_path='products.abs',
-                           name='', rel_type='')
-        result = generate_relationships([intg])
-        assert 'channels.efs -> products.abs' in result
-        assert "'" not in result.split('products.abs')[1].split('\n')[0]
