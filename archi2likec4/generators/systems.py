@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from ..models import AppFunction, Subsystem, System
+from ..models import AppFunction, Integration, Subsystem, System
 from ..utils import escape_str, validate_c4_id
 from ._common import render_metadata, truncate_desc
 
@@ -47,12 +47,19 @@ def _render_subsystem(sub: Subsystem, lines: list[str], indent: int = 4,
     lines.append(f'{pad}}}')
 
 
-def generate_system_detail_c4(domain_c4_id: str, sys: System) -> str:
-    """Generate systems/{c4_id}.c4 with extend block + scoped detail view.
+def generate_system_detail_c4(
+    domain_c4_id: str,
+    sys: System,
+    outgoing: list[Integration] | None = None,
+) -> str:
+    """Generate systems/{c4_id}/model.c4 with extend block + relationships + detail view.
 
     The detail view (``view {sys_id}_detail of {domain}.{sys_id}``) enables
     drill-down navigation: clicking a system on the domain-level functional
     view opens this view showing its subsystems and appFunctions.
+
+    If *outgoing* integrations are provided, they are rendered after the
+    extend block as ``source -> target 'label'`` lines.
 
     If the system belongs to a subdomain, the path is
     ``{domain}.{subdomain}.{system}`` instead of ``{domain}.{system}``.
@@ -77,6 +84,17 @@ def generate_system_detail_c4(domain_c4_id: str, sys: System) -> str:
         _render_appfunction(fn, lines, indent=4, sys_c4_id=sys.c4_id)
 
     lines.append('  }')
+
+    # ── Outgoing relationships (integrations from this system) ──
+    if outgoing:
+        lines.append('')
+        for intg in outgoing:
+            if intg.name:
+                label = escape_str(intg.name)
+                lines.append(f"  {intg.source_path} -> {intg.target_path} '{label}'")
+            else:
+                lines.append(f'  {intg.source_path} -> {intg.target_path}')
+
     lines.append('')
     lines.append('}')
     lines.append('')

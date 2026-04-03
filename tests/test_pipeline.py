@@ -694,7 +694,7 @@ class TestGenerateDeployment:
         )
         config = ConvertConfig()
         count = _generate(built, output, config, [])
-        assert (output / 'deployment' / 'topology.c4').exists()
+        assert (output / 'infrastructure' / 'environments.c4').exists()
         assert (output / 'views' / 'deployment-architecture.c4').exists()
         assert count > 0
 

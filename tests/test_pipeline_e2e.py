@@ -96,7 +96,6 @@ class TestPipelineE2E:
 
         # Verify output files exist
         assert (output / 'specification.c4').exists()
-        assert (output / 'relationships.c4').exists()
         assert (output / 'entities.c4').exists()
         assert (output / 'AUDIT.md').exists()
 
@@ -105,9 +104,11 @@ class TestPipelineE2E:
         assert 'element system' in spec
         assert 'deploymentNode vm' in spec
 
-        # Verify relationships content
-        rels = (output / 'relationships.c4').read_text()
-        assert 'alphasystem' in rels.lower() or 'betasystem' in rels.lower()
+        # Verify relationships are inlined in system model.c4 files
+        sys_dirs = list((output / 'systems').iterdir())
+        model_files = [d / 'model.c4' for d in sys_dirs if (d / 'model.c4').exists()]
+        all_model_content = '\n'.join(f.read_text() for f in model_files)
+        assert '->' in all_model_content  # at least one relationship inlined
 
     def test_unknown_domain_from_overrides_not_lost(self, tmp_path):
         """Systems assigned to a domain_overrides target unknown to parsed domains must not vanish."""

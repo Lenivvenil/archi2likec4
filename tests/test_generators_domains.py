@@ -233,6 +233,44 @@ class TestGenerateSystemDetailC4:
         result = generate_system_detail_c4('channels', sys)
         assert "do_work = appFunction 'DoWork'" in result
 
+    def test_outgoing_relationships_rendered(self):
+        sub = Subsystem(c4_id='core', name='Core', archi_id='sub-1', metadata={})
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     subsystems=[sub], metadata={})
+        outgoing = [
+            Integration(source_path='channels.efs', target_path='products.abs',
+                        name='Payment flow', rel_type=''),
+            Integration(source_path='channels.efs', target_path='platform.esb',
+                        name='', rel_type=''),
+        ]
+        result = generate_system_detail_c4('channels', sys, outgoing=outgoing)
+        assert "channels.efs -> products.abs 'Payment flow'" in result
+        assert 'channels.efs -> platform.esb' in result
+        # Relationships should be outside the extend block
+        lines = result.split('\n')
+        extend_close_idx = next(i for i, line in enumerate(lines) if line.strip() == '}' and i > 3)
+        rel_lines = [line for line in lines[extend_close_idx:] if '->' in line]
+        assert len(rel_lines) == 2
+
+    def test_no_outgoing_relationships(self):
+        sub = Subsystem(c4_id='core', name='Core', archi_id='sub-1', metadata={})
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     subsystems=[sub], metadata={})
+        result = generate_system_detail_c4('channels', sys, outgoing=None)
+        assert '->' not in result
+
+    def test_outgoing_only_system(self):
+        """System with no subsystems/functions but with outgoing relationships."""
+        sys = System(c4_id='efs', name='EFS', archi_id='sys-1',
+                     subsystems=[], functions=[], metadata={})
+        outgoing = [
+            Integration(source_path='channels.efs', target_path='products.abs',
+                        name='Payment flow', rel_type=''),
+        ]
+        result = generate_system_detail_c4('channels', sys, outgoing=outgoing)
+        assert 'extend channels.efs {' in result
+        assert "channels.efs -> products.abs 'Payment flow'" in result
+
 
 # ── generate_relationships ───────────────────────────────────────────────
 

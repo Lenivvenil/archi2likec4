@@ -39,26 +39,31 @@ from .generators import (
     build_view_context,
     generate_audit_md,
     generate_datastore_mapping_c4,
-    generate_deployment_c4,
     generate_deployment_overview_view,
-    generate_system_deployment_views,
     generate_domain_c4,
     generate_domain_functional_view,
     generate_domain_integration_view,
     generate_entities,
     generate_landscape_view,
     generate_persistence_map,
-    generate_relationships,
     generate_solution_views,
     generate_spec,
     generate_system_detail_c4,
 )
+from .generators.deployment import (
+    _build_node_kind_map,
+    generate_infrastructure_files,
+    generate_system_deployment_c4,
+)
 from .models import (
+    DEFAULT_DEPLOYMENT_KIND,
+    INSTANCE_ALLOWED_KINDS,
     AppComponent,
     AppFunction,
     AppInterface,
     DataObject,
     DomainInfo,
+    Integration,
     ParsedSubdomain,
     RawRelationship,
     SolutionView,
@@ -76,7 +81,7 @@ from .parsers import (
     parse_subdomains,
     parse_technology_elements,
 )
-from .utils import flatten_deployment_nodes
+from .utils import extract_system_id, flatten_deployment_nodes
 
 logger = logging.getLogger(__name__)
 
@@ -486,9 +491,12 @@ def _generate(
     (output_dir / 'specification.c4').write_text(
         generate_spec(config, system_ids=system_ids), encoding='utf-8')
     file_count += 1
-    (output_dir / 'relationships.c4').write_text(
-        generate_relationships(built.integrations), encoding='utf-8')
-    file_count += 1
+    # Build per-system integration index for inline relationships in model.c4
+    _sys_integrations: dict[str, list[Integration]] = {}
+    for intg in built.integrations:
+        sid = extract_system_id(intg.source_path, _sys_subdomain, _sys_ids, built.sys_domain)
+        _sys_integrations.setdefault(sid, []).append(intg)
+
     (output_dir / 'entities.c4').write_text(
         generate_entities(built.entities, built.data_access), encoding='utf-8')
     file_count += 1
@@ -529,11 +537,14 @@ def _generate(
         file_count += 1
         domain_count += 1
 
-        # System detail files (extend blocks with subsystems + functions)
+        # System detail files: systems/{c4_id}/model.c4
         for s in domain_sys_list:
-            if s.subsystems or s.functions:
-                (systems_dir / f'{s.c4_id}.c4').write_text(
-                    generate_system_detail_c4(domain_id, s),
+            outgoing = _sys_integrations.get(s.c4_id.replace('-', '_'), [])
+            if s.subsystems or s.functions or outgoing:
+                sys_subdir = systems_dir / s.c4_id
+                sys_subdir.mkdir(exist_ok=True)
+                (sys_subdir / 'model.c4').write_text(
+                    generate_system_detail_c4(domain_id, s, outgoing=outgoing),
                     encoding='utf-8')
                 file_count += 1
                 system_detail_count += 1
@@ -568,22 +579,57 @@ def _generate(
     view_count += 1
 
     # Deployment
+    deploy_system_count = 0
     if built.deployment_nodes:
-        deployment_dir = output_dir / 'deployment'
-        deployment_dir.mkdir(exist_ok=True)
-        (deployment_dir / 'topology.c4').write_text(
-            generate_deployment_c4(built.deployment_nodes, built.deployment_map,
-                                   env=config.deployment_env,
-                                   sys_subdomain=_sys_subdomain, sys_ids=_sys_ids,
-                                   sys_domain=built.sys_domain),
-            encoding='utf-8')
-        file_count += 1
+        # Infrastructure files: per-site .c4 files with node definitions only
+        infrastructure_dir = output_dir / 'infrastructure'
+        infrastructure_dir.mkdir(exist_ok=True)
+        infra_files = generate_infrastructure_files(
+            built.deployment_nodes, env=config.deployment_env)
+        for fname, content in infra_files.items():
+            (infrastructure_dir / fname).write_text(content, encoding='utf-8')
+            file_count += 1
+
+        # Per-system deployment.c4: instanceOf placements + targeted deployment views
+        # Build per-system deployment map: system_c4_id → [(app_path, infra_path)]
+        _node_kinds = _build_node_kind_map(built.deployment_nodes)
+        _sys_deploy_map: dict[str, list[tuple[str, str]]] = {}
+        if built.deployment_map:
+            for app_path, infra_path in built.deployment_map:
+                node_kind = _node_kinds.get(infra_path, DEFAULT_DEPLOYMENT_KIND)
+                if node_kind not in INSTANCE_ALLOWED_KINDS:
+                    continue
+                sid = extract_system_id(app_path, _sys_subdomain, _sys_ids, built.sys_domain)
+                _sys_deploy_map.setdefault(sid, []).append((app_path, infra_path))
+
+        # Build system name lookup
+        _sys_name_lookup: dict[str, str] = {}
+        for s in built.systems:
+            tag_id = s.c4_id.replace('-', '_')
+            _sys_name_lookup[tag_id] = s.name
+
+        for sid, entries in sorted(_sys_deploy_map.items()):
+            sys_name = _sys_name_lookup.get(sid, sid)
+            deploy_content = generate_system_deployment_c4(
+                system_c4_id=sid,
+                system_name=sys_name,
+                deploy_entries=entries,
+                env=config.deployment_env,
+            )
+            if deploy_content:
+                sys_subdir = systems_dir / sid
+                sys_subdir.mkdir(exist_ok=True)
+                (sys_subdir / 'deployment.c4').write_text(deploy_content, encoding='utf-8')
+                file_count += 1
+                deploy_system_count += 1
 
         # Post-generation structural validation of deployment tree
         tree_violations = validate_deployment_tree(built.deployment_nodes)
         for v in tree_violations:
             logger.warning('Deployment tree violation: %s', v)
         if built.datastore_entity_links:
+            deployment_dir = output_dir / 'deployment'
+            deployment_dir.mkdir(exist_ok=True)
             (deployment_dir / 'datastore-mapping.c4').write_text(
                 generate_datastore_mapping_c4(built.datastore_entity_links),
                 encoding='utf-8')
@@ -594,19 +640,8 @@ def _generate(
             encoding='utf-8')
         file_count += 1
         view_count += 1
-        per_system = generate_system_deployment_views(
-            nodes=built.deployment_nodes,
-            deployment_map=built.deployment_map,
-            systems=built.systems,
-            env=config.deployment_env,
-            sys_subdomain=_sys_subdomain,
-            sys_ids=_sys_ids,
-            sys_domain=built.sys_domain,
-        )
-        if per_system:
-            (views_dir / 'deployment-systems.c4').write_text(per_system, encoding='utf-8')
-            file_count += 1
-        logger.info('  deployment/ (topology + views)')
+        logger.info('  infrastructure/ (%d files)', len(infra_files))
+        logger.info('  systems/ (%d deployment.c4 files)', deploy_system_count)
 
     # Scripts
     (scripts_dir / 'federate.py').write_text(generate_federate_script(), encoding='utf-8')
@@ -621,9 +656,9 @@ def _generate(
     file_count += 1
 
     logger.info('%d files written to %s/', file_count, output_dir)
-    logger.info('  specification.c4, relationships.c4, entities.c4')
+    logger.info('  specification.c4, entities.c4')
     logger.info('  domains/ (%d .c4 files)', domain_count)
-    logger.info('  systems/ (%d .c4 detail files)', system_detail_count)
+    logger.info('  systems/ (%d system directories with model.c4)', system_detail_count)
     logger.info('  views/ (%d view files)', view_count)
     logger.info('  scripts/ (federate.py + federation-registry.yaml)')
     logger.info('Done! Run: cd %s && npx likec4 serve', output_dir)
