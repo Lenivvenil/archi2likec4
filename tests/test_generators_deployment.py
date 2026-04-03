@@ -3,8 +3,9 @@
 from archi2likec4.generators import (
     generate_deployment_c4,
     generate_deployment_overview_view,
+    generate_system_deployment_views,
 )
-from archi2likec4.models import DeploymentNode
+from archi2likec4.models import DeploymentNode, System
 
 # ── generate_deployment_c4 ───────────────────────────────────────────────
 
@@ -448,11 +449,109 @@ class TestKindResolution:
 # ── generate_deployment_overview_view ────────────────────────────────────
 
 class TestGenerateDeploymentOverviewView:
-    def test_view_content(self):
+    def test_view_content_no_nodes(self):
         content = generate_deployment_overview_view()
         assert 'deployment view deployment_architecture' in content
-        assert 'prod.**' in content
+        assert 'include prod' in content
+
+    def test_star_chain_with_nodes(self):
+        vm = DeploymentNode(c4_id='vm1', name='VM-1', archi_id='n-2', tech_type='Node', kind='vm')
+        site = DeploymentNode(c4_id='dc1', name='DC-1', archi_id='n-1', tech_type='Location', kind='site', children=[vm])
+        content = generate_deployment_overview_view(nodes=[site])
+        assert 'include prod' in content
+        assert 'include prod.*' in content
+        assert 'include prod.dc1.*' in content
+        assert 'include prod.dc1.vm1.*' in content
+        assert '.**' not in content
 
     def test_custom_env(self):
         content = generate_deployment_overview_view(env='staging')
-        assert 'staging.**' in content
+        assert 'include staging' in content
+
+
+# ── generate_system_deployment_views ─────────────────────────────────
+
+def _make_system(c4_id: str, name: str) -> System:
+    return System(c4_id=c4_id, name=name, archi_id=f'a-{c4_id}')
+
+
+def _simple_nodes() -> list[DeploymentNode]:
+    """A minimal deployment tree: site → cluster → vm."""
+    vm = DeploymentNode(c4_id='vm1', name='VM-1', archi_id='n-3', tech_type='Node', kind='vm')
+    cluster = DeploymentNode(c4_id='esxi', name='ESXi', archi_id='n-2',
+                             tech_type='TechnologyCollaboration', kind='cluster', children=[vm])
+    site = DeploymentNode(c4_id='dc1', name='DC-1', archi_id='n-1',
+                          tech_type='Location', kind='site', children=[cluster])
+    return [site]
+
+
+class TestGenerateSystemDeploymentViews:
+
+    def test_single_system_view(self):
+        nodes = _simple_nodes()
+        systems = [_make_system('efs', 'EFS')]
+        deployment_map = [('channels.efs', 'dc1.esxi.vm1')]
+        content = generate_system_deployment_views(
+            nodes=nodes, deployment_map=deployment_map, systems=systems,
+        )
+        assert 'deployment view efs_deploy' in content
+        assert "title 'EFS — prod'" in content
+        assert 'exclude * where tag is not #system_efs' in content
+        # Star-chain includes, no .**
+        assert '.**' not in content
+        assert 'include prod' in content
+        assert 'include prod.*' in content
+        assert 'include prod.dc1.*' in content
+
+    def test_multiple_systems(self):
+        nodes = _simple_nodes()
+        systems = [_make_system('efs', 'EFS'), _make_system('abs', 'ABS')]
+        deployment_map = [
+            ('channels.efs', 'dc1.esxi.vm1'),
+            ('products.abs', 'dc1.esxi.vm1'),
+        ]
+        content = generate_system_deployment_views(
+            nodes=nodes, deployment_map=deployment_map, systems=systems,
+        )
+        assert 'deployment view abs_deploy' in content
+        assert 'deployment view efs_deploy' in content
+
+    def test_system_no_deployments_skipped(self):
+        nodes = _simple_nodes()
+        systems = [_make_system('efs', 'EFS'), _make_system('abs', 'ABS')]
+        deployment_map = [('channels.efs', 'dc1.esxi.vm1')]
+        content = generate_system_deployment_views(
+            nodes=nodes, deployment_map=deployment_map, systems=systems,
+        )
+        assert 'efs_deploy' in content
+        assert 'abs_deploy' not in content
+
+    def test_empty_map_returns_empty(self):
+        nodes = _simple_nodes()
+        systems = [_make_system('efs', 'EFS')]
+        assert generate_system_deployment_views(nodes=nodes, deployment_map=[], systems=systems) == ''
+
+    def test_no_nodes_returns_empty(self):
+        systems = [_make_system('efs', 'EFS')]
+        deployment_map = [('channels.efs', 'dc1.vm1')]
+        assert generate_system_deployment_views(nodes=None, deployment_map=deployment_map, systems=systems) == ''
+
+    def test_view_id_sanitized(self):
+        nodes = _simple_nodes()
+        systems = [_make_system('call_center', 'Call Center')]
+        deployment_map = [('channels.call_center', 'dc1.esxi.vm1')]
+        content = generate_system_deployment_views(
+            nodes=nodes, deployment_map=deployment_map, systems=systems,
+        )
+        assert 'deployment view call_center_deploy' in content
+        assert '#system_call_center' in content
+
+    def test_custom_env(self):
+        nodes = _simple_nodes()
+        systems = [_make_system('efs', 'EFS')]
+        deployment_map = [('channels.efs', 'dc1.esxi.vm1')]
+        content = generate_system_deployment_views(
+            nodes=nodes, deployment_map=deployment_map, systems=systems, env='staging',
+        )
+        assert 'include staging' in content
+        assert "title 'EFS — staging'" in content

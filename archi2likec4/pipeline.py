@@ -41,6 +41,7 @@ from .generators import (
     generate_datastore_mapping_c4,
     generate_deployment_c4,
     generate_deployment_overview_view,
+    generate_system_deployment_views,
     generate_domain_c4,
     generate_domain_functional_view,
     generate_domain_integration_view,
@@ -588,10 +589,24 @@ def _generate(
                 encoding='utf-8')
             file_count += 1
         (views_dir / 'deployment-architecture.c4').write_text(
-            generate_deployment_overview_view(env=config.deployment_env), encoding='utf-8')
+            generate_deployment_overview_view(
+                nodes=built.deployment_nodes, env=config.deployment_env),
+            encoding='utf-8')
         file_count += 1
         view_count += 1
-        logger.info('  deployment/ (topology + view)')
+        per_system = generate_system_deployment_views(
+            nodes=built.deployment_nodes,
+            deployment_map=built.deployment_map,
+            systems=built.systems,
+            env=config.deployment_env,
+            sys_subdomain=_sys_subdomain,
+            sys_ids=_sys_ids,
+            sys_domain=built.sys_domain,
+        )
+        if per_system:
+            (views_dir / 'deployment-systems.c4').write_text(per_system, encoding='utf-8')
+            file_count += 1
+        logger.info('  deployment/ (topology + views)')
 
     # Scripts
     (scripts_dir / 'federate.py').write_text(generate_federate_script(), encoding='utf-8')

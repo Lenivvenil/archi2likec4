@@ -11,6 +11,8 @@ def _render_system(sys: System, lines: list[str], indent: int = 2) -> None:
     pad = ' ' * indent
     title = escape_str(sys.name)
     lines.append(f"{pad}{sys.c4_id} = system '{title}' {{")
+    # System ownership tag for deployment view instance filtering
+    lines.append(f"{pad}  #system_{sys.c4_id.replace('-', '_')}")
     for tag in sys.tags:
         lines.append(f'{pad}  #{tag}')
     if sys.documentation:

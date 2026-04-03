@@ -5,6 +5,7 @@ from .deployment import (
     generate_datastore_mapping_c4,
     generate_deployment_c4,
     generate_deployment_overview_view,
+    generate_system_deployment_views,
 )
 from .domains import generate_domain_c4
 from .entities import generate_entities
@@ -28,6 +29,7 @@ __all__ = [
     'generate_datastore_mapping_c4',
     'generate_deployment_c4',
     'generate_deployment_overview_view',
+    'generate_system_deployment_views',
     'generate_domain_c4',
     'generate_domain_functional_view',
     'generate_domain_integration_view',

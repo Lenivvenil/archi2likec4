@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 
-from ..models import DEFAULT_DEPLOYMENT_KIND, INSTANCE_ALLOWED_KINDS, DeploymentNode
+from ..models import DEFAULT_DEPLOYMENT_KIND, INSTANCE_ALLOWED_KINDS, DeploymentNode, System
 from ..utils import escape_str, extract_system_id
 from ._common import render_metadata, truncate_desc
 
@@ -204,15 +204,124 @@ def generate_datastore_mapping_c4(links: list[tuple[str, str]]) -> str:
     return '\n'.join(lines)
 
 
-def generate_deployment_overview_view(env: str = 'prod') -> str:
-    """Generate views/deployment-architecture.c4 using deployment view syntax."""
-    return f"""\
-views {{
+def _collect_all_paths(
+    nodes: list[DeploymentNode],
+    prefix: str = '',
+    parent_kind: str | None = None,
+) -> list[str]:
+    """Collect all node paths from the deployment tree (for star-chain includes).
 
-  deployment view deployment_architecture {{
-    title 'Deployment Architecture'
-    include {env}.**
-  }}
+    LikeC4 deployment views do not support ``.**`` (deep wildcard).  Instead,
+    ``include path.*`` must be emitted for every intermediate level.
 
-}}
-"""
+    Orphan infraSoftware (top-level, no real parent) is excluded — matching the
+    same filter as :func:`_render_deployment_node`.
+    """
+    paths: list[str] = []
+    for node in nodes:
+        if node.kind == 'infraSoftware' and parent_kind in (None, 'environment'):
+            continue
+        path = f'{prefix}.{node.c4_id}' if prefix else node.c4_id
+        paths.append(path)
+        paths.extend(_collect_all_paths(node.children, path, parent_kind=node.kind))
+    return paths
+
+
+def generate_deployment_overview_view(
+    nodes: list[DeploymentNode] | None = None,
+    env: str = 'prod',
+) -> str:
+    """Generate views/deployment-architecture.c4 using star-chain includes.
+
+    LikeC4 deployment views do not support ``include env.**``.  We emit
+    ``include env`` + ``include env.*`` + ``include env.X.*`` for every
+    intermediate path in the deployment tree.
+    """
+    lines = [
+        'views {',
+        '',
+        '  deployment view deployment_architecture {',
+        "    title 'Deployment Architecture'",
+    ]
+    if nodes:
+        all_paths = _collect_all_paths(nodes)
+        lines.append(f'    include {env}')
+        lines.append(f'    include {env}.*')
+        for p in sorted(set(all_paths)):
+            lines.append(f'    include {env}.{p}.*')
+    else:
+        lines.append(f'    include {env}')
+    lines.append('  }')
+    lines.append('')
+    lines.append('}')
+    lines.append('')
+    return '\n'.join(lines)
+
+
+def generate_system_deployment_views(
+    nodes: list[DeploymentNode] | None = None,
+    deployment_map: list[tuple[str, str]] | None = None,
+    systems: list[System] | None = None,
+    env: str = 'prod',
+    *,
+    sys_subdomain: dict[str, str] | None = None,
+    sys_ids: set[str] | None = None,
+    sys_domain: dict[str, str] | None = None,
+) -> str:
+    """Generate per-system deployment views using star-chain + tag exclude.
+
+    LikeC4 deployment views do not support ``include env.**``.  For each
+    system we emit star-chain includes for all tree levels, then
+    ``exclude * where tag is not #system_<id>`` to filter.
+
+    Returns a single ``.c4`` string with all per-system views, or empty string
+    if there are no deployments.
+    """
+    if not deployment_map or not systems or not nodes:
+        return ''
+
+    # Build reverse index: system_tag → set of infra paths
+    system_infra: dict[str, set[str]] = {}
+    for app_path, infra_path in deployment_map:
+        sid = extract_system_id(app_path, sys_subdomain, sys_ids, sys_domain)
+        system_infra.setdefault(sid, set()).add(infra_path)
+
+    if not system_infra:
+        return ''
+
+    # Build system name lookup: sanitized c4_id → display name
+    sys_names: dict[str, str] = {}
+    for s in systems:
+        tag_id = s.c4_id.replace('-', '_')
+        sys_names[tag_id] = s.name
+
+    # Precompute all tree paths for star-chain
+    all_paths = sorted(set(_collect_all_paths(nodes)))
+
+    lines = ['views {']
+    generated = 0
+    for sid in sorted(system_infra):
+        name = escape_str(sys_names.get(sid, sid))
+
+        lines.append('')
+        lines.append(f'  deployment view {sid}_deploy {{')
+        lines.append(f"    title '{name} — {env}'")
+        lines.append('')
+        lines.append(f'    include {env}')
+        lines.append(f'    include {env}.*')
+        for p in all_paths:
+            lines.append(f'    include {env}.{p}.*')
+        lines.append('')
+        lines.append(f'    exclude * where tag is not #system_{sid}')
+        lines.append('  }')
+        generated += 1
+
+    lines.append('')
+    lines.append('}')
+    lines.append('')
+
+    if not generated:
+        return ''
+
+    logger.info('Generated %d per-system deployment views', generated)
+    return '\n'.join(lines)

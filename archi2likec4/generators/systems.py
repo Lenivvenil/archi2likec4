@@ -9,10 +9,13 @@ from ._common import render_metadata, truncate_desc
 _MAX_FN_DESC_LEN = 300
 
 
-def _render_appfunction(fn: AppFunction, lines: list[str], indent: int = 6) -> None:
+def _render_appfunction(fn: AppFunction, lines: list[str], indent: int = 6,
+                        sys_c4_id: str = '') -> None:
     pad = ' ' * indent
     title = escape_str(fn.name)
     lines.append(f"{pad}{fn.c4_id} = appFunction '{title}' {{")
+    if sys_c4_id:
+        lines.append(f"{pad}  #system_{sys_c4_id.replace('-', '_')}")
     if fn.documentation:
         desc = truncate_desc(escape_str(fn.documentation), max_len=_MAX_FN_DESC_LEN)
         lines.append(f"{pad}  description '{desc}'")
@@ -20,10 +23,13 @@ def _render_appfunction(fn: AppFunction, lines: list[str], indent: int = 6) -> N
     lines.append(f'{pad}}}')
 
 
-def _render_subsystem(sub: Subsystem, lines: list[str], indent: int = 4) -> None:
+def _render_subsystem(sub: Subsystem, lines: list[str], indent: int = 4,
+                      sys_c4_id: str = '') -> None:
     pad = ' ' * indent
     title = escape_str(sub.name)
     lines.append(f"{pad}{sub.c4_id} = subsystem '{title}' {{")
+    if sys_c4_id:
+        lines.append(f"{pad}  #system_{sys_c4_id.replace('-', '_')}")
     for tag in sub.tags:
         lines.append(f'{pad}  #{tag}')
     if sub.documentation:
@@ -37,7 +43,7 @@ def _render_subsystem(sub: Subsystem, lines: list[str], indent: int = 4) -> None
     if sub.functions:
         lines.append('')
         for fn in sorted(sub.functions, key=lambda f: f.name):
-            _render_appfunction(fn, lines, indent=indent + 2)
+            _render_appfunction(fn, lines, indent=indent + 2, sys_c4_id=sys_c4_id)
     lines.append(f'{pad}}}')
 
 
@@ -63,12 +69,12 @@ def generate_system_detail_c4(domain_c4_id: str, sys: System) -> str:
     ]
 
     for sub in sorted(sys.subsystems, key=lambda s: s.name):
-        _render_subsystem(sub, lines, indent=4)
+        _render_subsystem(sub, lines, indent=4, sys_c4_id=sys.c4_id)
         lines.append('')
 
     # Functions directly on system (no subsystem parent)
     for fn in sorted(sys.functions, key=lambda f: f.name):
-        _render_appfunction(fn, lines, indent=4)
+        _render_appfunction(fn, lines, indent=4, sys_c4_id=sys.c4_id)
 
     lines.append('  }')
     lines.append('')
