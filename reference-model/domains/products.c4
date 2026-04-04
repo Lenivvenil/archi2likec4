@@ -1,0 +1,40 @@
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Домен «Продукты» — ядро бизнес-логики
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+model {
+
+  domain products 'Продукты' {
+    description 'Продуктовые системы и бизнес-процессы'
+
+    system core_banking 'АБС' {
+      #critical
+      description 'Автоматизированная банковская система (core banking)'
+      technology 'Oracle DB, PL/SQL, Java'
+    }
+
+    system card_processing 'Карточный процессинг' {
+      #critical
+      description 'Выпуск, обслуживание и процессинг платёжных карт'
+      technology 'Java 17, IBM MQ, Oracle'
+    }
+
+    system anti_fraud 'Антифрод' {
+      description 'Система обнаружения мошеннических операций в реальном времени'
+      technology 'Python, Kafka, ClickHouse'
+    }
+  }
+
+  // ── Внешние системы ──
+
+  external mastercard 'Mastercard' {
+    #external
+    description 'Международная платёжная система'
+  }
+
+  external sms_provider 'SMS-провайдер' {
+    #external
+    description 'Внешний провайдер SMS-рассылок'
+  }
+
+}

@@ -1,0 +1,35 @@
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Ландшафтные views — кросс-системные обзоры
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+views {
+
+  view landscape {
+    title 'Ландшафт систем'
+    description 'Все системы и их интеграции'
+
+    include *
+    autoLayout TopBottom
+  }
+
+  view critical_systems {
+    title 'Критичные системы'
+    description 'Системы с тегом #critical и их связи'
+
+    include * where tag is #critical
+    include * -> * where source.tag is #critical
+    include * -> * where target.tag is #critical
+    autoLayout TopBottom
+  }
+
+  // ── Обзор всего деплоя ──
+
+  deployment view infrastructure_overview {
+    title 'Обзор инфраструктуры — Production'
+    description 'Все ЦОДы, зоны и VM с задеплоенными компонентами'
+
+    include prod.**
+    autoLayout TopBottom
+  }
+
+}

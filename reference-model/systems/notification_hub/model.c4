@@ -1,0 +1,43 @@
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Центр уведомлений — логическая модель
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+model {
+
+  extend channels.notification_hub {
+    #async_channel
+
+    dispatcher = service 'Dispatcher' {
+      description 'Маршрутизация уведомлений по каналам: SMS, push, email'
+      technology 'Node.js 20'
+    }
+
+    sms_adapter = service 'SMS Adapter' {
+      description 'Адаптер к внешнему SMS-провайдеру'
+      technology 'Node.js 20'
+    }
+
+    push_adapter = service 'Push Adapter' {
+      description 'Адаптер Firebase Cloud Messaging'
+      technology 'Node.js 20'
+    }
+
+    notif_queue = queue 'Notification Queue' {
+      description 'Входящая очередь уведомлений'
+      technology 'Kafka'
+    }
+
+    // Внутренние связи
+    dispatcher -> notif_queue 'consumes events'
+    dispatcher -> sms_adapter 'routes SMS'
+    dispatcher -> push_adapter 'routes push'
+  }
+
+  // ── Исходящие интеграции ──
+
+  channels.notification_hub -> sms_provider 'отправка SMS' {
+    technology 'SMPP'
+    #async
+  }
+
+}

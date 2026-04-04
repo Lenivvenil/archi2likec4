@@ -1,0 +1,23 @@
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// Домен «Каналы» — клиентские точки входа
+// Системы объявлены здесь, детализированы в systems/{name}/
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+model {
+
+  domain channels 'Каналы' {
+    description 'Клиентские каналы и точки взаимодействия'
+
+    system mobile_bank 'Мобильный банк' {
+      #critical
+      description 'Мобильное приложение для физических лиц'
+      technology 'Java 17, Spring Boot, Oracle'
+    }
+
+    system notification_hub 'Центр уведомлений' {
+      description 'Единая шина уведомлений: SMS, push, email'
+      technology 'Node.js, Kafka, Redis'
+    }
+  }
+
+}
