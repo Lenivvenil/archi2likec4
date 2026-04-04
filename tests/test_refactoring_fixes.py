@@ -23,7 +23,7 @@ class TestValidateNoSideEffects:
     def test_validate_returns_tuple(self) -> None:
         built = MockBuilt()
         config = MockConfig()
-        result = _validate(built, config, sv_unresolved=0, sv_total=0)
+        result = _validate(built, config)
         assert isinstance(result, tuple)
         assert len(result) == 2
 
@@ -35,22 +35,16 @@ class TestValidateNoSideEffects:
         built = MockBuilt(diagnostics=diag, domain_systems={'unassigned': ['a', 'b']})
         orphan_before = built.diagnostics.orphan_fns
         ds_before = copy.deepcopy(built.domain_systems)
-        _validate(built, MockConfig(), sv_unresolved=0, sv_total=10)
+        _validate(built, MockConfig())
         assert built.diagnostics.orphan_fns == orphan_before
         assert built.domain_systems == ds_before
 
     def test_validate_zero_counts_on_clean_data(self) -> None:
         built = MockBuilt()
         config = MockConfig()
-        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=10)
+        warnings, errors = _validate(built, config)
         assert warnings == 0
         assert errors == 0
-
-    def test_validate_error_on_high_unresolved(self) -> None:
-        built = MockBuilt()
-        config = MockConfig(max_unresolved_ratio=0.3)
-        warnings, errors = _validate(built, config, sv_unresolved=8, sv_total=10)
-        assert errors >= 1
 
 
 # --- Issue #10: config is not mutated in-place ---

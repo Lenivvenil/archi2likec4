@@ -96,7 +96,6 @@ class TestPipelineE2E:
 
         # Verify output files exist
         assert (output / 'specification.c4').exists()
-        assert (output / 'entities.c4').exists()
         assert (output / 'AUDIT.md').exists()
 
         # Verify spec content
@@ -184,7 +183,7 @@ class TestValidate:
         """Empty build produces 0 warnings and 0 errors."""
         built = _make_empty_built()
         config = ConvertConfig()
-        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
+        warnings, errors = _validate(built, config)
         assert warnings == 0
         assert errors == 0
 
@@ -194,7 +193,7 @@ class TestValidate:
         built = _make_empty_built()._replace(
             diagnostics=BuildDiagnostics(orphan_fns=10, intg_skipped=0, intg_total_eligible=0))
         config = ConvertConfig(max_orphan_functions_warn=5)
-        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
+        warnings, errors = _validate(built, config)
         assert warnings >= 1
         assert errors == 0
 
@@ -204,7 +203,7 @@ class TestValidate:
         built = _make_empty_built()._replace(
             diagnostics=BuildDiagnostics(orphan_fns=5, intg_skipped=0, intg_total_eligible=0))
         config = ConvertConfig(max_orphan_functions_warn=5)
-        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
+        warnings, errors = _validate(built, config)
         assert warnings == 0
 
     def test_unassigned_above_threshold_produces_warning(self):
@@ -219,7 +218,7 @@ class TestValidate:
             domain_systems={'unassigned': unassigned},
         )
         config = ConvertConfig(max_unassigned_systems_warn=20)
-        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
+        warnings, errors = _validate(built, config)
         assert warnings >= 1
 
     def test_unassigned_below_threshold_no_warning(self):
@@ -231,14 +230,14 @@ class TestValidate:
             domain_systems={'unassigned': unassigned},
         )
         config = ConvertConfig(max_unassigned_systems_warn=20)
-        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
+        warnings, errors = _validate(built, config)
         assert warnings == 0
 
     def test_deployment_env_passed_through(self):
         """deployment_env from config should not cause errors during validation."""
         built = _make_empty_built()
         config = ConvertConfig(deployment_env='staging')
-        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
+        warnings, errors = _validate(built, config)
         assert warnings == 0
         assert errors == 0
 
@@ -246,6 +245,6 @@ class TestValidate:
         """strict=True with no critical incidents does not add warnings."""
         built = _make_empty_built()
         config = ConvertConfig(strict=True)
-        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
+        warnings, errors = _validate(built, config)
         assert warnings == 0
         assert errors == 0

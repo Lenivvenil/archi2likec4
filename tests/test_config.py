@@ -474,6 +474,11 @@ class TestDeploymentEnvConfig:
         with pytest.raises(ConfigError, match='deployment_env.*invalid C4 identifier'):
             _apply_yaml(config, {'deployment_env': 'Prod'})
 
+    def test_hyphen_raises(self):
+        config = ConvertConfig()
+        with pytest.raises(ConfigError, match='deployment_env.*invalid C4 identifier'):
+            _apply_yaml(config, {'deployment_env': 'prod-v2'})
+
     def test_in_known_keys(self):
         from archi2likec4.config import _KNOWN_YAML_KEYS
         assert 'deployment_env' in _KNOWN_YAML_KEYS
@@ -936,7 +941,7 @@ class TestSpecConfig:
 
     def test_spec_colors_invalid_key_raises(self):
         config = ConvertConfig()
-        with pytest.raises(ConfigError, match='spec_colors.*invalid C4 identifier'):
+        with pytest.raises(ConfigError, match='spec_colors.*invalid color name'):
             _apply_yaml(config, {'spec_colors': {'my color': '#FF0000'}})
 
     def test_spec_shapes_invalid_key_raises(self):

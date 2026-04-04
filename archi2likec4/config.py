@@ -16,7 +16,9 @@ from .models import DEFAULT_PROP_MAP, DEFAULT_STANDARD_KEYS, PROMOTE_WARN_THRESH
 
 logger = logging.getLogger(__name__)
 
-_VALID_C4_ID = re.compile(r'^[a-z][a-z0-9_-]*$')
+_VALID_C4_ID = re.compile(r'^[a-z][a-z0-9_]*$')
+# Color names in LikeC4 allow hyphens (e.g. archi-app, archi-tech-light)
+_VALID_COLOR_NAME = re.compile(r'^[a-z][a-z0-9_-]*$')
 
 
 # ── Defaults ───────────────────────────────────────────────────────────
@@ -417,7 +419,7 @@ def _apply_yaml(config: ConvertConfig, data: dict[str, Any]) -> None:
         if not _VALID_C4_ID.match(env_val):
             raise ConfigError(
                 f"deployment_env: invalid C4 identifier {env_val!r} "
-                f"(must match [a-z][a-z0-9_-]*)")
+                f"(must match {_VALID_C4_ID.pattern})")
         config.deployment_env = env_val
 
     if 'extra_view_patterns' in data:
@@ -514,10 +516,10 @@ def _apply_yaml(config: ConvertConfig, data: dict[str, Any]) -> None:
             if not isinstance(k, str) or not isinstance(v, str):
                 raise ConfigError(
                     f"spec_colors: keys and values must be strings, got {k!r}: {v!r}")
-            if not _VALID_C4_ID.match(k):
+            if not _VALID_COLOR_NAME.match(k):
                 raise ConfigError(
-                    f"spec_colors: invalid C4 identifier {k!r} "
-                    f"(must match [a-z][a-z0-9_-]*)")
+                    f"spec_colors: invalid color name {k!r} "
+                    f"(must match {_VALID_COLOR_NAME.pattern})")
         config.spec_colors = {**config.spec_colors, **val}
 
     if 'spec_shapes' in data:
@@ -547,7 +549,7 @@ def _apply_yaml(config: ConvertConfig, data: dict[str, Any]) -> None:
             if not _VALID_C4_ID.match(item):
                 raise ConfigError(
                     f"spec_tags: invalid C4 identifier {item!r} "
-                    f"(must match [a-z][a-z0-9_-]*)")
+                    f"(must match {_VALID_C4_ID.pattern})")
         config.spec_tags = list(dict.fromkeys(config.spec_tags + list(val)))
 
     if 'trash_folder' in data:

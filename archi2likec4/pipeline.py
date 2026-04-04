@@ -5,7 +5,7 @@ import copy
 import logging
 import shutil
 import sys
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
@@ -34,22 +34,16 @@ from .builders import (
 )
 from .config import ConvertConfig, load_config
 from .exceptions import ConfigError, ParseError, ValidationError
-from .federation import generate_federate_script, generate_federation_registry
 from .generators import (
-    build_view_context,
     generate_audit_md,
-    generate_datastore_mapping_c4,
-    generate_deployment_overview_view,
     generate_domain_c4,
     generate_domain_functional_view,
     generate_domain_integration_view,
-    generate_entities,
     generate_landscape_view,
-    generate_persistence_map,
-    generate_solution_views,
     generate_spec,
     generate_system_detail_c4,
 )
+from .generators.claude_md import generate_claude_md
 from .generators.deployment import (
     _build_node_kind_map,
     generate_infrastructure_files,
@@ -365,58 +359,31 @@ def _build(parsed: ParseResult, config: ConvertConfig) -> BuildResult:
     )
 
 
-def _build_solution_view_index(built: BuildResult) -> dict[str, str]:
-    """Build sys_subdomain map used by generate_solution_views."""
-    return {
-        s.c4_id: s.subdomain
-        for d_sys_list in built.domain_systems.values()
-        for s in d_sys_list
-        if s.subdomain
-    }
-
-
-def _validate(built: BuildResult, config: ConvertConfig, sv_unresolved: int, sv_total: int) -> tuple[int, int]:
+def _validate(built: BuildResult, config: ConvertConfig) -> tuple[int, int]:
     """Phase 3: quality gates. Returns (warnings, errors).
 
-    Solution views are pre-generated in convert() before this phase runs.
     This phase remains purely diagnostic — it checks invariants but produces
     no artifacts.
     """
     warnings = 0
     errors = 0
 
-    # Gate 1: Solution view unresolved ratio
-    if sv_total > 0:
-        sv_ratio = sv_unresolved / sv_total
-        if sv_ratio > config.max_unresolved_ratio:
-            logger.error('%d/%d (%.0f%%) solution view elements unresolved — '
-                         'likely data model mismatch',
-                         sv_unresolved, sv_total, sv_ratio * 100)
-            errors += 1
-        elif sv_ratio > config.max_unresolved_ratio * 0.6:
-            logger.warning('%d/%d (%.0f%%) solution view elements unresolved',
-                           sv_unresolved, sv_total, sv_ratio * 100)
-            warnings += 1
-        else:
-            logger.info('%d/%d (%.0f%%) solution view elements unresolved',
-                        sv_unresolved, sv_total, sv_ratio * 100)
-
-    # Gate 2: Orphan functions
+    # Gate 1: Orphan functions
     if built.diagnostics.orphan_fns > config.max_orphan_functions_warn:
         logger.warning('%d orphan functions (threshold: %d)',
                        built.diagnostics.orphan_fns, config.max_orphan_functions_warn)
         warnings += 1
 
-    # Gate 3: Unassigned systems
+    # Gate 2: Unassigned systems
     unassigned_count = len(built.domain_systems.get('unassigned', []))
     if unassigned_count > config.max_unassigned_systems_warn:
         logger.warning('%d systems in "unassigned" domain (threshold: %d)',
                        unassigned_count, config.max_unassigned_systems_warn)
         warnings += 1
 
-    # Gate 4: Critical QA incidents (strict mode only)
+    # Gate 3: Critical QA incidents (strict mode only)
     if config.strict:
-        _, audit_incidents = compute_audit_incidents(built, sv_unresolved, sv_total, config)
+        _, audit_incidents = compute_audit_incidents(built, 0, 0, config)
         critical = [i for i in audit_incidents
                     if i.severity == 'Critical' and not i.suppressed and i.count > 0]
         if critical:
@@ -428,27 +395,14 @@ def _validate(built: BuildResult, config: ConvertConfig, sv_unresolved: int, sv_
     return warnings, errors
 
 
-@dataclass
-class SolutionViewInfo:
-    """Groups pre-generated solution view data for _generate."""
-
-    files: dict[str, str] = field(default_factory=dict)
-    unresolved: int = 0
-    total: int = 0
-
-
 def _generate(
     built: BuildResult,
     output_dir: Path,
     config: ConvertConfig,
     domains_info: list[DomainInfo],
-    sv_info: SolutionViewInfo | None = None,
 ) -> int:
     """Phase 4: generate .c4 files."""
     logger.info('Generating files...')
-
-    if sv_info is None:
-        sv_info = SolutionViewInfo()
 
     # Resolve once so all subsequent operations use the same absolute path
     output_dir = output_dir.resolve()
@@ -476,10 +430,6 @@ def _generate(
     views_dir.mkdir(exist_ok=True)
     views_domains_dir = views_dir / 'domains'
     views_domains_dir.mkdir(exist_ok=True)
-    views_solutions_dir = views_dir / 'solutions'
-    views_solutions_dir.mkdir(exist_ok=True)
-    scripts_dir = output_dir / 'scripts'
-    scripts_dir.mkdir(exist_ok=True)
 
     file_count = 0
 
@@ -491,15 +441,18 @@ def _generate(
     (output_dir / 'specification.c4').write_text(
         generate_spec(config, system_ids=system_ids), encoding='utf-8')
     file_count += 1
+
+    # CLAUDE.md for the target repository
+    domain_ids = sorted(d for d in built.domain_systems if d != 'unassigned' and built.domain_systems[d])
+    (output_dir / 'CLAUDE.md').write_text(
+        generate_claude_md(domain_ids, system_ids), encoding='utf-8')
+    file_count += 1
+
     # Build per-system integration index for inline relationships in model.c4
     _sys_integrations: dict[str, list[Integration]] = {}
     for intg in built.integrations:
         sid = extract_system_id(intg.source_path, _sys_subdomain, _sys_ids, built.sys_domain)
         _sys_integrations.setdefault(sid, []).append(intg)
-
-    (output_dir / 'entities.c4').write_text(
-        generate_entities(built.entities, built.data_access), encoding='utf-8')
-    file_count += 1
 
     # Domain files + views
     all_domain_meta: dict[str, DomainInfo] = {d.c4_id: d for d in domains_info}
@@ -563,18 +516,8 @@ def _generate(
         file_count += 1
         view_count += 1
 
-    # Solution views (pre-generated in convert())
-    for sol_slug, content in sv_info.files.items():
-        (views_solutions_dir / f'{sol_slug}.c4').write_text(content, encoding='utf-8')
-        file_count += 1
-        view_count += 1
-    logger.info('%d solution view files generated', len(sv_info.files))
-
     # Top-level views
     (views_dir / 'landscape.c4').write_text(generate_landscape_view(), encoding='utf-8')
-    file_count += 1
-    view_count += 1
-    (views_dir / 'persistence-map.c4').write_text(generate_persistence_map(), encoding='utf-8')
     file_count += 1
     view_count += 1
 
@@ -627,40 +570,19 @@ def _generate(
         tree_violations = validate_deployment_tree(built.deployment_nodes)
         for v in tree_violations:
             logger.warning('Deployment tree violation: %s', v)
-        if built.datastore_entity_links:
-            deployment_dir = output_dir / 'deployment'
-            deployment_dir.mkdir(exist_ok=True)
-            (deployment_dir / 'datastore-mapping.c4').write_text(
-                generate_datastore_mapping_c4(built.datastore_entity_links),
-                encoding='utf-8')
-            file_count += 1
-        (views_dir / 'deployment-architecture.c4').write_text(
-            generate_deployment_overview_view(
-                nodes=built.deployment_nodes, env=config.deployment_env),
-            encoding='utf-8')
-        file_count += 1
-        view_count += 1
         logger.info('  infrastructure/ (%d files)', len(infra_files))
         logger.info('  systems/ (%d deployment.c4 files)', deploy_system_count)
 
-    # Scripts
-    (scripts_dir / 'federate.py').write_text(generate_federate_script(), encoding='utf-8')
-    file_count += 1
-    (scripts_dir / 'federation-registry.yaml').write_text(
-        generate_federation_registry(), encoding='utf-8')
-    file_count += 1
-
     # Quality audit
-    audit = generate_audit_md(built, sv_info.unresolved, sv_info.total, config)
+    audit = generate_audit_md(built, 0, 0, config)
     (output_dir / 'AUDIT.md').write_text(audit, encoding='utf-8')
     file_count += 1
 
     logger.info('%d files written to %s/', file_count, output_dir)
-    logger.info('  specification.c4, entities.c4')
+    logger.info('  specification.c4')
     logger.info('  domains/ (%d .c4 files)', domain_count)
     logger.info('  systems/ (%d system directories with model.c4)', system_detail_count)
     logger.info('  views/ (%d view files)', view_count)
-    logger.info('  scripts/ (federate.py + federation-registry.yaml)')
     logger.info('Done! Run: cd %s && npx likec4 serve', output_dir)
     return file_count
 
@@ -740,7 +662,8 @@ def _validate_config_runtime(config: ConvertConfig) -> None:
 
     import re as _re
 
-    _C4_ID_RE = _re.compile(r'^[a-z][a-z0-9_-]*$')
+    _C4_ID_RE = _re.compile(r'^[a-z][a-z0-9_]*$')
+    _COLOR_NAME_RE = _re.compile(r'^[a-z][a-z0-9_-]*$')
 
     if config.deployment_env is None:
         raise ConfigError("deployment_env: must not be None")
@@ -750,7 +673,7 @@ def _validate_config_runtime(config: ConvertConfig) -> None:
     if not _C4_ID_RE.match(env):
         raise ConfigError(
             f"deployment_env: invalid C4 identifier {env!r} "
-            f"(must match [a-z][a-z0-9_-]*)")
+            f"(must match {_C4_ID_RE.pattern})")
     config.deployment_env = env
 
     if not isinstance(config.extra_view_patterns, list):
@@ -784,10 +707,10 @@ def _validate_config_runtime(config: ConvertConfig) -> None:
     for k, v in config.spec_colors.items():
         if not isinstance(k, str) or not isinstance(v, str):
             raise ConfigError(f"spec_colors: keys and values must be strings, got {k!r}: {v!r}")
-        if not _C4_ID_RE.match(k):
+        if not _COLOR_NAME_RE.match(k):
             raise ConfigError(
-                f"spec_colors: invalid C4 identifier {k!r} "
-                f"(must match [a-z][a-z0-9_-]*)")
+                f"spec_colors: invalid color name {k!r} "
+                f"(must match {_COLOR_NAME_RE.pattern})")
 
     # Validate spec_shapes
     if not isinstance(config.spec_shapes, dict):
@@ -807,7 +730,7 @@ def _validate_config_runtime(config: ConvertConfig) -> None:
         if not isinstance(item, str):
             raise ConfigError(f"spec_tags: all items must be strings, got {type(item).__name__}: {item!r}")
         if not _C4_ID_RE.match(item):
-            raise ConfigError(f"spec_tags: invalid C4 identifier {item!r} (must match [a-z][a-z0-9_-]*)")
+            raise ConfigError(f"spec_tags: invalid C4 identifier {item!r} (must match {_C4_ID_RE.pattern})")
 
 # ── Public API ───────────────────────────────────────────────────────────
 
@@ -870,24 +793,7 @@ def convert(
     parsed = _parse(model_root_path, config)
     built = _build(parsed, config)
 
-    # Compute solution views once — metrics go to _validate, files go to _generate
-    sys_subdomain = _build_solution_view_index(built)
-    view_ctx = build_view_context(
-        archi_to_c4=built.archi_to_c4,
-        sys_domain=built.sys_domain,
-        relationships=parsed.relationships,
-        promoted_archi_to_c4=built.promoted_archi_to_c4,
-        tech_archi_to_c4=built.tech_archi_to_c4,
-        entity_archi_ids={e.archi_id for e in built.entities},
-        deployment_map=built.deployment_map,
-        sys_subdomain=sys_subdomain or None,
-        deployment_env=config.deployment_env,
-    )
-    sv_files, sv_unresolved, sv_total = generate_solution_views(
-        parsed.solution_views, view_ctx,
-    )
-
-    gate_warnings, gate_errors = _validate(built, config, sv_unresolved, sv_total)
+    gate_warnings, gate_errors = _validate(built, config)
 
     if gate_errors > 0:
         raise ValidationError(f'Quality gates failed with {gate_errors} error(s)')
@@ -898,9 +804,8 @@ def convert(
     files_written = 0
     sync_ok = True
     if not config.dry_run:
-        sv_info = SolutionViewInfo(files=sv_files, unresolved=sv_unresolved, total=sv_total)
         files_written = _generate(
-            built, output_dir_path, config, parsed.domains_info, sv_info,
+            built, output_dir_path, config, parsed.domains_info,
         )
         if config.sync_target is not None:
             sync_ok = _sync_output(config)

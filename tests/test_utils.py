@@ -77,6 +77,11 @@ class TestMakeId:
         result = make_id('EFS.Core')
         assert result == 'efs_core'
 
+    def test_replaces_hyphens(self):
+        assert make_id('compliance-reports') == 'compliance_reports'
+        assert make_id('risk-assessment-ui') == 'risk_assessment_ui'
+        assert make_id('sap_scc-ui_2_14') == 'sap_scc_ui_2_14'
+
 
 # ── escape_str ───────────────────────────────────────────────────────────
 

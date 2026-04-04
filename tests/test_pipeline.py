@@ -13,7 +13,6 @@ from archi2likec4.exceptions import ConfigError, ValidationError
 from archi2likec4.models import DeploymentNode, DomainInfo, System
 from archi2likec4.pipeline import (
     BuildResult,
-    SolutionViewInfo,
     _generate,
     _sync_output,
     _validate,
@@ -123,20 +122,6 @@ class TestGenerateSafety:
         assert count > 0
         assert not (output / 'old_file.c4').exists()
         assert (output / 'specification.c4').exists()
-
-    def test_generate_with_solution_views(self, tmp_path):
-        """SolutionViewInfo files are written to views/solutions/."""
-        output = tmp_path / 'output'
-        sv_info = SolutionViewInfo(
-            files={'test-view': 'views { view test_view {} }'},
-            unresolved=1,
-            total=10,
-        )
-        built = _empty_built()
-        config = ConvertConfig()
-        count = _generate(built, output, config, [], sv_info=sv_info)
-        assert (output / 'views' / 'solutions' / 'test-view.c4').exists()
-        assert count > 0
 
     def test_generate_with_domains(self, tmp_path):
         """Domains and system details are generated."""
@@ -378,7 +363,7 @@ class TestValidateConfigRuntime:
     def test_spec_colors_invalid_c4_id(self):
         config = ConvertConfig()
         config.spec_colors = {'INVALID!': '#fff'}
-        with pytest.raises(ConfigError, match='spec_colors.*invalid C4 identifier'):
+        with pytest.raises(ConfigError, match='spec_colors.*invalid color name'):
             _validate_config_runtime(config)
 
     def test_spec_shapes_not_dict(self):
@@ -421,27 +406,21 @@ class TestValidateConfigRuntime:
 # ── _validate edge cases ─────────────────────────────────────────────────
 
 class TestValidateEdgeCases:
-    def test_sv_ratio_error(self):
-        """High unresolved ratio triggers an error."""
-        built = _empty_built()
-        config = ConvertConfig(max_unresolved_ratio=0.3)
-        warnings, errors = _validate(built, config, sv_unresolved=40, sv_total=100)
-        assert errors == 1
-
-    def test_sv_ratio_warning(self):
-        """Moderate unresolved ratio triggers a warning."""
-        built = _empty_built()
-        config = ConvertConfig(max_unresolved_ratio=0.5)
-        # 0.6 * 0.5 = 0.3, so ratio > 0.3 and <= 0.5 triggers warning
-        warnings, errors = _validate(built, config, sv_unresolved=35, sv_total=100)
+    def test_orphan_functions_warning(self):
+        """Orphan functions above threshold trigger warning."""
+        built = _empty_built()._replace(
+            diagnostics=BuildDiagnostics(orphan_fns=10, intg_skipped=0, intg_total_eligible=0),
+        )
+        config = ConvertConfig(max_orphan_functions_warn=5)
+        warnings, errors = _validate(built, config)
         assert warnings == 1
         assert errors == 0
 
-    def test_sv_ratio_info_only(self):
-        """Low unresolved ratio produces neither warning nor error."""
+    def test_no_warnings_below_threshold(self):
+        """No warnings when all metrics are below threshold."""
         built = _empty_built()
-        config = ConvertConfig(max_unresolved_ratio=0.5)
-        warnings, errors = _validate(built, config, sv_unresolved=5, sv_total=100)
+        config = ConvertConfig()
+        warnings, errors = _validate(built, config)
         assert warnings == 0
         assert errors == 0
 
@@ -453,7 +432,7 @@ class TestValidateEdgeCases:
             domain_systems={'unassigned': [sys1]},
         )
         config = ConvertConfig(strict=True)
-        warnings, errors = _validate(built, config, sv_unresolved=0, sv_total=0)
+        warnings, errors = _validate(built, config)
         # QA-1 (unassigned systems) is Critical — strict mode should report it
         assert warnings > 0
         assert errors == 0
@@ -695,23 +674,7 @@ class TestGenerateDeployment:
         config = ConvertConfig()
         count = _generate(built, output, config, [])
         assert (output / 'infrastructure' / 'environments.c4').exists()
-        assert (output / 'views' / 'deployment-architecture.c4').exists()
         assert count > 0
-
-    def test_generate_with_datastore_entity_links(self, tmp_path):
-        """datastore-mapping.c4 is generated when links exist."""
-        output = tmp_path / 'output'
-        node = DeploymentNode(
-            c4_id='db1', name='Database', archi_id='t-2',
-            tech_type='SystemSoftware', kind='dataStore',
-        )
-        built = _empty_built()._replace(
-            deployment_nodes=[node],
-            datastore_entity_links=[('db1', 'entity1')],
-        )
-        config = ConvertConfig()
-        _generate(built, output, config, [])
-        assert (output / 'deployment' / 'datastore-mapping.c4').exists()
 
     def test_generate_auto_creates_domain_info(self, tmp_path):
         """Unknown domain ids from domain_systems get auto-created DomainInfo."""

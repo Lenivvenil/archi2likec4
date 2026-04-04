@@ -7,8 +7,6 @@ import pytest
 
 from archi2likec4.pipeline import main
 
-_SV_PATCH = 'archi2likec4.pipeline.generate_solution_views'
-
 
 class TestCLIArgs:
     """Argument parsing and flag handling."""
@@ -17,7 +15,6 @@ class TestCLIArgs:
         """Default model_root and output_dir are used when no args given."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build'), \
-             patch(_SV_PATCH, return_value=({}, 0, 0)), \
              patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
              patch('archi2likec4.pipeline._generate'), \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
@@ -37,7 +34,6 @@ class TestCLIArgs:
         """--strict sets config.strict = True."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build'), \
-             patch(_SV_PATCH, return_value=({}, 0, 0)), \
              patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
              patch('archi2likec4.pipeline._generate'), \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
@@ -56,7 +52,6 @@ class TestCLIArgs:
         """--verbose sets config.verbose = True."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build'), \
-             patch(_SV_PATCH, return_value=({}, 0, 0)), \
              patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
              patch('archi2likec4.pipeline._generate'), \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
@@ -75,7 +70,6 @@ class TestCLIArgs:
         """--dry-run completes without calling _generate."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build'), \
-             patch(_SV_PATCH, return_value=({}, 0, 0)), \
              patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
              patch('archi2likec4.pipeline._generate') as mock_gen, \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
@@ -94,7 +88,6 @@ class TestCLIArgs:
         """Custom model_root and output_dir from positional args."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build'), \
-             patch(_SV_PATCH, return_value=({}, 0, 0)), \
              patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
              patch('archi2likec4.pipeline._generate'), \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
@@ -118,7 +111,6 @@ class TestCLIErrorHandling:
         """Quality-gate errors cause exit 1."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build'), \
-             patch(_SV_PATCH, return_value=({}, 0, 0)), \
              patch('archi2likec4.pipeline._validate', return_value=(0, 3)), \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
              patch('pathlib.Path.is_dir', return_value=True), \
@@ -137,7 +129,6 @@ class TestCLIErrorHandling:
         """With --strict, warnings cause exit 1."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build'), \
-             patch(_SV_PATCH, return_value=({}, 0, 0)), \
              patch('archi2likec4.pipeline._validate', return_value=(5, 0)), \
              patch('archi2likec4.pipeline.load_config') as mock_load, \
              patch('pathlib.Path.is_dir', return_value=True), \
@@ -228,7 +219,6 @@ class TestSyncTargetCLI:
         """--sync-target sets config.sync_target to resolved path."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build'), \
-             patch(_SV_PATCH, return_value=({}, 0, 0)), \
              patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
              patch('archi2likec4.pipeline._generate'), \
              patch('archi2likec4.pipeline._sync_output') as mock_sync, \
@@ -249,7 +239,6 @@ class TestSyncTargetCLI:
         """--sync-target from CLI overrides sync_target set in YAML/config."""
         with patch('archi2likec4.pipeline._parse'), \
              patch('archi2likec4.pipeline._build'), \
-             patch(_SV_PATCH, return_value=({}, 0, 0)), \
              patch('archi2likec4.pipeline._validate', return_value=(0, 0)), \
              patch('archi2likec4.pipeline._generate'), \
              patch('archi2likec4.pipeline._sync_output'), \
