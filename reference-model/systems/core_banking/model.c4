@@ -34,9 +34,6 @@ model {
 
   // ── Исходящие интеграции ──
 
-  products.core_banking -> products.card_processing 'авторизация карточных транзакций' {
-    technology 'IBM MQ'
-    #async
-  }
+  products.core_banking -> products.card_processing 'авторизация карточных транзакций'
 
 }

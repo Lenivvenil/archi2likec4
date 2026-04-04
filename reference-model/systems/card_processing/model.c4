@@ -28,14 +28,8 @@ model {
 
   // ── Исходящие интеграции ──
 
-  products.card_processing -> mastercard 'авторизации, клиринг' {
-    technology 'ISO 8583 / MasterCard Interface Processor'
-    #sync
-  }
+  products.card_processing -> mastercard 'авторизации, клиринг'
 
-  products.card_processing -> channels.notification_hub 'уведомление о транзакции' {
-    technology 'Kafka'
-    #async
-  }
+  products.card_processing -> channels.notification_hub 'уведомление о транзакции'
 
 }

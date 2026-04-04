@@ -35,24 +35,12 @@ model {
 
   // ── Исходящие интеграции ──
 
-  channels.mobile_bank -> products.core_banking 'проверка баланса, выписки' {
-    technology 'REST/HTTPS'
-    #sync
-  }
+  channels.mobile_bank -> products.core_banking 'проверка баланса, выписки'
 
-  channels.mobile_bank -> products.card_processing 'блокировка/разблокировка карт' {
-    technology 'REST/HTTPS'
-    #sync
-  }
+  channels.mobile_bank -> products.card_processing 'блокировка/разблокировка карт'
 
-  channels.mobile_bank -> channels.notification_hub 'запрос на отправку OTP' {
-    technology 'Kafka'
-    #async
-  }
+  channels.mobile_bank -> channels.notification_hub 'запрос на отправку OTP'
 
-  channels.mobile_bank -> products.anti_fraud 'проверка транзакции' {
-    technology 'REST/HTTPS, < 200ms SLA'
-    #sync
-  }
+  channels.mobile_bank -> products.anti_fraud 'проверка транзакции'
 
 }

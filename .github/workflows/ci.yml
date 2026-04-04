@@ -88,5 +88,8 @@ jobs:
         with:
           node-version: "20"
 
+      - name: Install likec4
+        run: cd reference-model && npm install
+
       - name: Validate reference model
-        run: cd reference-model && npx @likec4/cli@latest build
+        run: cd reference-model && ./node_modules/.bin/likec4 build

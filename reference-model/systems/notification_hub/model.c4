@@ -5,7 +5,6 @@
 model {
 
   extend channels.notification_hub {
-    #async_channel
 
     dispatcher = service 'Dispatcher' {
       description 'Маршрутизация уведомлений по каналам: SMS, push, email'
@@ -35,9 +34,6 @@ model {
 
   // ── Исходящие интеграции ──
 
-  channels.notification_hub -> sms_provider 'отправка SMS' {
-    technology 'SMPP'
-    #async
-  }
+  channels.notification_hub -> sms_provider 'отправка SMS'
 
 }

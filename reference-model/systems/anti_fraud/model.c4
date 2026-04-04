@@ -35,9 +35,6 @@ model {
 
   // ── Исходящие интеграции ──
 
-  products.anti_fraud -> channels.notification_hub 'алерт о подозрительной операции' {
-    technology 'Kafka'
-    #async
-  }
+  products.anti_fraud -> channels.notification_hub 'алерт о подозрительной операции'
 
 }
