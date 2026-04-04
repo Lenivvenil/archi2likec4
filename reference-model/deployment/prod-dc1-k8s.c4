@@ -1,0 +1,70 @@
+deployment {
+  extend prod.dc1.internal {
+    // ── Kubernetes Cluster ──
+    k8s_prod = k8sCluster 'k8s-prod-cluster' {
+      technology 'Kubernetes 1.29, Rancher'
+
+      // ── Namespace: Payments ──
+      ns_payments = k8sNamespace 'payments' {
+        description 'Payment microservices namespace'
+
+        payment_router_pod = container 'payment-router' {
+          technology 'Java 21, 3 replicas'
+          instanceOf bank.payments.payment_hub.payment_router
+        }
+
+        payment_processor_pod = container 'payment-processor' {
+          technology 'Java 21, 5 replicas'
+          instanceOf bank.payments.payment_hub.payment_processor
+        }
+      }
+
+      // ── Namespace: Core Banking ──
+      ns_core = k8sNamespace 'core-banking' {
+        description 'Core banking services'
+
+        account_svc_pod = container 'account-service' {
+          technology 'Java 21, 3 replicas'
+          instanceOf bank.products.core_banking.account_service
+        }
+
+        ledger_svc_pod = container 'ledger-service' {
+          technology 'Java 21, 2 replicas'
+          instanceOf bank.products.core_banking.ledger_service
+        }
+      }
+
+      // ── Namespace: Risk ──
+      ns_risk = k8sNamespace 'risk' {
+        description 'Risk and fraud detection'
+
+        fraud_engine_pod = container 'fraud-engine' {
+          technology 'Python 3.12, 4 replicas'
+          instanceOf bank.risk.antifraud.fraud_engine
+        }
+
+        rules_engine_pod = container 'rules-engine' {
+          technology 'Java 21, 2 replicas'
+          instanceOf bank.risk.antifraud.rules_engine
+        }
+      }
+
+      // ── Namespace: Notifications ──
+      ns_notify = k8sNamespace 'notifications' {
+        orchestrator_pod = container 'notification-orchestrator' {
+          technology 'Java 21, 2 replicas'
+          instanceOf bank.notifications.notification_center.orchestrator
+        }
+      }
+    }
+
+    // ── Kafka Cluster (outside K8s) ──
+    kafka_cluster = physicalServer 'kafka-cluster' {
+      technology '3-node Kafka 3.7 cluster'
+      kafka_broker = vm 'kafka-broker' {
+        technology 'RHEL 9, dedicated'
+        instanceOf bank.payments.payment_hub.payment_queue
+      }
+    }
+  }
+}

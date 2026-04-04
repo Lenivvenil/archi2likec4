@@ -1,0 +1,29 @@
+deployment {
+  environment prod 'Production' {
+    #critical
+    description 'Production environment with HA across two data centers'
+    technology 'VMware + Kubernetes'
+
+    // ── Primary Data Center ──
+    dc1 = datacenter 'DC-1 (Primary)' {
+      technology 'Tier III, Moscow'
+
+      // ── Network Segments ──
+      dmz = networkSegment 'DMZ' {
+        description 'Internet-facing segment, WAF-protected'
+      }
+
+      internal = networkSegment 'Internal' {
+        description 'Application segment, no direct internet access'
+      }
+
+      mgmt = networkSegment 'Management' {
+        description 'Infrastructure management, monitoring'
+      }
+
+      db_segment = networkSegment 'Database Segment' {
+        description 'Isolated database network'
+      }
+    }
+  }
+}

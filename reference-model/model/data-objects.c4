@@ -1,0 +1,45 @@
+model {
+  // ── Data Objects (logical data entities) ──
+  // Nested under the domain that "owns" them
+
+  extend bank.products {
+    do_customer_registry = dataObject 'Customer Registry' {
+      #golden_source
+      description 'Master customer records: personal data, KYC status, segments'
+    }
+
+    do_account_ledger = dataObject 'Account Ledger' {
+      #golden_source
+      description 'All account balances, postings, and transaction history'
+    }
+
+    do_product_terms = dataObject 'Product Terms' {
+      description 'Product definitions, interest rates, fee schedules'
+    }
+  }
+
+  extend bank.payments {
+    do_transaction_log = dataObject 'Transaction Log' {
+      #golden_source
+      description 'Immutable log of all payment transactions'
+    }
+
+    do_card_registry = dataObject 'Card Registry' {
+      #golden_source
+      #pci_dss
+      description 'Card numbers, expiry, limits, status'
+    }
+  }
+
+  extend bank.notifications {
+    do_notification_templates = dataObject 'Notification Templates' {
+      description 'SMS, email, and push message templates'
+    }
+  }
+
+  extend bank.risk {
+    do_fraud_patterns = dataObject 'Fraud Patterns & ML Models' {
+      description 'Trained ML models and fraud detection rule sets'
+    }
+  }
+}

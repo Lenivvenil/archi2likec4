@@ -1,0 +1,45 @@
+views {
+  // ── L1: Channels Domain ──
+  view channelsDomain of bank.channels {
+    title 'Channels Domain (L1)'
+    description 'Customer-facing digital channels and their backend integrations'
+    include *
+    style bank.channels.* {
+      color primary
+    }
+    style * {
+      color muted
+    }
+    autoLayout TopBottom
+  }
+
+  // ── L1: Products Domain ──
+  view productsDomain of bank.products {
+    title 'Products & Accounts Domain (L1)'
+    include *
+    style bank.products.* {
+      color primary
+    }
+    autoLayout TopBottom
+  }
+
+  // ── L1: Payments Domain ──
+  view paymentsDomain of bank.payments {
+    title 'Payments Domain (L1)'
+    include *
+    style bank.payments.* {
+      color primary
+    }
+    autoLayout TopBottom
+  }
+
+  // ── L1: Risk Domain ──
+  view riskDomain of bank.risk {
+    title 'Risk & Compliance Domain (L1)'
+    include *
+    style bank.risk.* {
+      color primary
+    }
+    autoLayout TopBottom
+  }
+}

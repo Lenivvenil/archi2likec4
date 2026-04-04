@@ -1,0 +1,23 @@
+model {
+  // ── Data Ownership (Golden Source) ──
+  bank.products.core_banking -[owns]-> bank.products.do_customer_registry 'Golden Source'
+  bank.products.core_banking -[owns]-> bank.products.do_account_ledger 'Golden Source'
+  bank.products.product_catalog -[owns]-> bank.products.do_product_terms 'Golden Source'
+  bank.payments.payment_hub -[owns]-> bank.payments.do_transaction_log 'Golden Source'
+  bank.payments.card_system -[owns]-> bank.payments.do_card_registry 'Golden Source'
+  bank.notifications.notification_center -[owns]-> bank.notifications.do_notification_templates 'Golden Source'
+  bank.risk.antifraud -[owns]-> bank.risk.do_fraud_patterns 'Golden Source'
+
+  // ── Data Reads ──
+  bank.channels.mobile_bank -[reads]-> bank.products.do_account_ledger 'Displays balances'
+  bank.channels.mobile_bank -[reads]-> bank.products.do_customer_registry 'Shows profile'
+  bank.channels.internet_bank -[reads]-> bank.products.do_account_ledger 'Displays balances'
+  bank.channels.internet_bank -[reads]-> bank.products.do_customer_registry 'Shows profile'
+  bank.risk.antifraud -[reads]-> bank.payments.do_transaction_log 'Analyzes transactions'
+  bank.risk.antifraud -[reads]-> bank.payments.do_card_registry 'Checks card patterns'
+  bank.notifications.notification_center -[reads]-> bank.products.do_customer_registry 'Resolves contact info'
+
+  // ── Data Writes ──
+  bank.payments.payment_hub -[writes]-> bank.products.do_account_ledger 'Posts transactions'
+  bank.payments.card_system -[writes]-> bank.payments.do_transaction_log 'Logs card transactions'
+}

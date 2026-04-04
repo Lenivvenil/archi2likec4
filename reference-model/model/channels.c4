@@ -1,0 +1,70 @@
+model {
+  extend bank.channels {
+    mobile_bank = system 'Mobile Bank' {
+      description 'iOS/Android mobile banking application'
+      technology 'React Native'
+
+      // L3: Services
+      mobile_ui = mobileApp 'Mobile UI' {
+        technology 'React Native'
+        description 'Native mobile interface'
+      }
+
+      mobile_bff = service 'Mobile BFF' {
+        technology 'Node.js'
+        description 'Backend-for-frontend aggregation layer'
+
+        // L4: Components
+        auth_handler = component 'Auth Handler' {
+          technology 'Passport.js'
+        }
+        account_aggregator = component 'Account Aggregator' {
+          technology 'GraphQL'
+        }
+        payment_facade = component 'Payment Facade' {
+          technology 'REST'
+        }
+
+        // L5: API endpoints
+        login_api = api '/api/v1/auth/login' {
+          technology 'POST, OAuth2'
+        }
+        accounts_api = api '/api/v1/accounts' {
+          technology 'GET, REST'
+        }
+        transfer_api = api '/api/v1/transfers' {
+          technology 'POST, REST'
+        }
+      }
+
+      push_service = service 'Push Service' {
+        technology 'Firebase Cloud Messaging'
+        description 'Mobile push notification delivery'
+      }
+    }
+
+    internet_bank = system 'Internet Bank' {
+      description 'Web-based internet banking portal'
+      technology 'React SPA'
+
+      web_ui = webapp 'Web UI' {
+        technology 'React, TypeScript'
+      }
+
+      web_bff = service 'Web BFF' {
+        technology 'Java, Spring Boot'
+        description 'Backend-for-frontend for web channel'
+      }
+    }
+
+    // Internal relationships
+    mobile_bank.mobile_ui -> mobile_bank.mobile_bff 'API calls' {
+      technology 'HTTPS/JSON'
+    }
+    mobile_bank.mobile_bff.auth_handler -> mobile_bank.mobile_bff.login_api
+    mobile_bank.mobile_bff.account_aggregator -> mobile_bank.mobile_bff.accounts_api
+    internet_bank.web_ui -> internet_bank.web_bff 'API calls' {
+      technology 'HTTPS/JSON'
+    }
+  }
+}

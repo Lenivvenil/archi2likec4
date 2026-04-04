@@ -1,0 +1,39 @@
+model {
+  extend bank.payments {
+    payment_hub = system 'Payment Hub' {
+      description 'Centralized payment processing and routing'
+      technology 'Java, Kafka'
+
+      payment_router = service 'Payment Router' {
+        technology 'Java, Spring'
+        description 'Routes payments to appropriate processor'
+      }
+      payment_processor = service 'Payment Processor' {
+        technology 'Java'
+        description 'Executes payment transactions'
+      }
+      payment_queue = messageQueue 'Payment Queue' {
+        technology 'Apache Kafka'
+      }
+      payment_db = database 'Payment DB' {
+        technology 'PostgreSQL 15'
+      }
+    }
+
+    card_system = system 'Card Processing' {
+      #pci_dss
+      description 'Card issuance, authorization, settlement'
+      technology 'C++, Oracle'
+
+      card_auth = service 'Card Authorization' {
+        technology 'C++'
+      }
+      card_settlement = service 'Card Settlement' {
+        technology 'Java'
+      }
+      card_db = database 'Card DB' {
+        technology 'Oracle 19c'
+      }
+    }
+  }
+}

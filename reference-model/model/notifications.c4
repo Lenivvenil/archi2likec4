@@ -1,0 +1,24 @@
+model {
+  extend bank.notifications {
+    notification_center = system 'Notification Center' {
+      description 'Omni-channel notification orchestration'
+      technology 'Java, Kafka'
+
+      orchestrator = service 'Notification Orchestrator' {
+        technology 'Java, Spring'
+      }
+      template_engine = service 'Template Engine' {
+        technology 'Java, Thymeleaf'
+      }
+      sms_gateway = service 'SMS Gateway' {
+        technology 'SMPP'
+      }
+      email_sender = service 'Email Sender' {
+        technology 'SMTP'
+      }
+      notification_queue = messageQueue 'Notification Queue' {
+        technology 'Apache Kafka'
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+views {
+  deployment view prodOverview {
+    title 'Production Environment — Overview'
+    description 'All deployment nodes and instances in production'
+    include prod.**
+    autoLayout TopBottom
+  }
+
+  deployment view prodDmz {
+    title 'Production DMZ — Web & Mobile Tier'
+    include prod.dc1.dmz.**
+    autoLayout LeftRight
+  }
+
+  deployment view prodK8s {
+    title 'Production Kubernetes — Application Tier'
+    include prod.dc1.internal.k8s_prod.**
+    autoLayout TopBottom
+  }
+
+  deployment view prodDatabases {
+    title 'Production Database Segment'
+    include prod.dc1.db_segment.**
+    autoLayout LeftRight
+  }
+}

@@ -1,0 +1,48 @@
+deployment {
+  extend prod.dc1.db_segment {
+    // ── Database Servers ──
+    db_server01 = physicalServer 'db-oracle-01' {
+      technology 'Dell PowerEdge R940, 4x Xeon'
+
+      san_primary = storage 'SAN Primary' {
+        technology 'NetApp AFF A400, 50TB'
+      }
+
+      oracle_vm = vm 'vm-oracle-primary' {
+        technology 'RHEL 9, 32 vCPU, 256GB RAM'
+        oracle_account = instanceOf bank.products.core_banking.account_service.account_db {
+          title 'Account DB (Primary)'
+        }
+        oracle_ledger = instanceOf bank.products.core_banking.ledger_service.ledger_db {
+          title 'Ledger DB (Primary)'
+        }
+      }
+    }
+
+    db_server02 = physicalServer 'db-postgres-01' {
+      technology 'Dell PowerEdge R750'
+
+      san_payments = storage 'SAN Payments' {
+        technology 'NetApp AFF A250, 20TB'
+      }
+
+      pg_vm = vm 'vm-postgres-payments' {
+        technology 'RHEL 9, 16 vCPU, 64GB RAM'
+        instanceOf bank.payments.payment_hub.payment_db {
+          title 'Payment DB (Primary)'
+          technology 'PostgreSQL 15 with Patroni HA'
+        }
+      }
+    }
+
+    db_server03 = physicalServer 'db-card-01' {
+      technology 'Dell PowerEdge R940'
+      card_vm = vm 'vm-oracle-card' {
+        technology 'RHEL 9, 16 vCPU, 128GB RAM'
+        instanceOf bank.payments.card_system.card_db {
+          title 'Card DB (Primary)'
+        }
+      }
+    }
+  }
+}

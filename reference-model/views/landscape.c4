@@ -1,35 +1,36 @@
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Ландшафтные views — кросс-системные обзоры
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 views {
+  // ── L0: Enterprise Landscape ──
+  view index {
+    title 'Demo Bank — Enterprise Landscape (L0)'
+    description 'All business domains, external systems, and key actors'
 
-  view landscape {
-    title 'Ландшафт систем'
-    description 'Все системы и их интеграции'
+    include
+      bank,
+      bank.*,
+      customer,
+      operator,
+      cbr,
+      visa,
+      swift
 
-    include *
+    include
+      customer -> bank.*,
+      bank.* -> cbr,
+      bank.* -> visa,
+      bank.* -> swift,
+      bank.channels.* -> bank.products.*,
+      bank.channels.* -> bank.payments.*,
+      bank.payments.* -> bank.risk.*,
+      bank.products.* -> bank.notifications.*,
+      bank.payments.* -> bank.notifications.*
+
+    style bank.* {
+      color primary
+    }
+    style cbr, visa, swift {
+      color muted
+    }
+
     autoLayout TopBottom
   }
-
-  view critical_systems {
-    title 'Критичные системы'
-    description 'Системы с тегом #critical и их связи'
-
-    include * where tag is #critical
-    include * -> * where source.tag is #critical
-    include * -> * where target.tag is #critical
-    autoLayout TopBottom
-  }
-
-  // ── Обзор всего деплоя ──
-
-  deployment view infrastructure_overview {
-    title 'Обзор инфраструктуры — Production'
-    description 'Все ЦОДы, зоны и VM с задеплоенными компонентами'
-
-    include prod.**
-    autoLayout TopBottom
-  }
-
 }

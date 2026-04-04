@@ -1,0 +1,15 @@
+views {
+  // ── L3: Mobile BFF (Component View) ──
+  view mobileBffService of bank.channels.mobile_bank.mobile_bff {
+    title 'Mobile BFF — Components & APIs (L3)'
+    include *
+    autoLayout TopBottom
+  }
+
+  // ── L3: Account Service (Component View) ──
+  view accountService of bank.products.core_banking.account_service {
+    title 'Account Service — Components (L3)'
+    include *
+    autoLayout TopBottom
+  }
+}

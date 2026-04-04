@@ -1,0 +1,25 @@
+model {
+  extend bank.risk {
+    antifraud = system 'Anti-Fraud System' {
+      description 'Real-time fraud detection and prevention'
+      technology 'Python, Kafka, ML'
+
+      fraud_engine = service 'Fraud Detection Engine' {
+        technology 'Python, scikit-learn'
+        description 'ML-based transaction scoring'
+      }
+      rules_engine = service 'Rules Engine' {
+        technology 'Drools'
+        description 'Business rules for fraud patterns'
+      }
+      fraud_db = database 'Fraud DB' {
+        technology 'ClickHouse'
+      }
+    }
+
+    aml_system = system 'AML System' {
+      description 'Anti-money laundering screening and reporting'
+      technology 'Java, Elasticsearch'
+    }
+  }
+}

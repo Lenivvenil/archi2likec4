@@ -1,0 +1,32 @@
+views {
+  dynamic view paymentFlow {
+    title 'Use Cases / Payments / P2P Transfer Flow'
+    description 'Step-by-step flow of a person-to-person payment'
+
+    customer -> bank.channels.mobile_bank.mobile_ui 'Opens transfer screen'
+    bank.channels.mobile_bank.mobile_ui -> bank.channels.mobile_bank.mobile_bff 'POST /api/v1/transfers'
+    bank.channels.mobile_bank.mobile_bff -> bank.payments.payment_hub.payment_router 'Route payment request'
+    bank.payments.payment_hub.payment_router -> bank.risk.antifraud.fraud_engine 'Score transaction'
+    bank.risk.antifraud.fraud_engine -> bank.payments.payment_hub.payment_router 'Risk score: OK'
+    bank.payments.payment_hub.payment_router -> bank.payments.payment_hub.payment_processor 'Execute transfer'
+    bank.payments.payment_hub.payment_processor -> bank.products.core_banking.ledger_service 'Post debit + credit'
+    bank.payments.payment_hub.payment_processor -> bank.payments.payment_hub.payment_queue 'Publish payment.completed'
+    bank.payments.payment_hub.payment_queue -> bank.notifications.notification_center.orchestrator 'Consume event'
+    bank.notifications.notification_center.orchestrator -> bank.channels.mobile_bank.push_service 'Send push notification'
+
+    autoLayout TopBottom
+  }
+
+  dynamic view cardAuthFlow {
+    title 'Use Cases / Cards / Card Authorization Flow'
+
+    visa -> bank.payments.card_system.card_auth 'Authorization request (ISO 8583)'
+    bank.payments.card_system.card_auth -> bank.risk.antifraud.fraud_engine 'Real-time fraud check'
+    bank.risk.antifraud.fraud_engine -> bank.payments.card_system.card_auth 'Fraud score'
+    bank.payments.card_system.card_auth -> bank.products.core_banking.account_service 'Check balance'
+    bank.products.core_banking.account_service -> bank.payments.card_system.card_auth 'Balance OK'
+    bank.payments.card_system.card_auth -> visa 'Authorization response'
+
+    autoLayout LeftRight
+  }
+}
