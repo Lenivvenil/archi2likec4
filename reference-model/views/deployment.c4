@@ -1,26 +1,71 @@
 views {
+  // ── Full Production Overview ──
   deployment view prodOverview {
-    title 'Production Environment — Overview'
-    description 'All deployment nodes and instances in production'
+    title 'Production Environment — Full Overview'
+    description 'All deployment nodes and instances across both data centers'
     include prod.**
     autoLayout TopBottom
   }
 
+  // ── DC-1: Per-Segment Views ──
   deployment view prodDmz {
     title 'Production DMZ — Web & Mobile Tier'
+    description 'Nginx reverse proxies, BFF servers, ESXi hypervisors'
     include prod.dc1.dmz.**
     autoLayout LeftRight
   }
 
   deployment view prodK8s {
     title 'Production Kubernetes — Application Tier'
+    description 'Microservices across 6 namespaces: infra, payments, core-banking, cards, risk, notifications'
     include prod.dc1.internal.k8s_prod.**
     autoLayout TopBottom
   }
 
+  deployment view prodMessaging {
+    title 'Production Messaging — Kafka + IBM MQ'
+    description 'Kafka 3-node cluster and IBM MQ for core banking integration'
+    include prod.dc1.internal.kafka_cluster.**
+    include prod.dc1.internal.mq_cluster.**
+    autoLayout LeftRight
+  }
+
   deployment view prodDatabases {
     title 'Production Database Segment'
+    description 'Oracle, PostgreSQL, ClickHouse with SAN storage'
     include prod.dc1.db_segment.**
+    autoLayout LeftRight
+  }
+
+  deployment view prodMonitoring {
+    title 'Production Management — Monitoring & Logging'
+    description 'Prometheus + Grafana, ELK stack'
+    include prod.dc1.mgmt.**
+    autoLayout LeftRight
+  }
+
+  // ── DC-2: Disaster Recovery ──
+  deployment view drOverview {
+    title 'Disaster Recovery — DC-2 (St. Petersburg)'
+    description 'Warm standby: K8s cluster, DataGuard replicas, Kafka MirrorMaker'
+    include prod.dc2.**
+    autoLayout TopBottom
+  }
+
+  // ── Staging Environment ──
+  deployment view stagingOverview {
+    title 'Staging Environment'
+    description 'Reduced-scale pre-production: single K8s namespace, shared DB'
+    include staging.**
+    autoLayout TopBottom
+  }
+
+  // ── Per-System: Card Processing (PCI-DSS) ──
+  deployment view cardSystemDeployment {
+    title 'Card Processing — PCI-DSS Deployment'
+    description 'Isolated K8s namespace + encrypted Oracle DB'
+    include prod.dc1.internal.k8s_prod.ns_cards.**
+    include prod.dc1.db_segment.db_server03.**
     autoLayout LeftRight
   }
 }

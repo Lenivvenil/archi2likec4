@@ -257,4 +257,12 @@ specification {
       color infra-gray
     }
   }
+
+  deploymentNode infraSoftware {
+    notation 'Infrastructure Software'
+    style {
+      color green
+      size small
+    }
+  }
 }

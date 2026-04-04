@@ -1,15 +1,20 @@
 deployment {
   extend prod.dc1.db_segment {
-    // ── Database Servers ──
+    // ── Oracle Database Server (Core Banking) ──
     db_server01 = physicalServer 'db-oracle-01' {
-      technology 'Dell PowerEdge R940, 4x Xeon'
+      technology 'Dell PowerEdge R940, 4x Xeon, 512GB RAM'
 
       san_primary = storage 'SAN Primary' {
-        technology 'NetApp AFF A400, 50TB'
+        technology 'NetApp AFF A400, 50TB, RAID-DP'
       }
 
       oracle_vm = vm 'vm-oracle-primary' {
         technology 'RHEL 9, 32 vCPU, 256GB RAM'
+
+        oracle_sw = infraSoftware 'Oracle DBMS' {
+          technology 'Oracle Database 19c Enterprise + RAC'
+        }
+
         oracle_account = instanceOf bank.products.core_banking.account_service.account_db {
           title 'Account DB (Primary)'
         }
@@ -19,8 +24,9 @@ deployment {
       }
     }
 
+    // ── PostgreSQL Database Server (Payments) ──
     db_server02 = physicalServer 'db-postgres-01' {
-      technology 'Dell PowerEdge R750'
+      technology 'Dell PowerEdge R750, 128GB RAM'
 
       san_payments = storage 'SAN Payments' {
         technology 'NetApp AFF A250, 20TB'
@@ -28,19 +34,51 @@ deployment {
 
       pg_vm = vm 'vm-postgres-payments' {
         technology 'RHEL 9, 16 vCPU, 64GB RAM'
+
+        pg_sw = infraSoftware 'PostgreSQL + Patroni' {
+          technology 'PostgreSQL 15.6, Patroni HA, pgBouncer'
+        }
+
         instanceOf bank.payments.payment_hub.payment_db {
           title 'Payment DB (Primary)'
-          technology 'PostgreSQL 15 with Patroni HA'
         }
       }
     }
 
+    // ── Oracle Database Server (Card Processing, PCI-DSS) ──
     db_server03 = physicalServer 'db-card-01' {
-      technology 'Dell PowerEdge R940'
+      technology 'Dell PowerEdge R940, PCI-DSS hardened'
+
+      san_card = storage 'SAN Card' {
+        technology 'NetApp AFF A250, 10TB, encrypted at rest'
+      }
+
       card_vm = vm 'vm-oracle-card' {
         technology 'RHEL 9, 16 vCPU, 128GB RAM'
+
+        card_oracle_sw = infraSoftware 'Oracle DBMS' {
+          technology 'Oracle Database 19c Enterprise, TDE enabled'
+        }
+
         instanceOf bank.payments.card_system.card_db {
-          title 'Card DB (Primary)'
+          title 'Card DB (Primary, PCI-DSS)'
+        }
+      }
+    }
+
+    // ── ClickHouse Server (Anti-Fraud Analytics) ──
+    db_server04 = physicalServer 'db-clickhouse-01' {
+      technology 'Dell PowerEdge R750, NVMe storage'
+
+      ch_vm = vm 'vm-clickhouse' {
+        technology 'RHEL 9, 32 vCPU, 128GB RAM, NVMe'
+
+        ch_sw = infraSoftware 'ClickHouse' {
+          technology 'ClickHouse 24.3, ReplicatedMergeTree'
+        }
+
+        instanceOf bank.risk.antifraud.fraud_db {
+          title 'Fraud DB (ClickHouse)'
         }
       }
     }

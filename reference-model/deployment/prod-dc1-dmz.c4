@@ -1,33 +1,55 @@
 deployment {
   extend prod.dc1.dmz {
-    // ── Physical Server → Hypervisor → VM pattern ──
+    // ── Physical Server 1: Web Tier ──
     esxi01 = physicalServer 'esxi-dmz-01' {
       technology 'Dell PowerEdge R750, ESXi 8.0'
 
       hypervisor01 = hypervisor 'VMware ESXi' {
         technology 'ESXi 8.0 Update 3'
 
-        vm_web01 = vm 'vm-web-01' {
-          technology 'RHEL 9, 8 vCPU, 16GB'
-          instanceOf bank.channels.internet_bank.web_ui
+        vm_nginx01 = vm 'vm-nginx-01' {
+          technology 'RHEL 9, 4 vCPU, 8GB'
+          nginx01 = infraSoftware 'Nginx' {
+            technology 'Nginx 1.25, reverse proxy + WAF rules'
+            description 'Terminates TLS, routes to web BFF and mobile BFF'
+          }
         }
 
-        vm_web02 = vm 'vm-web-02' {
+        vm_web01 = vm 'vm-web-01' {
           technology 'RHEL 9, 8 vCPU, 16GB'
-          instanceOf bank.channels.internet_bank.web_bff
+          instanceOf bank.channels.internet_bank.web_ui {
+            title 'Internet Bank — Static Assets'
+          }
+          instanceOf bank.channels.internet_bank.web_bff {
+            title 'Internet Bank — Web BFF'
+          }
         }
       }
     }
 
+    // ── Physical Server 2: Mobile Tier ──
     esxi02 = physicalServer 'esxi-dmz-02' {
       technology 'Dell PowerEdge R750, ESXi 8.0'
 
       hypervisor02 = hypervisor 'VMware ESXi' {
         technology 'ESXi 8.0 Update 3'
 
-        vm_mobile01 = vm 'vm-mobile-bff-01' {
+        vm_nginx02 = vm 'vm-nginx-02' {
           technology 'RHEL 9, 4 vCPU, 8GB'
-          instanceOf bank.channels.mobile_bank.mobile_bff
+          nginx02 = infraSoftware 'Nginx' {
+            technology 'Nginx 1.25, reverse proxy + rate limiting'
+            description 'API gateway for mobile clients'
+          }
+        }
+
+        vm_mobile01 = vm 'vm-mobile-bff-01' {
+          technology 'RHEL 9, 8 vCPU, 16GB'
+          instanceOf bank.channels.mobile_bank.mobile_bff {
+            title 'Mobile BFF (Node.js)'
+          }
+          instanceOf bank.channels.mobile_bank.push_service {
+            title 'Push Service (FCM)'
+          }
         }
       }
     }
