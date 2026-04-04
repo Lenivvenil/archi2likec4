@@ -9,7 +9,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import NamedTuple
 
-from .audit_data import compute_audit_incidents
 from .builders import (
     BuildDiagnostics,
     BuildResult,
@@ -35,7 +34,6 @@ from .builders import (
 from .config import ConvertConfig, load_config
 from .exceptions import ConfigError, ParseError, ValidationError
 from .generators import (
-    generate_audit_md,
     generate_domain_c4,
     generate_domain_functional_view,
     generate_domain_integration_view,
@@ -49,6 +47,7 @@ from .generators.deployment import (
     generate_infrastructure_files,
     generate_system_deployment_c4,
 )
+from .maturity import compute_repo_score, detect_all_gaps, generate_maturity_json, generate_maturity_md
 from .models import (
     DEFAULT_DEPLOYMENT_KIND,
     INSTANCE_ALLOWED_KINDS,
@@ -381,16 +380,14 @@ def _validate(built: BuildResult, config: ConvertConfig) -> tuple[int, int]:
                        unassigned_count, config.max_unassigned_systems_warn)
         warnings += 1
 
-    # Gate 3: Critical QA incidents (strict mode only)
+    # Gate 3: GAP-based blocker check (strict mode only)
     if config.strict:
-        _, audit_incidents = compute_audit_incidents(built, 0, 0, config)
-        critical = [i for i in audit_incidents
-                    if i.severity == 'Critical' and not i.suppressed and i.count > 0]
-        if critical:
-            for inc in critical:
-                logger.warning('Critical QA incident: %s %s (%d)',
-                               inc.qa_id, inc.title, inc.count)
-            warnings += len(critical)
+        gaps = detect_all_gaps(built, config)
+        blocker_gaps = [g for g in gaps if g.severity == 'blocker']
+        if blocker_gaps:
+            for g in blocker_gaps[:10]:  # log first 10
+                logger.warning('Blocker gap: %s %s (%s)', g.code, g.element_name, g.element_id)
+            warnings += len(blocker_gaps)
 
     return warnings, errors
 
@@ -573,16 +570,22 @@ def _generate(
         logger.info('  infrastructure/ (%d files)', len(infra_files))
         logger.info('  systems/ (%d deployment.c4 files)', deploy_system_count)
 
-    # Quality audit
-    audit = generate_audit_md(built, 0, 0, config)
-    (output_dir / 'AUDIT.md').write_text(audit, encoding='utf-8')
+    # Maturity audit
+    gaps = detect_all_gaps(built, config)
+    repo_score = compute_repo_score(built, gaps)
+    (output_dir / 'MATURITY.md').write_text(
+        generate_maturity_md(repo_score, config), encoding='utf-8')
+    file_count += 1
+    (output_dir / 'maturity.json').write_text(
+        generate_maturity_json(repo_score), encoding='utf-8')
     file_count += 1
 
     logger.info('%d files written to %s/', file_count, output_dir)
-    logger.info('  specification.c4')
+    logger.info('  specification.c4, CLAUDE.md')
     logger.info('  domains/ (%d .c4 files)', domain_count)
     logger.info('  systems/ (%d system directories with model.c4)', system_detail_count)
     logger.info('  views/ (%d view files)', view_count)
+    logger.info('  MATURITY.md (score: %d/100, tier: %s)', repo_score.score, repo_score.tier)
     logger.info('Done! Run: cd %s && npx likec4 serve', output_dir)
     return file_count
 

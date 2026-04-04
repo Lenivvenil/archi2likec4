@@ -424,16 +424,19 @@ class TestValidateEdgeCases:
         assert warnings == 0
         assert errors == 0
 
-    def test_strict_mode_with_criticals(self):
-        """strict=True with critical QA incidents adds warnings."""
-        sys1 = System(c4_id='sys1', name='Sys1', archi_id='a-1', domain='unassigned')
+    def test_strict_mode_with_blockers(self):
+        """strict=True with blocker gaps (GAP-DUP) adds warnings."""
+        sys1 = System(c4_id='sys1', name='DupName', archi_id='a-1', domain='dom')
+        sys2 = System(c4_id='sys2', name='DupName', archi_id='a-2', domain='dom')
+        node = DeploymentNode(c4_id='srv', name='Srv', archi_id='t-1', tech_type='Node')
         built = _empty_built()._replace(
-            systems=[sys1],
-            domain_systems={'unassigned': [sys1]},
+            systems=[sys1, sys2],
+            domain_systems={'dom': [sys1, sys2]},
+            deployment_nodes=[node],
         )
         config = ConvertConfig(strict=True)
         warnings, errors = _validate(built, config)
-        # QA-1 (unassigned systems) is Critical — strict mode should report it
+        # GAP-DUP is blocker — strict mode should report it
         assert warnings > 0
         assert errors == 0
 
@@ -480,9 +483,10 @@ class TestConvert:
         assert result.files_written > 0
 
     def test_convert_strict_mode(self, tmp_path):
+        """strict mode raises when blocker gaps exceed threshold."""
         model = _create_model(tmp_path)
-        config = ConvertConfig(strict=True)
-        # Minimal model triggers QA warnings → strict mode raises
+        config = ConvertConfig(strict=True, max_unassigned_systems_warn=0)
+        # Minimal model has 1 unassigned system → warning exceeds threshold=0 → strict raises
         with pytest.raises(ValidationError, match='strict mode'):
             convert(model, tmp_path / 'output', config=config)
 
@@ -536,10 +540,14 @@ class TestMain:
 
     def test_main_strict_with_warnings(self, tmp_path, monkeypatch):
         model = _create_model(tmp_path)
+        # Set max_unassigned_systems_warn=0 so 1 unassigned system triggers warning
+        config_file = tmp_path / '.archi2likec4.yaml'
+        config_file.write_text('quality_gates:\n  max_unassigned_systems_warn: 0\n')
         monkeypatch.setattr(sys, 'argv', [
-            'archi2likec4', str(model), str(tmp_path / 'output'), '--strict',
+            'archi2likec4', str(model), str(tmp_path / 'output'),
+            '--strict', '--config', str(config_file),
         ])
-        # Minimal model triggers QA warnings → strict mode exits with code 1
+        # Minimal model has 1 unassigned system → warning with threshold=0 → strict exits 1
         with pytest.raises(SystemExit, match='1'):
             main()
 

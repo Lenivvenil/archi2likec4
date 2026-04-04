@@ -96,7 +96,7 @@ class TestPipelineE2E:
 
         # Verify output files exist
         assert (output / 'specification.c4').exists()
-        assert (output / 'AUDIT.md').exists()
+        assert (output / 'MATURITY.md').exists()
 
         # Verify spec content
         spec = (output / 'specification.c4').read_text()

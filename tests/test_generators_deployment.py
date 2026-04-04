@@ -1,9 +1,10 @@
 """Tests for deployment-related generation in archi2likec4.generators."""
 
-from archi2likec4.generators import (
+from archi2likec4.generators.deployment import (
     generate_deployment_overview_view,
+    generate_infrastructure_files,
+    generate_system_deployment_c4,
 )
-from archi2likec4.generators.deployment import generate_infrastructure_files, generate_system_deployment_c4
 from archi2likec4.models import DeploymentNode
 
 # ── kind resolution (builders) ──────────────────────────────────────────

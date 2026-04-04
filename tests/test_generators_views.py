@@ -1,12 +1,5 @@
 """Tests for view generation in archi2likec4.generators."""
 
-from archi2likec4.generators import (
-    generate_domain_functional_view,
-    generate_domain_integration_view,
-    generate_landscape_view,
-    generate_persistence_map,
-    generate_solution_views,
-)
 from archi2likec4.generators.views import (
     ViewContext,
     _detect_env,
@@ -18,6 +11,11 @@ from archi2likec4.generators.views import (
     _system_path_from_c4,
     _ViewData,
     build_view_context,
+    generate_domain_functional_view,
+    generate_domain_integration_view,
+    generate_landscape_view,
+    generate_persistence_map,
+    generate_solution_views,
 )
 from archi2likec4.models import (
     RawRelationship,

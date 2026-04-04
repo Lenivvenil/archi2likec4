@@ -1,11 +1,9 @@
 """Tests for entity and audit generation in archi2likec4.generators."""
 
-from archi2likec4.generators import (
-    generate_audit_md,
-    generate_datastore_mapping_c4,
-    generate_entities,
-)
 from archi2likec4.generators._common import render_metadata, truncate_desc
+from archi2likec4.generators.audit import generate_audit_md
+from archi2likec4.generators.deployment import generate_datastore_mapping_c4
+from archi2likec4.generators.entities import generate_entities
 from archi2likec4.models import DataAccess, DataEntity, DeploymentNode, Subsystem, System
 from tests.helpers import MockBuilt, MockConfig
 
