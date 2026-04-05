@@ -1,54 +1,193 @@
 views {
+  // ══════════════════════════════════════════════════════════════════
+  // LikeC4 deployment views do NOT support `.**` (deep wildcard).
+  // Use star-chain: `include path.*` at every intermediate level.
+  // ══════════════════════════════════════════════════════════════════
+
   // ── Full Production Overview ──
   deployment view prodOverview {
     title 'Production Environment — Full Overview'
     description 'All deployment nodes and instances across both data centers'
-    include prod.**
+
+    include prod
+    include prod.*
+    // DC-1
+    include prod.dc1.*
+    include prod.dc1.dmz.*
+    include prod.dc1.dmz.esxi01.*
+    include prod.dc1.dmz.esxi01.hypervisor01.*
+    include prod.dc1.dmz.esxi01.hypervisor01.vm_nginx01.*
+    include prod.dc1.dmz.esxi01.hypervisor01.vm_web01.*
+    include prod.dc1.dmz.esxi02.*
+    include prod.dc1.dmz.esxi02.hypervisor02.*
+    include prod.dc1.dmz.esxi02.hypervisor02.vm_nginx02.*
+    include prod.dc1.dmz.esxi02.hypervisor02.vm_mobile01.*
+    include prod.dc1.internal.*
+    include prod.dc1.internal.k8s_prod.*
+    include prod.dc1.internal.k8s_prod.ns_infra.*
+    include prod.dc1.internal.k8s_prod.ns_infra.ingress_pod.*
+    include prod.dc1.internal.k8s_prod.ns_payments.*
+    include prod.dc1.internal.k8s_prod.ns_core.*
+    include prod.dc1.internal.k8s_prod.ns_cards.*
+    include prod.dc1.internal.k8s_prod.ns_risk.*
+    include prod.dc1.internal.k8s_prod.ns_notify.*
+    include prod.dc1.internal.kafka_cluster.*
+    include prod.dc1.internal.kafka_cluster.kafka_vm1.*
+    include prod.dc1.internal.kafka_cluster.kafka_vm2.*
+    include prod.dc1.internal.kafka_cluster.kafka_vm3.*
+    include prod.dc1.internal.mq_cluster.*
+    include prod.dc1.internal.mq_cluster.mq_vm.*
+    include prod.dc1.mgmt.*
+    include prod.dc1.mgmt.monitoring_server.*
+    include prod.dc1.mgmt.monitoring_server.prometheus_vm.*
+    include prod.dc1.mgmt.monitoring_server.elk_vm.*
+    include prod.dc1.db_segment.*
+    include prod.dc1.db_segment.db_server01.*
+    include prod.dc1.db_segment.db_server01.oracle_vm.*
+    include prod.dc1.db_segment.db_server02.*
+    include prod.dc1.db_segment.db_server02.pg_vm.*
+    include prod.dc1.db_segment.db_server03.*
+    include prod.dc1.db_segment.db_server03.card_vm.*
+    include prod.dc1.db_segment.db_server04.*
+    include prod.dc1.db_segment.db_server04.ch_vm.*
+    // DC-2
+    include prod.dc2.*
+    include prod.dc2.dr_app.*
+    include prod.dc2.dr_app.k8s_dr.*
+    include prod.dc2.dr_app.k8s_dr.ns_core_dr.*
+    include prod.dc2.dr_app.k8s_dr.ns_payments_dr.*
+    include prod.dc2.dr_app.k8s_dr.ns_risk_dr.*
+    include prod.dc2.dr_app.kafka_dr.*
+    include prod.dc2.dr_app.kafka_dr.kafka_dr_vm.*
+    include prod.dc2.dr_db.*
+    include prod.dc2.dr_db.dr_oracle.*
+    include prod.dc2.dr_db.dr_oracle.oracle_dr_vm.*
+    include prod.dc2.dr_db.dr_postgres.*
+    include prod.dc2.dr_db.dr_postgres.pg_dr_vm.*
+
     autoLayout TopBottom
   }
 
-  // ── DC-1: Per-Segment Views ──
+  // ── DC-1 DMZ ──
   deployment view prodDmz {
     title 'Production DMZ — Web & Mobile Tier'
     description 'Nginx reverse proxies, BFF servers, ESXi hypervisors'
-    include prod.dc1.dmz.**
+
+    include prod
+    include prod.dc1
+    include prod.dc1.dmz
+    include prod.dc1.dmz.*
+    include prod.dc1.dmz.esxi01.*
+    include prod.dc1.dmz.esxi01.hypervisor01.*
+    include prod.dc1.dmz.esxi01.hypervisor01.vm_nginx01.*
+    include prod.dc1.dmz.esxi01.hypervisor01.vm_web01.*
+    include prod.dc1.dmz.esxi02.*
+    include prod.dc1.dmz.esxi02.hypervisor02.*
+    include prod.dc1.dmz.esxi02.hypervisor02.vm_nginx02.*
+    include prod.dc1.dmz.esxi02.hypervisor02.vm_mobile01.*
+
     autoLayout LeftRight
   }
 
+  // ── DC-1 Kubernetes ──
   deployment view prodK8s {
     title 'Production Kubernetes — Application Tier'
-    description 'Microservices across 6 namespaces: infra, payments, core-banking, cards, risk, notifications'
-    include prod.dc1.internal.k8s_prod.**
+    description 'Microservices across 6 namespaces'
+
+    include prod
+    include prod.dc1
+    include prod.dc1.internal
+    include prod.dc1.internal.k8s_prod
+    include prod.dc1.internal.k8s_prod.*
+    include prod.dc1.internal.k8s_prod.ns_infra.*
+    include prod.dc1.internal.k8s_prod.ns_infra.ingress_pod.*
+    include prod.dc1.internal.k8s_prod.ns_payments.*
+    include prod.dc1.internal.k8s_prod.ns_core.*
+    include prod.dc1.internal.k8s_prod.ns_cards.*
+    include prod.dc1.internal.k8s_prod.ns_risk.*
+    include prod.dc1.internal.k8s_prod.ns_notify.*
+
     autoLayout TopBottom
   }
 
+  // ── DC-1 Messaging ──
   deployment view prodMessaging {
     title 'Production Messaging — Kafka + IBM MQ'
     description 'Kafka 3-node cluster and IBM MQ for core banking integration'
-    include prod.dc1.internal.kafka_cluster.**
-    include prod.dc1.internal.mq_cluster.**
+
+    include prod
+    include prod.dc1
+    include prod.dc1.internal
+    include prod.dc1.internal.kafka_cluster
+    include prod.dc1.internal.kafka_cluster.*
+    include prod.dc1.internal.kafka_cluster.kafka_vm1.*
+    include prod.dc1.internal.kafka_cluster.kafka_vm2.*
+    include prod.dc1.internal.kafka_cluster.kafka_vm3.*
+    include prod.dc1.internal.mq_cluster
+    include prod.dc1.internal.mq_cluster.*
+    include prod.dc1.internal.mq_cluster.mq_vm.*
+
     autoLayout LeftRight
   }
 
+  // ── DC-1 Databases ──
   deployment view prodDatabases {
     title 'Production Database Segment'
-    description 'Oracle, PostgreSQL, ClickHouse with SAN storage'
-    include prod.dc1.db_segment.**
+    description 'Oracle, PostgreSQL, ClickHouse with SAN storage and infraSoftware'
+
+    include prod
+    include prod.dc1
+    include prod.dc1.db_segment
+    include prod.dc1.db_segment.*
+    include prod.dc1.db_segment.db_server01.*
+    include prod.dc1.db_segment.db_server01.oracle_vm.*
+    include prod.dc1.db_segment.db_server02.*
+    include prod.dc1.db_segment.db_server02.pg_vm.*
+    include prod.dc1.db_segment.db_server03.*
+    include prod.dc1.db_segment.db_server03.card_vm.*
+    include prod.dc1.db_segment.db_server04.*
+    include prod.dc1.db_segment.db_server04.ch_vm.*
+
     autoLayout LeftRight
   }
 
+  // ── DC-1 Monitoring ──
   deployment view prodMonitoring {
     title 'Production Management — Monitoring & Logging'
     description 'Prometheus + Grafana, ELK stack'
-    include prod.dc1.mgmt.**
+
+    include prod
+    include prod.dc1
+    include prod.dc1.mgmt
+    include prod.dc1.mgmt.*
+    include prod.dc1.mgmt.monitoring_server.*
+    include prod.dc1.mgmt.monitoring_server.prometheus_vm.*
+    include prod.dc1.mgmt.monitoring_server.elk_vm.*
+
     autoLayout LeftRight
   }
 
-  // ── DC-2: Disaster Recovery ──
+  // ── DC-2 Disaster Recovery ──
   deployment view drOverview {
     title 'Disaster Recovery — DC-2 (St. Petersburg)'
     description 'Warm standby: K8s cluster, DataGuard replicas, Kafka MirrorMaker'
-    include prod.dc2.**
+
+    include prod
+    include prod.dc2
+    include prod.dc2.*
+    include prod.dc2.dr_app.*
+    include prod.dc2.dr_app.k8s_dr.*
+    include prod.dc2.dr_app.k8s_dr.ns_core_dr.*
+    include prod.dc2.dr_app.k8s_dr.ns_payments_dr.*
+    include prod.dc2.dr_app.k8s_dr.ns_risk_dr.*
+    include prod.dc2.dr_app.kafka_dr.*
+    include prod.dc2.dr_app.kafka_dr.kafka_dr_vm.*
+    include prod.dc2.dr_db.*
+    include prod.dc2.dr_db.dr_oracle.*
+    include prod.dc2.dr_db.dr_oracle.oracle_dr_vm.*
+    include prod.dc2.dr_db.dr_postgres.*
+    include prod.dc2.dr_db.dr_postgres.pg_dr_vm.*
+
     autoLayout TopBottom
   }
 
@@ -56,7 +195,17 @@ views {
   deployment view stagingOverview {
     title 'Staging Environment'
     description 'Reduced-scale pre-production: single K8s namespace, shared DB'
-    include staging.**
+
+    include staging
+    include staging.*
+    include staging.staging_dc.*
+    include staging.staging_dc.staging_app.*
+    include staging.staging_dc.staging_app.staging_k8s.*
+    include staging.staging_dc.staging_app.staging_k8s.ns_all.*
+    include staging.staging_dc.staging_data.*
+    include staging.staging_dc.staging_data.staging_db_vm.*
+    include staging.staging_dc.staging_data.staging_kafka_vm.*
+
     autoLayout TopBottom
   }
 
@@ -64,8 +213,18 @@ views {
   deployment view cardSystemDeployment {
     title 'Card Processing — PCI-DSS Deployment'
     description 'Isolated K8s namespace + encrypted Oracle DB'
-    include prod.dc1.internal.k8s_prod.ns_cards.**
-    include prod.dc1.db_segment.db_server03.**
+
+    include prod
+    include prod.dc1
+    include prod.dc1.internal
+    include prod.dc1.internal.k8s_prod
+    include prod.dc1.internal.k8s_prod.ns_cards
+    include prod.dc1.internal.k8s_prod.ns_cards.*
+    include prod.dc1.db_segment
+    include prod.dc1.db_segment.db_server03
+    include prod.dc1.db_segment.db_server03.*
+    include prod.dc1.db_segment.db_server03.card_vm.*
+
     autoLayout LeftRight
   }
 }
