@@ -1,23 +1,29 @@
 model {
-  // ── Data Ownership (Golden Source) ──
-  bank.products.core_banking -[owns]-> bank.products.do_customer_registry 'Golden Source'
-  bank.products.core_banking -[owns]-> bank.products.do_account_ledger 'Golden Source'
-  bank.products.product_catalog -[owns]-> bank.products.do_product_terms 'Golden Source'
-  bank.payments.payment_hub -[owns]-> bank.payments.do_transaction_log 'Golden Source'
-  bank.payments.card_system -[owns]-> bank.payments.do_card_registry 'Golden Source'
-  bank.notifications.notification_center -[owns]-> bank.notifications.do_notification_templates 'Golden Source'
-  bank.risk.antifraud -[owns]-> bank.risk.do_fraud_patterns 'Golden Source'
+  // --- Ownership (ровно один owns на data object) ---
+  bank.products.core_banking -[owns]-> bank.do_customer 'Golden Source'
+  bank.products.core_banking -[owns]-> bank.do_accounts 'Golden Source'
+  bank.products.product_catalog -[owns]-> bank.do_products 'Golden Source'
+  bank.payments.payment_hub -[owns]-> bank.do_transactions 'System of Record'
+  bank.payments.card_processing -[owns]-> bank.do_cards 'System of Record'
+  bank.notifications.notification_center -[owns]-> bank.do_templates 'Manages'
+  bank.risk.anti_fraud -[owns]-> bank.do_fraud 'Manages'
+  bank.risk.aml -[owns]-> bank.do_kyc 'System of Record'
+  bank.platform.iam -[owns]-> bank.do_consent 'Manages'
+  bank.platform.api_gateway -[owns]-> bank.do_audit 'Writes all access events'
 
-  // ── Data Reads ──
-  bank.channels.mobile_bank -[reads]-> bank.products.do_account_ledger 'Displays balances'
-  bank.channels.mobile_bank -[reads]-> bank.products.do_customer_registry 'Shows profile'
-  bank.channels.internet_bank -[reads]-> bank.products.do_account_ledger 'Displays balances'
-  bank.channels.internet_bank -[reads]-> bank.products.do_customer_registry 'Shows profile'
-  bank.risk.antifraud -[reads]-> bank.payments.do_transaction_log 'Analyzes transactions'
-  bank.risk.antifraud -[reads]-> bank.payments.do_card_registry 'Checks card patterns'
-  bank.notifications.notification_center -[reads]-> bank.products.do_customer_registry 'Resolves contact info'
+  // --- Reads (cross-system data consumption) ---
+  bank.payments.payment_hub -[reads]-> bank.do_customer 'Customer verification'
+  bank.payments.payment_hub -[reads]-> bank.do_accounts 'Balance checks'
+  bank.risk.aml -[reads]-> bank.do_customer 'KYC source data'
+  bank.payments.card_processing -[reads]-> bank.do_accounts 'Card-to-account mapping'
+  bank.analytics.dwh -[reads]-> bank.do_transactions 'CDC replication'
+  bank.analytics.dwh -[reads]-> bank.do_customer 'CDC replication'
+  bank.analytics.dwh -[reads]-> bank.do_accounts 'CDC replication'
+  bank.analytics.reporting_engine -[reads]-> bank.do_transactions 'Reporting queries'
+  bank.notifications.notification_center -[reads]-> bank.do_customer 'Contact details'
 
-  // ── Data Writes ──
-  bank.payments.payment_hub -[writes]-> bank.products.do_account_ledger 'Posts transactions'
-  bank.payments.card_system -[writes]-> bank.payments.do_transaction_log 'Logs card transactions'
+  // --- Writes (cross-system, not owner) ---
+  bank.payments.payment_hub -[writes]-> bank.do_audit 'Transaction audit trail'
+  bank.products.core_banking -[writes]-> bank.do_audit 'Account operation log'
+  bank.risk.aml -[writes]-> bank.do_audit 'KYC/AML decision log'
 }

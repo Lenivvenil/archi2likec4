@@ -1,0 +1,21 @@
+deployment {
+  extend prod.dc1.data {
+    oracle_rac = storage 'Oracle RAC' {
+      technology 'Oracle 19c, 512GB RAM'
+      instanceOf bank.products.core_banking.core_db
+    }
+    pg_cluster = storage 'PostgreSQL + Patroni' {
+      technology 'PostgreSQL 15.6, Patroni, pgBouncer'
+      instanceOf bank.payments.payment_hub.payment_db
+      instanceOf bank.payments.card_processing.card_db
+    }
+    kafka = infraSoftware 'Kafka Cluster' {
+      technology 'Apache Kafka 3.7, 3 brokers, NVMe'
+      instanceOf bank.payments.payment_hub.payment_queue
+    }
+    clickhouse = storage 'ClickHouse' {
+      technology 'ClickHouse 24.3, NVMe'
+      instanceOf bank.analytics.dwh
+    }
+  }
+}

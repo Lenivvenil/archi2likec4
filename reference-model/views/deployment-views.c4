@@ -1,0 +1,20 @@
+views {
+  deployment view deploy_production {
+    title 'Production Deployment — DC-1 Primary'
+    include prod
+    include prod.dc1.**
+    autoLayout TopBottom
+  }
+
+  deployment view deploy_dr {
+    title 'Disaster Recovery — Both Data Centers'
+    include prod.**
+    autoLayout TopBottom
+  }
+
+  deployment view deploy_staging {
+    title 'Staging Environment'
+    include staging.**
+    autoLayout TopBottom
+  }
+}

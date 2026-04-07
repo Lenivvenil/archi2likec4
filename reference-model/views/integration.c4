@@ -1,0 +1,8 @@
+views {
+  view integration_map {
+    title 'System Integration Map'
+    include * where kind is system
+    include * where kind is externalSystem
+    autoLayout TopBottom
+  }
+}

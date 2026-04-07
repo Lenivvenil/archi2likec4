@@ -1,36 +1,17 @@
 views {
-  // ── L0: Enterprise Landscape ──
+  // L0 — Enterprise Landscape (для CTO, новичков)
   view index {
-    title 'Demo Bank — Enterprise Landscape (L0)'
-    description 'All business domains, external systems, and key actors'
-
-    include
-      bank,
-      bank.*,
-      customer,
-      operator,
-      cbr,
-      visa,
-      swift
-
-    include
-      customer -> bank.*,
-      bank.* -> cbr,
-      bank.* -> visa,
-      bank.* -> swift,
-      bank.channels.* -> bank.products.*,
-      bank.channels.* -> bank.payments.*,
-      bank.payments.* -> bank.risk.*,
-      bank.products.* -> bank.notifications.*,
-      bank.payments.* -> bank.notifications.*
-
-    style bank.* {
-      color primary
-    }
-    style cbr, visa, swift {
-      color muted
-    }
-
+    title 'Demo Bank — System Landscape'
+    include bank
+    include bank.channels with { navigateTo domain_channels }
+    include bank.products with { navigateTo domain_products }
+    include bank.payments with { navigateTo domain_payments }
+    include bank.risk with { navigateTo domain_risk }
+    include bank.platform with { navigateTo domain_platform }
+    include bank.analytics with { navigateTo domain_analytics }
+    include customer, operator, cbr, visa, swift
+    include customer -> bank.*, operator -> bank.*
+    include bank.* -> cbr, bank.* -> visa, bank.* -> swift
     autoLayout TopBottom
   }
 }

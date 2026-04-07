@@ -2,47 +2,44 @@ model {
   bank = enterprise 'Demo Bank' {
     description 'Full-service retail and commercial bank'
 
-    // ── L1: Business Domains ──
     channels = domain 'Channels' {
       description 'Customer-facing digital and physical channels'
     }
-
     products = domain 'Products & Accounts' {
       description 'Core banking products, accounts, and ledger'
     }
-
     payments = domain 'Payments' {
       description 'Payment processing, transfers, card operations'
     }
-
     risk = domain 'Risk & Compliance' {
       description 'Fraud detection, AML, regulatory reporting'
     }
-
     notifications = domain 'Notifications' {
       description 'Customer communications across all channels'
     }
+    platform = domain 'Platform' {
+      description 'Shared infrastructure and cross-cutting services'
+    }
+    analytics = domain 'Data & Analytics' {
+      description 'Data warehouse, reporting, regulatory analytics'
+    }
   }
 
-  // ── Actors ──
   customer = actor 'Retail Customer' {
-    description 'Individual banking customer'
+    description 'Individual banking customer using digital channels'
   }
-
   operator = actor 'Bank Operator' {
-    description 'Internal bank employee'
+    description 'Back-office employee: teller, compliance officer, manager'
   }
 
-  // ── External Systems ──
   cbr = externalSystem 'Central Bank (CBR)' {
-    description 'Regulatory reporting and interbank settlement'
+    description 'Regulatory authority: reporting, sanctions lists, rates'
   }
-
   visa = externalSystem 'Visa / Mastercard' {
-    description 'Card network for authorization and settlement'
+    #pci_dss
+    description 'Card payment networks: authorization, clearing, settlement'
   }
-
   swift = externalSystem 'SWIFT Network' {
-    description 'International payment messaging'
+    description 'International payment messaging: MT103, MT202'
   }
 }

@@ -1,0 +1,76 @@
+model {
+  extend bank.payments.payment_hub {
+    payment_orchestrator = service 'Payment Orchestrator' {
+      description 'Payment workflow: validation, routing, execution'
+      technology 'Java 17, Spring Boot'
+    }
+    clearing_engine = service 'Clearing Engine' {
+      description 'Settlement and reconciliation processing'
+      technology 'Java 17'
+    }
+    swift_adapter = service 'SWIFT Adapter' {
+      #critical
+      description 'SWIFT FIN message formatting and delivery'
+      technology 'Java 17, IBM MQ'
+    }
+    payment_db = database 'Payment DB' {
+      #pci_dss
+      description 'Transaction log, payment state machine'
+      technology 'PostgreSQL 15, Patroni'
+    }
+    payment_queue = messageQueue 'Payment Queue' {
+      description 'Event bus for payment lifecycle events'
+      technology 'Apache Kafka 3.7'
+    }
+
+    payment_orchestrator -[sync]-> clearing_engine 'Settlement requests' {
+      technology 'gRPC'
+    }
+    payment_orchestrator -[sync]-> swift_adapter 'International transfers' {
+      technology 'REST/JSON'
+    }
+    payment_orchestrator -[sync]-> payment_db 'Persist transactions' {
+      technology 'JDBC'
+    }
+    payment_orchestrator -[publishes]-> payment_queue 'Payment events' {
+      technology 'Kafka, Avro'
+    }
+  }
+
+  extend bank.payments.card_processing {
+    issuing_service = service 'Issuing Service' {
+      #pci_dss
+      description 'Card issuance, lifecycle, limits management'
+      technology 'Java 17'
+    }
+    acquiring_service = service 'Acquiring Service' {
+      #pci_dss
+      description 'Authorization, capture, reversal processing'
+      technology 'Java 17'
+    }
+    hsm_integration = component 'HSM Integration' {
+      #pci_dss
+      description 'Hardware Security Module: PIN, keys, crypto'
+      technology 'Java 17, PKCS#11'
+    }
+    card_db = database 'Card DB' {
+      #pci_dss
+      #pii
+      description 'Card data: tokenized PAN, expiry, cardholder'
+      technology 'PostgreSQL 15'
+    }
+
+    issuing_service -[sync]-> hsm_integration 'Key operations' {
+      technology 'PKCS#11'
+    }
+    acquiring_service -[sync]-> hsm_integration 'PIN verification' {
+      technology 'PKCS#11'
+    }
+    issuing_service -[sync]-> card_db 'Card data CRUD' {
+      technology 'JDBC'
+    }
+    acquiring_service -[sync]-> card_db 'Transaction logging' {
+      technology 'JDBC'
+    }
+  }
+}

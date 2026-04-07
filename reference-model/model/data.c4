@@ -1,0 +1,45 @@
+model {
+  // --- Data Objects (на уровне enterprise) ---
+  extend bank {
+    do_customer = dataObject 'Customer Registry' {
+      #pii
+      #golden_source
+      description 'Master customer data: name, ID, address, contacts'
+    }
+    do_accounts = dataObject 'Account Ledger' {
+      #golden_source
+      description 'All accounts: current, savings, loan, card'
+    }
+    do_products = dataObject 'Product Terms' {
+      #golden_source
+      description 'Product catalog: rates, fees, conditions'
+    }
+    do_transactions = dataObject 'Transaction Log' {
+      #pii
+      #pci_dss
+      description 'All financial transactions with full audit trail'
+    }
+    do_cards = dataObject 'Card Registry' {
+      #pii
+      #pci_dss
+      description 'Card data: PAN (tokenized), expiry, cardholder info'
+    }
+    do_templates = dataObject 'Notification Templates' {
+      description 'SMS/email/push templates and delivery rules'
+    }
+    do_fraud = dataObject 'Fraud Patterns' {
+      description 'ML models, detection rules, risk scores'
+    }
+    do_kyc = dataObject 'KYC/AML Records' {
+      #pii
+      description 'Due diligence results, sanctions screening, EDD'
+    }
+    do_audit = dataObject 'Audit Log' {
+      description 'Immutable log of all system access and data changes'
+    }
+    do_consent = dataObject 'Consent Records' {
+      #pii
+      description 'Customer consent for data processing and sharing'
+    }
+  }
+}

@@ -1,93 +1,19 @@
 deployment {
-  // ── DR Application Tier (warm standby) ──
-  extend prod.dc2.dr_app {
-    k8s_dr = k8sCluster 'k8s-dr-cluster' {
-      technology 'Kubernetes 1.29, Rancher (passive)'
-
-      ns_core_dr = k8sNamespace 'core-banking-dr' {
-        account_dr = container 'account-service-dr' {
-          technology 'Java 21, 1 replica (standby)'
-          instanceOf bank.products.core_banking.account_service {
-            title 'Account Service (DR standby)'
-          }
-        }
-        ledger_dr = container 'ledger-service-dr' {
-          technology 'Java 21, 1 replica (standby)'
-          instanceOf bank.products.core_banking.ledger_service {
-            title 'Ledger Service (DR standby)'
-          }
-        }
-      }
-
-      ns_payments_dr = k8sNamespace 'payments-dr' {
-        payment_router_dr = container 'payment-router-dr' {
-          technology 'Java 21, 1 replica (standby)'
-          instanceOf bank.payments.payment_hub.payment_router {
-            title 'Payment Router (DR standby)'
-          }
-        }
-      }
-
-      ns_risk_dr = k8sNamespace 'risk-dr' {
-        fraud_dr = container 'fraud-engine-dr' {
-          technology 'Python 3.12, 1 replica (standby)'
-          instanceOf bank.risk.antifraud.fraud_engine {
-            title 'Fraud Engine (DR standby)'
-          }
-        }
+  extend prod.dc2 {
+    dr_app = networkSegment 'Application Zone' {
+      dr_k8s = k8sCluster 'k8s-dr' {
+        technology 'Kubernetes 1.29, passive standby'
       }
     }
-
-    // ── Kafka MirrorMaker for cross-DC replication ──
-    kafka_dr = physicalServer 'kafka-dr' {
-      technology 'Dell PowerEdge R650'
-      kafka_dr_vm = vm 'vm-kafka-mirror' {
-        technology 'RHEL 9, 8 vCPU, 32GB'
-        mirror_sw = infraSoftware 'Kafka MirrorMaker 2' {
-          technology 'MM2, replicates payment + notification topics from DC-1'
-        }
+    dr_data = networkSegment 'Data Zone' {
+      dr_oracle = storage 'Oracle Data Guard' {
+        technology 'Physical Standby, async redo apply'
       }
-    }
-  }
-
-  // ── DR Database Tier (replicas) ──
-  extend prod.dc2.dr_db {
-    dr_oracle = physicalServer 'db-oracle-dr' {
-      technology 'Dell PowerEdge R940'
-
-      san_dr = storage 'SAN DR' {
-        technology 'NetApp AFF A250, 30TB'
+      dr_pg = storage 'PostgreSQL Replica' {
+        technology 'Streaming replication, 15min lag'
       }
-
-      oracle_dr_vm = vm 'vm-oracle-dr' {
-        technology 'RHEL 9, 32 vCPU, 256GB RAM'
-
-        oracle_dr_sw = infraSoftware 'Oracle DataGuard' {
-          technology 'Oracle 19c, Physical Standby, async redo apply'
-        }
-
-        instanceOf bank.products.core_banking.account_service.account_db {
-          title 'Account DB (DR Standby)'
-        }
-        instanceOf bank.products.core_banking.ledger_service.ledger_db {
-          title 'Ledger DB (DR Standby)'
-        }
-      }
-    }
-
-    dr_postgres = physicalServer 'db-postgres-dr' {
-      technology 'Dell PowerEdge R750'
-
-      pg_dr_vm = vm 'vm-postgres-dr' {
-        technology 'RHEL 9, 16 vCPU, 64GB RAM'
-
-        pg_dr_sw = infraSoftware 'PostgreSQL Streaming Replica' {
-          technology 'PostgreSQL 15.6, async streaming replication'
-        }
-
-        instanceOf bank.payments.payment_hub.payment_db {
-          title 'Payment DB (DR Replica)'
-        }
+      dr_kafka = infraSoftware 'Kafka MirrorMaker' {
+        technology 'MirrorMaker 2, topic replication'
       }
     }
   }

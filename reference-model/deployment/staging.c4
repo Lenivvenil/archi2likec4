@@ -1,87 +1,26 @@
 deployment {
   environment staging 'Staging' {
-    description 'Pre-production validation environment, mirrors prod topology at reduced scale'
+    description 'Pre-production testing, reduced scale'
+    technology 'Kubernetes'
 
-    staging_dc = datacenter 'DC-1 Staging Rack' {
-      technology 'Shared rack in DC-1, 2U allocation'
-
-      staging_app = networkSegment 'Staging App' {
-        staging_k8s = k8sCluster 'k8s-staging' {
-          technology 'Kubernetes 1.29, single control plane'
-
-          ns_all = k8sNamespace 'staging' {
-            description 'All services in a single namespace'
-
-            stg_mobile_bff = container 'mobile-bff' {
-              technology 'Node.js, 1 replica'
-              instanceOf bank.channels.mobile_bank.mobile_bff {
-                title 'Mobile BFF (staging)'
-              }
-            }
-
-            stg_web_bff = container 'web-bff' {
-              technology 'Java 21, 1 replica'
-              instanceOf bank.channels.internet_bank.web_bff {
-                title 'Web BFF (staging)'
-              }
-            }
-
-            stg_payment_router = container 'payment-router' {
-              technology 'Java 21, 1 replica'
-              instanceOf bank.payments.payment_hub.payment_router {
-                title 'Payment Router (staging)'
-              }
-            }
-
-            stg_account_svc = container 'account-service' {
-              technology 'Java 21, 1 replica'
-              instanceOf bank.products.core_banking.account_service {
-                title 'Account Service (staging)'
-              }
-            }
-
-            stg_fraud = container 'fraud-engine' {
-              technology 'Python 3.12, 1 replica'
-              instanceOf bank.risk.antifraud.fraud_engine {
-                title 'Fraud Engine (staging)'
-              }
-            }
-
-            stg_orchestrator = container 'notification-orchestrator' {
-              technology 'Java 21, 1 replica'
-              instanceOf bank.notifications.notification_center.orchestrator {
-                title 'Orchestrator (staging)'
-              }
-            }
-          }
+    staging_dc = datacenter 'Staging (Moscow)' {
+      staging_k8s = k8sCluster 'k8s-staging' {
+        technology 'Kubernetes 1.29, single control plane'
+        ns_all = k8sNamespace 'staging' {
+          instanceOf bank.channels.mobile_bank
+          instanceOf bank.channels.internet_bank
+          instanceOf bank.platform.api_gateway
+          instanceOf bank.payments.payment_hub.payment_orchestrator
+          instanceOf bank.products.core_banking.accounts_module
+          instanceOf bank.risk.anti_fraud
+          instanceOf bank.notifications.notification_center
         }
       }
-
-      staging_data = networkSegment 'Staging Data' {
-        staging_db_vm = vm 'vm-staging-db' {
-          technology 'RHEL 9, 8 vCPU, 32GB, shared DB VM'
-
-          stg_pg = infraSoftware 'PostgreSQL' {
-            technology 'PostgreSQL 15, all schemas on one instance'
-          }
-
-          instanceOf bank.payments.payment_hub.payment_db {
-            title 'Payment DB (staging)'
-          }
-          instanceOf bank.products.core_banking.account_service.account_db {
-            title 'Account DB (staging, PostgreSQL mock)'
-          }
-        }
-
-        staging_kafka_vm = vm 'vm-staging-kafka' {
-          technology 'RHEL 9, 4 vCPU, 16GB'
-          stg_kafka = infraSoftware 'Kafka' {
-            technology 'Apache Kafka 3.7, single-broker'
-          }
-          instanceOf bank.payments.payment_hub.payment_queue {
-            title 'Payment Queue (staging)'
-          }
-        }
+      staging_db = storage 'PostgreSQL' {
+        technology 'PostgreSQL 15, single node, all schemas'
+      }
+      staging_kafka = infraSoftware 'Kafka' {
+        technology 'Single broker'
       }
     }
   }

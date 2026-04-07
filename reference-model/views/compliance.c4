@@ -1,0 +1,91 @@
+views {
+  // PCI-DSS Scope — для CISO, QSA-аудитора
+  // Note: 'where tag is #X' not supported in LikeC4 1.53 — using explicit includes
+  view compliance_pci {
+    title 'PCI-DSS Scope — Cardholder Data Environment'
+    // Systems and containers in PCI-DSS scope
+    include visa
+    include bank.products.core_banking
+    include bank.products.core_banking.core_db
+    include bank.payments.payment_hub
+    include bank.payments.payment_hub.payment_db
+    include bank.payments.card_processing
+    include bank.payments.card_processing.issuing_service
+    include bank.payments.card_processing.acquiring_service
+    include bank.payments.card_processing.hsm_integration
+    include bank.payments.card_processing.card_db
+    include bank.do_transactions
+    include bank.do_cards
+    // Show PCI-relevant relationships
+    include bank.payments.card_processing -> visa
+    include bank.payments.payment_hub -> bank.payments.card_processing
+    include bank.payments.payment_hub -> bank.products.core_banking
+    style bank.products.core_banking {
+      color red
+      border solid
+    }
+    style bank.payments.payment_hub {
+      color red
+      border solid
+    }
+    style bank.payments.card_processing {
+      color red
+      border solid
+    }
+    autoLayout TopBottom
+  }
+
+  // PII Data Flows — для DPO
+  view compliance_pii {
+    title 'PII Data Flows'
+    // Elements containing/processing PII
+    include bank.channels.mobile_bank
+    include bank.channels.internet_bank
+    include bank.products.core_banking
+    include bank.products.core_banking.customer_module
+    include bank.payments.card_processing
+    include bank.payments.card_processing.card_db
+    include bank.risk.aml
+    include bank.notifications.notification_center
+    include bank.analytics.dwh
+    include bank.do_customer
+    include bank.do_transactions
+    include bank.do_cards
+    include bank.do_kyc
+    include bank.do_consent
+    // Key PII flows
+    include bank.channels.mobile_bank -> bank.products.core_banking
+    include bank.channels.internet_bank -> bank.products.core_banking
+    include bank.risk.aml -> bank.products.core_banking
+    include bank.analytics.dwh -> bank.products.core_banking
+    autoLayout TopBottom
+  }
+
+  // Data Ownership — для Enterprise Architect, DPO
+  view data_ownership {
+    title 'Data Ownership Map'
+    include * where kind is dataObject
+    // Systems that own data objects
+    include bank.products.core_banking
+    include bank.products.product_catalog
+    include bank.payments.payment_hub
+    include bank.payments.card_processing
+    include bank.notifications.notification_center
+    include bank.risk.anti_fraud
+    include bank.risk.aml
+    include bank.platform.iam
+    include bank.platform.api_gateway
+    // Ownership relationships
+    include bank.products.core_banking -> bank.do_customer
+    include bank.products.core_banking -> bank.do_accounts
+    include bank.products.product_catalog -> bank.do_products
+    include bank.payments.payment_hub -> bank.do_transactions
+    include bank.payments.card_processing -> bank.do_cards
+    include bank.notifications.notification_center -> bank.do_templates
+    include bank.risk.anti_fraud -> bank.do_fraud
+    include bank.risk.aml -> bank.do_kyc
+    include bank.platform.iam -> bank.do_consent
+    include bank.platform.api_gateway -> bank.do_audit
+    autoLayout TopBottom
+  }
+}

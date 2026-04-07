@@ -1,0 +1,29 @@
+deployment {
+  environment prod 'Production' {
+    #critical
+    description 'Production environment: 2 datacenters, active-passive'
+    technology 'VMware + Kubernetes'
+
+    dc1 = datacenter 'DC-1 Primary (Moscow)' {
+      technology 'Tier III'
+
+      dmz = networkSegment 'DMZ' {
+        description 'Internet-facing zone, WAF-protected'
+      }
+      app = networkSegment 'Application Zone' {
+        description 'Internal application services'
+      }
+      data = networkSegment 'Data Zone' {
+        description 'Database and storage segment'
+      }
+      mgmt = networkSegment 'Management Zone' {
+        description 'Monitoring, logging, secrets'
+      }
+    }
+
+    dc2 = datacenter 'DC-2 DR (St.Petersburg)' {
+      technology 'Tier III'
+      description 'Disaster recovery: warm standby'
+    }
+  }
+}

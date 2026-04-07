@@ -1,45 +1,21 @@
 model {
   extend bank.products {
     core_banking = system 'Core Banking (ABS)' {
-      description 'Account management, ledger, interest calculation'
-      technology 'Java, Oracle'
-
-      account_service = service 'Account Service' {
-        technology 'Java, Spring'
-        description 'Account lifecycle management'
-
-        account_engine = component 'Account Engine' {
-          technology 'Java'
-        }
-        interest_calc = component 'Interest Calculator' {
-          technology 'Java'
-        }
-        account_db = database 'Account DB' {
-          technology 'Oracle 19c'
-        }
-      }
-
-      ledger_service = service 'General Ledger' {
-        technology 'Java, Spring'
-        description 'Double-entry bookkeeping engine'
-
-        posting_engine = component 'Posting Engine' {
-          technology 'Java'
-        }
-        ledger_db = database 'Ledger DB' {
-          technology 'Oracle 19c'
-        }
-      }
-
-      integration_bus = messageQueue 'Integration Bus' {
-        technology 'IBM MQ'
-        description 'Internal message broker for core banking events'
+      #critical
+      #pci_dss
+      #pii
+      description 'Central ledger: accounts, GL, customer master data'
+      technology 'Java 17, Spring Boot'
+      metadata {
+        sla '99.99%'
+        rto '2h'
+        rpo '15min'
+        tps_peak '5000'
       }
     }
-
     product_catalog = system 'Product Catalog' {
-      description 'Banking product definitions and configuration'
-      technology 'Java, PostgreSQL'
+      description 'Product terms, rates, fees configuration'
+      technology 'Java 17, Spring Boot'
     }
   }
 }

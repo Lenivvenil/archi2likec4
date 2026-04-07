@@ -1,151 +1,32 @@
 deployment {
-  extend prod.dc1.internal {
-    // ── Kubernetes Cluster ──
-    k8s_prod = k8sCluster 'k8s-prod-cluster' {
+  extend prod.dc1.app {
+    k8s = k8sCluster 'k8s-prod' {
       technology 'Kubernetes 1.29, Rancher'
 
-      // ── Infrastructure Namespace ──
-      ns_infra = k8sNamespace 'infra' {
-        description 'Cluster infrastructure: ingress, service mesh'
-
-        ingress_pod = container 'ingress-nginx' {
-          technology 'Ingress-NGINX 1.10, 2 replicas'
-          ingress_sw = infraSoftware 'NGINX Ingress Controller' {
-            technology 'Routes external traffic to K8s services'
-          }
-        }
-      }
-
-      // ── Namespace: Payments ──
       ns_payments = k8sNamespace 'payments' {
-        description 'Payment microservices namespace'
-
-        payment_router_pod = container 'payment-router' {
-          technology 'Java 21, 3 replicas'
-          instanceOf bank.payments.payment_hub.payment_router
-        }
-
-        payment_processor_pod = container 'payment-processor' {
-          technology 'Java 21, 5 replicas'
-          instanceOf bank.payments.payment_hub.payment_processor
-        }
+        instanceOf bank.payments.payment_hub.payment_orchestrator
+        instanceOf bank.payments.payment_hub.clearing_engine
+        instanceOf bank.payments.payment_hub.swift_adapter
       }
-
-      // ── Namespace: Core Banking ──
       ns_core = k8sNamespace 'core-banking' {
-        description 'Core banking services'
-
-        account_svc_pod = container 'account-service' {
-          technology 'Java 21, 3 replicas'
-          instanceOf bank.products.core_banking.account_service
-        }
-
-        ledger_svc_pod = container 'ledger-service' {
-          technology 'Java 21, 2 replicas'
-          instanceOf bank.products.core_banking.ledger_service
-        }
+        instanceOf bank.products.core_banking.accounts_module
+        instanceOf bank.products.core_banking.gl_module
+        instanceOf bank.products.core_banking.customer_module
       }
-
-      // ── Namespace: Cards (PCI-DSS isolated) ──
       ns_cards = k8sNamespace 'cards' {
-        description 'Card processing — PCI-DSS network policy enforced'
-
-        card_auth_pod = container 'card-auth' {
-          technology 'C++, 4 replicas, low-latency'
-          instanceOf bank.payments.card_system.card_auth
-        }
-
-        card_settlement_pod = container 'card-settlement' {
-          technology 'Java 21, 2 replicas'
-          instanceOf bank.payments.card_system.card_settlement
-        }
+        instanceOf bank.payments.card_processing.issuing_service
+        instanceOf bank.payments.card_processing.acquiring_service
+        instanceOf bank.payments.card_processing.hsm_integration
       }
-
-      // ── Namespace: Risk ──
       ns_risk = k8sNamespace 'risk' {
-        description 'Risk and fraud detection'
-
-        fraud_engine_pod = container 'fraud-engine' {
-          technology 'Python 3.12, 4 replicas, GPU-enabled'
-          instanceOf bank.risk.antifraud.fraud_engine
-        }
-
-        rules_engine_pod = container 'rules-engine' {
-          technology 'Java 21 + Drools, 2 replicas'
-          instanceOf bank.risk.antifraud.rules_engine
-        }
+        instanceOf bank.risk.anti_fraud
+        instanceOf bank.risk.aml
       }
-
-      // ── Namespace: Notifications ──
-      ns_notify = k8sNamespace 'notifications' {
-        description 'Notification delivery services'
-
-        orchestrator_pod = container 'notification-orchestrator' {
-          technology 'Java 21, 2 replicas'
-          instanceOf bank.notifications.notification_center.orchestrator
-        }
-
-        template_pod = container 'template-engine' {
-          technology 'Java 21, 2 replicas'
-          instanceOf bank.notifications.notification_center.template_engine
-        }
-
-        sms_pod = container 'sms-gateway' {
-          technology 'Java 21, 2 replicas'
-          instanceOf bank.notifications.notification_center.sms_gateway
-        }
-
-        email_pod = container 'email-sender' {
-          technology 'Java 21, 2 replicas'
-          instanceOf bank.notifications.notification_center.email_sender
-        }
+      ns_platform = k8sNamespace 'platform' {
+        instanceOf bank.platform.iam
       }
-    }
-
-    // ── Kafka Cluster (bare-metal, outside K8s) ──
-    kafka_cluster = physicalServer 'kafka-cluster' {
-      technology '3-node Kafka 3.7 cluster, dedicated NVMe'
-
-      kafka_vm1 = vm 'vm-kafka-01' {
-        technology 'RHEL 9, 16 vCPU, 64GB, NVMe'
-        kafka_sw1 = infraSoftware 'Kafka Broker' {
-          technology 'Apache Kafka 3.7, broker.id=1'
-        }
-        instanceOf bank.payments.payment_hub.payment_queue {
-          title 'Payment Queue (partition leader)'
-        }
-      }
-
-      kafka_vm2 = vm 'vm-kafka-02' {
-        technology 'RHEL 9, 16 vCPU, 64GB, NVMe'
-        kafka_sw2 = infraSoftware 'Kafka Broker' {
-          technology 'Apache Kafka 3.7, broker.id=2'
-        }
-        instanceOf bank.notifications.notification_center.notification_queue {
-          title 'Notification Queue (partition leader)'
-        }
-      }
-
-      kafka_vm3 = vm 'vm-kafka-03' {
-        technology 'RHEL 9, 16 vCPU, 64GB, NVMe'
-        kafka_sw3 = infraSoftware 'Kafka Broker' {
-          technology 'Apache Kafka 3.7, broker.id=3'
-        }
-      }
-    }
-
-    // ── IBM MQ Cluster ──
-    mq_cluster = physicalServer 'mq-cluster' {
-      technology 'IBM Power S1014, AIX 7.3'
-
-      mq_vm = vm 'vm-ibm-mq' {
-        technology 'AIX 7.3, 8 vCPU, 32GB'
-        mq_sw = infraSoftware 'IBM MQ' {
-          technology 'IBM MQ 9.3, HA pair'
-        }
-        instanceOf bank.products.core_banking.integration_bus {
-          title 'Core Banking Integration Bus'
-        }
+      ns_notifications = k8sNamespace 'notifications' {
+        instanceOf bank.notifications.notification_center
       }
     }
   }

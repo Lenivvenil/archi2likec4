@@ -1,0 +1,136 @@
+views {
+  // --- Scenario 1: P2P Transfer (happy path, 10 steps) ---
+  dynamic view scenario_p2p {
+    title 'P2P Transfer'
+    description 'Customer initiates peer-to-peer transfer via mobile app'
+
+    customer -> bank.channels.mobile_bank 'Initiates transfer'
+    bank.channels.mobile_bank -[sync]-> bank.platform.api_gateway 'POST /api/v1/transfers'
+    bank.platform.api_gateway -[sync]-> bank.platform.iam 'Validate JWT token'
+    bank.platform.api_gateway -[sync]-> bank.payments.payment_hub.payment_orchestrator 'Create payment request'
+    parallel {
+      bank.payments.payment_hub.payment_orchestrator -[async]-> bank.risk.aml 'AML screening'
+      bank.payments.payment_hub.payment_orchestrator -[sync]-> bank.products.core_banking.accounts_module 'Check balance + hold funds'
+    }
+    bank.payments.payment_hub.payment_orchestrator -[sync]-> bank.products.core_banking.gl_module 'Execute debit/credit'
+    bank.payments.payment_hub.payment_orchestrator -[sync]-> bank.payments.payment_hub.payment_db 'Persist transaction'
+    bank.products.core_banking -[async]-> bank.notifications.notification_center 'Payment confirmed event'
+    bank.notifications.notification_center -> customer 'Push notification: transfer complete'
+
+    autoLayout TopBottom
+  }
+
+  // --- Scenario 2: Card Authorization (SLA <3 sec, 7 steps) ---
+  dynamic view scenario_card_auth {
+    title 'Card Authorization'
+    description 'Customer pays at POS terminal — real-time card authorization'
+
+    customer -> bank.payments.card_processing.acquiring_service 'Tap card at POS (ISO 8583)'
+    bank.payments.card_processing.acquiring_service -[sync]-> bank.payments.card_processing.hsm_integration 'Verify PIN / cryptogram'
+    bank.payments.card_processing.acquiring_service -[sync]-> bank.payments.card_processing.card_db 'Check card status + limits'
+    bank.payments.card_processing.acquiring_service -[sync]-> bank.risk.anti_fraud 'Fraud score (ML, <100ms)'
+    bank.payments.card_processing.acquiring_service -[sync]-> bank.products.core_banking.accounts_module 'Authorization hold'
+    bank.payments.card_processing -[sync]-> visa 'Authorization response (ISO 8583)'
+    bank.payments.card_processing -[async]-> bank.notifications.notification_center 'Card transaction alert'
+
+    autoLayout TopBottom
+  }
+
+  // --- Scenario 3: Customer Onboarding / KYC (regulatory gate, 10 steps) ---
+  dynamic view scenario_onboarding {
+    title 'Customer Onboarding / KYC'
+    description 'New customer opens account — regulatory due diligence flow'
+
+    customer -> bank.channels.mobile_bank 'Submit onboarding application'
+    bank.channels.mobile_bank -[sync]-> bank.platform.api_gateway 'POST /api/v1/customers'
+    bank.platform.api_gateway -[sync]-> bank.products.core_banking.customer_module 'Create customer record'
+    bank.products.core_banking.customer_module -[async]-> bank.risk.aml 'KYC due diligence request'
+    bank.risk.aml -[sync]-> cbr 'Sanctions list check'
+    bank.risk.aml -[sync]-> bank.products.core_banking.customer_module 'KYC decision: approved'
+    parallel {
+      bank.products.core_banking.accounts_module -[sync]-> bank.products.core_banking.core_db 'Open current account'
+      bank.platform.iam -[sync]-> bank.products.core_banking.customer_module 'Create identity (SSO)'
+    }
+    bank.products.core_banking -[async]-> bank.notifications.notification_center 'Welcome event'
+    bank.notifications.notification_center -> customer 'Welcome SMS + push'
+
+    autoLayout TopBottom
+  }
+
+  // --- Scenario 4: International SWIFT Payment (async + external, 12 steps) ---
+  dynamic view scenario_swift {
+    title 'International SWIFT Payment'
+    description 'Corporate client sends cross-border wire via SWIFT MT103'
+
+    operator -> bank.channels.internet_bank 'Initiate international transfer'
+    bank.channels.internet_bank -[sync]-> bank.platform.api_gateway 'POST /api/v1/payments/swift'
+    bank.platform.api_gateway -[sync]-> bank.payments.payment_hub.payment_orchestrator 'Create SWIFT payment'
+    bank.payments.payment_hub.payment_orchestrator -[async]-> bank.risk.aml 'AML + sanctions screening'
+    bank.risk.aml -[sync]-> cbr 'Sanctions list validation'
+    bank.payments.payment_hub.payment_orchestrator -[sync]-> bank.products.core_banking.accounts_module 'Debit sender account'
+    bank.payments.payment_hub.payment_orchestrator -[sync]-> bank.products.core_banking.gl_module 'Nostro account debit'
+    bank.payments.payment_hub.payment_orchestrator -[sync]-> bank.payments.payment_hub.swift_adapter 'Format MT103 message'
+    bank.payments.payment_hub.swift_adapter -[sync]-> swift 'Transmit MT103 via SWIFT FIN'
+    bank.payments.payment_hub.payment_orchestrator -[sync]-> bank.payments.payment_hub.payment_db 'Persist SWIFT transaction'
+    bank.payments.payment_hub.payment_orchestrator -[publishes]-> bank.payments.payment_hub.payment_queue 'Payment sent event'
+    bank.notifications.notification_center -> operator 'Transfer submitted confirmation'
+
+    autoLayout TopBottom
+  }
+
+  // --- Scenario 5: Loan Origination (saga pattern, 13 steps) ---
+  dynamic view scenario_loan {
+    title 'Loan Origination'
+    description 'Retail customer applies for personal loan — multi-step approval saga'
+
+    customer -> bank.channels.mobile_bank 'Submit loan application'
+    bank.channels.mobile_bank -[sync]-> bank.platform.api_gateway 'POST /api/v1/loans'
+    bank.platform.api_gateway -[sync]-> bank.payments.payment_hub.payment_orchestrator 'Create loan workflow'
+    parallel {
+      bank.payments.payment_hub.payment_orchestrator -[sync]-> bank.risk.aml 'KYC/AML check'
+      bank.payments.payment_hub.payment_orchestrator -[sync]-> bank.risk.anti_fraud 'Fraud risk score'
+    }
+    bank.payments.payment_hub.payment_orchestrator -[sync]-> bank.products.core_banking.accounts_module 'Check existing accounts'
+    bank.analytics.reporting_engine -[reads]-> bank.analytics.dwh 'Pull credit history'
+    bank.payments.payment_hub.payment_orchestrator -[sync]-> bank.products.product_catalog 'Get loan product terms'
+    // Underwriting decision
+    bank.payments.payment_hub.payment_orchestrator -[sync]-> bank.products.core_banking.accounts_module 'Open loan account'
+    bank.products.core_banking.gl_module -[sync]-> bank.products.core_banking.core_db 'Record loan disbursement'
+    bank.products.core_banking -[async]-> bank.notifications.notification_center 'Loan approved event'
+    bank.notifications.notification_center -> customer 'Loan approved notification'
+    bank.risk.aml -[writes]-> bank.do_audit 'Loan origination audit log'
+
+    autoLayout TopBottom
+  }
+
+  // --- Scenario 6: Card Settlement (batch processing, 7 steps) ---
+  dynamic view scenario_settlement {
+    title 'Card Settlement'
+    description 'End-of-day card settlement batch with Visa/Mastercard'
+
+    bank.payments.card_processing.acquiring_service -[sync]-> bank.payments.card_processing.card_db 'Collect daily transactions'
+    bank.payments.payment_hub.clearing_engine -[sync]-> bank.payments.card_processing.card_db 'Calculate net card positions'
+    bank.payments.card_processing -[sync]-> visa 'Submit clearing file (NET settlement)'
+    visa -> bank.payments.payment_hub.clearing_engine 'Settlement confirmation + funds transfer'
+    bank.payments.payment_hub.clearing_engine -[sync]-> bank.products.core_banking.gl_module 'Post settlement to GL'
+    bank.payments.payment_hub.payment_orchestrator -[publishes]-> bank.payments.payment_hub.payment_queue 'Settlement complete event'
+    bank.analytics.dwh -[reads]-> bank.payments.payment_hub.payment_db 'CDC replication of settled txns'
+
+    autoLayout TopBottom
+  }
+
+  // --- Scenario 7: Regulatory Reporting (ETL + external, 6 steps) ---
+  dynamic view scenario_reporting {
+    title 'Regulatory Reporting (CBR)'
+    description 'Monthly regulatory report submission to Central Bank'
+
+    bank.analytics.dwh -[reads]-> bank.products.core_banking.core_db 'Replicate data via CDC (Debezium)'
+    bank.analytics.reporting_engine -[reads]-> bank.analytics.dwh 'Execute reporting SQL queries'
+    bank.analytics.reporting_engine -[sync]-> cbr 'Upload report via SFTP'
+    cbr -> bank.analytics.reporting_engine 'Acknowledgment + report ID'
+    bank.analytics.reporting_engine -[writes]-> bank.do_audit 'Report submission audit entry'
+    bank.analytics.reporting_engine -[async]-> bank.notifications.notification_center 'Report submitted event'
+
+    autoLayout TopBottom
+  }
+}

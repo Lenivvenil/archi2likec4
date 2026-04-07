@@ -1,0 +1,13 @@
+model {
+  extend bank.analytics {
+    dwh = system 'Data Warehouse' {
+      #pii
+      description 'Analytical storage: replicated data from core systems'
+      technology 'ClickHouse'
+    }
+    reporting_engine = system 'Reporting Engine' {
+      description 'Regulatory and management reporting'
+      technology 'Python 3.11, pandas'
+    }
+  }
+}

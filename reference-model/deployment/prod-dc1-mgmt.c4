@@ -1,34 +1,13 @@
 deployment {
   extend prod.dc1.mgmt {
-    // ── Monitoring & Observability Stack ──
-    monitoring_server = physicalServer 'monitoring-01' {
-      technology 'Dell PowerEdge R650, 64GB RAM'
-
-      prometheus_vm = vm 'vm-prometheus' {
-        technology 'RHEL 9, 8 vCPU, 32GB'
-        prometheus_sw = infraSoftware 'Prometheus' {
-          technology 'Prometheus 2.51, 90d retention'
-        }
-        grafana_sw = infraSoftware 'Grafana' {
-          technology 'Grafana 10.4, LDAP auth'
-        }
-        alertmanager_sw = infraSoftware 'Alertmanager' {
-          technology 'Alertmanager 0.27, PagerDuty + Telegram'
-        }
-      }
-
-      elk_vm = vm 'vm-elk' {
-        technology 'RHEL 9, 16 vCPU, 64GB, SSD'
-        elasticsearch_sw = infraSoftware 'Elasticsearch' {
-          technology 'Elasticsearch 8.13, single-node'
-        }
-        kibana_sw = infraSoftware 'Kibana' {
-          technology 'Kibana 8.13'
-        }
-        filebeat_sw = infraSoftware 'Filebeat' {
-          technology 'Filebeat 8.13, log collector'
-        }
-      }
+    prometheus = infraSoftware 'Prometheus + Grafana' {
+      technology 'Prometheus 2.51, Grafana 10.4'
+    }
+    elk = infraSoftware 'ELK Stack' {
+      technology 'Elasticsearch 8.13, Kibana, Filebeat'
+    }
+    vault = infraSoftware 'HashiCorp Vault' {
+      technology 'Vault 1.16, HA mode'
     }
   }
 }

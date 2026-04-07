@@ -1,42 +1,30 @@
 views {
-  // ── L2: Mobile Bank (Functional View) ──
-  view mobileBankSystem of bank.channels.mobile_bank {
-    title 'Mobile Bank — Functional Architecture (L2)'
-    description 'Internal services and their external dependencies'
+  // Container views — только для декомпозированных систем
+  view system_corebanking of bank.products.core_banking {
+    title 'Core Banking (ABS) — Containers'
     include *
-    style bank.channels.mobile_bank.* {
-      color primary
-    }
+    include -> bank.products.core_banking ->
     autoLayout TopBottom
   }
 
-  // ── L2: Core Banking (Functional View) ──
-  view coreBankingSystem of bank.products.core_banking {
-    title 'Core Banking (ABS) — Functional Architecture (L2)'
+  view system_paymenthub of bank.payments.payment_hub {
+    title 'Payment Hub — Containers'
     include *
-    style bank.products.core_banking.* {
-      color primary
-    }
+    include -> bank.payments.payment_hub ->
     autoLayout TopBottom
   }
 
-  // ── L2: Payment Hub (Functional View) ──
-  view paymentHubSystem of bank.payments.payment_hub {
-    title 'Payment Hub — Functional Architecture (L2)'
+  view system_apigateway of bank.platform.api_gateway {
+    title 'API Gateway — Containers'
     include *
-    style bank.payments.payment_hub.* {
-      color primary
-    }
+    include -> bank.platform.api_gateway ->
     autoLayout TopBottom
   }
 
-  // ── L2: Anti-Fraud (Functional View) ──
-  view antifraudSystem of bank.risk.antifraud {
-    title 'Anti-Fraud System — Functional Architecture (L2)'
+  view system_cardprocessing of bank.payments.card_processing {
+    title 'Card Processing — Containers'
     include *
-    style bank.risk.antifraud.* {
-      color primary
-    }
+    include -> bank.payments.card_processing ->
     autoLayout TopBottom
   }
 }

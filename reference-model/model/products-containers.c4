@@ -1,0 +1,32 @@
+model {
+  extend bank.products.core_banking {
+    accounts_module = service 'Accounts Module' {
+      description 'Account lifecycle: open, close, freeze, unfreeze'
+      technology 'Java 17, Spring Boot'
+    }
+    gl_module = service 'General Ledger Module' {
+      description 'Double-entry bookkeeping, balance calculations'
+      technology 'Java 17, Spring Boot'
+    }
+    customer_module = service 'Customer Module' {
+      #pii
+      description 'Customer master data management'
+      technology 'Java 17, Spring Boot'
+    }
+    core_db = database 'Core DB' {
+      #pci_dss
+      description 'Central Oracle RAC: accounts, GL, customers'
+      technology 'Oracle 19c RAC'
+    }
+
+    accounts_module -[sync]-> core_db 'CRUD accounts' {
+      technology 'JDBC'
+    }
+    gl_module -[sync]-> core_db 'CRUD ledger entries' {
+      technology 'JDBC'
+    }
+    customer_module -[sync]-> core_db 'CRUD customers' {
+      technology 'JDBC'
+    }
+  }
+}

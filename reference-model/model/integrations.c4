@@ -1,60 +1,87 @@
 model {
-  // ── Actor → Channel ──
-  customer -> bank.channels.mobile_bank 'Uses mobile app' {
+  // --- Actors → Channels ---
+  customer -> bank.channels.mobile_bank 'Mobile banking' {
     technology 'HTTPS'
   }
-  customer -> bank.channels.internet_bank 'Uses web banking' {
+  customer -> bank.channels.internet_bank 'Web banking' {
     technology 'HTTPS'
   }
-  operator -> bank.products.core_banking 'Manages accounts' {
-    technology 'Internal UI'
+  operator -> bank.channels.internet_bank 'Back-office operations' {
+    technology 'HTTPS'
   }
 
-  // ── Channel → Backend (sync) ──
-  bank.channels.mobile_bank -[sync]-> bank.products.core_banking 'Account queries, transfers' {
+  // --- Channels → Platform ---
+  bank.channels.mobile_bank -[sync]-> bank.platform.api_gateway 'All API calls' {
     technology 'REST/JSON, mTLS'
   }
-  bank.channels.mobile_bank -[sync]-> bank.payments.payment_hub 'Initiates payments' {
-    technology 'REST/JSON'
-  }
-  bank.channels.mobile_bank -[sync]-> bank.payments.card_system 'Card operations' {
-    technology 'REST/JSON'
-  }
-  bank.channels.internet_bank -[sync]-> bank.products.core_banking 'Account queries' {
+  bank.channels.internet_bank -[sync]-> bank.platform.api_gateway 'All API calls' {
     technology 'REST/JSON, mTLS'
   }
-  bank.channels.internet_bank -[sync]-> bank.payments.payment_hub 'Initiates payments' {
+
+  // --- Platform → Auth ---
+  bank.platform.api_gateway -[sync]-> bank.platform.iam 'Token validation' {
+    technology 'REST, OAuth2'
+  }
+
+  // --- Platform → Core ---
+  bank.platform.api_gateway -[sync]-> bank.products.core_banking 'Account operations' {
+    technology 'REST/JSON'
+  }
+  bank.platform.api_gateway -[sync]-> bank.payments.payment_hub 'Payment initiation' {
     technology 'REST/JSON'
   }
 
-  // ── Backend → Backend (async events) ──
-  bank.payments.payment_hub -[async]-> bank.products.core_banking 'Account posting events' {
+  // --- Core integrations ---
+  bank.payments.payment_hub -[sync]-> bank.products.core_banking 'Debit/credit operations' {
+    technology 'gRPC, Protobuf'
+  }
+  bank.payments.payment_hub -[async]-> bank.risk.aml 'AML screening requests' {
     technology 'Kafka, Avro'
   }
-  bank.payments.payment_hub -[async]-> bank.risk.antifraud 'Transaction events for scoring' {
-    technology 'Kafka, Avro'
+  bank.payments.payment_hub -[sync]-> bank.payments.card_processing 'Card transactions' {
+    technology 'REST/JSON'
   }
-  bank.payments.card_system -[async]-> bank.risk.antifraud 'Card auth events' {
-    technology 'Kafka, Avro'
-  }
-  bank.products.core_banking -[async]-> bank.notifications.notification_center 'Account events' {
-    technology 'Kafka, Avro'
-  }
-  bank.payments.payment_hub -[async]-> bank.notifications.notification_center 'Payment status events' {
+  bank.payments.payment_hub -[async]-> bank.notifications.notification_center 'Payment notifications' {
     technology 'Kafka, Avro'
   }
 
-  // ── External integrations ──
-  bank.payments.card_system -[sync]-> visa 'Card authorization' {
-    technology 'ISO 8583, TCP/IP'
+  // --- External ---
+  bank.payments.card_processing -[sync]-> visa 'Card authorization' {
+    technology 'ISO 8583'
   }
   bank.payments.payment_hub -[sync]-> swift 'International transfers' {
-    technology 'ISO 20022, MQ'
+    technology 'MQ, MT103/MT202'
   }
-  bank.risk.aml_system -[sync]-> cbr 'Regulatory reports' {
-    technology 'XML, SFTP'
+
+  // --- Risk ---
+  bank.risk.aml -[sync]-> bank.products.core_banking 'Customer data lookup' {
+    technology 'REST/JSON'
   }
-  bank.products.core_banking -[sync]-> cbr 'Mandatory reporting' {
-    technology 'XML, SFTP'
+  bank.risk.anti_fraud -[async]-> bank.payments.payment_hub 'Fraud alerts' {
+    technology 'Kafka, Avro'
+  }
+  bank.risk.aml -[sync]-> cbr 'SAR reports, sanctions lists' {
+    technology 'SOAP/XML, SFTP'
+  }
+
+  // --- Analytics ---
+  bank.analytics.dwh -[reads]-> bank.products.core_banking 'Replicated data' {
+    technology 'CDC, Debezium'
+  }
+  bank.analytics.reporting_engine -[reads]-> bank.analytics.dwh 'Analytical queries' {
+    technology 'SQL/JDBC'
+  }
+  bank.analytics.reporting_engine -[sync]-> cbr 'Regulatory reports' {
+    technology 'SFTP'
+  }
+
+  // --- Auth ---
+  bank.platform.iam -[reads]-> bank.products.core_banking 'User directory sync' {
+    technology 'LDAP'
+  }
+
+  // --- Notifications from core ---
+  bank.products.core_banking -[async]-> bank.notifications.notification_center 'Account events' {
+    technology 'Kafka, Avro'
   }
 }

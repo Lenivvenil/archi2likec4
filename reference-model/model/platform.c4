@@ -1,0 +1,14 @@
+model {
+  extend bank.platform {
+    api_gateway = system 'API Gateway' {
+      #critical
+      description 'Single entry point: routing, rate limiting, auth'
+      technology 'Spring Cloud Gateway'
+    }
+    iam = system 'IAM / SSO' {
+      #critical
+      description 'Identity & access management, OAuth2/OIDC provider'
+      technology 'Keycloak'
+    }
+  }
+}
