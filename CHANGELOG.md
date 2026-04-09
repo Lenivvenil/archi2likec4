@@ -5,10 +5,25 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- **GAP-based maturity auditor** (`archi2likec4/maturity/`): 10 GAP detectors (GAP-DEPLOY, GAP-ZONE, GAP-DOMAIN, etc.) with penalty-based scoring replacing old QA-1..QA-10 system; generates `MATURITY.md` and `maturity.json`
+- **Per-system directory structure**: `systems/{name}/model.c4` + `systems/{name}/deployment.c4`; infrastructure extracted to `infrastructure/`; domain views moved to `views/domains/{id}/`
+- **Per-system deployment views** with star-chain includes and tag-based scoping (`#system_<id>`)
+- **Reference model** (`reference-model/`): 7-domain demo-bank with container-level decomposition, dynamic scenarios, compliance views (PCI-DSS, PII), validated with `likec4 build` + CI job
 - **Homebrew tap**: `brew tap Lenivvenil/archi2likec4 && brew install archi2likec4` — Formula at [homebrew-archi2likec4](https://github.com/Lenivvenil/homebrew-archi2likec4)
 - **TestPyPI dry-run workflow** (`.github/workflows/test-publish.yml`): manual `workflow_dispatch` trigger publishes to TestPyPI for pre-release validation
 - **Automated Homebrew Formula bump** (`.github/workflows/publish.yml`): `update-homebrew` job runs after PyPI publish, computes SHA256 of new sdist and pushes updated Formula to tap repo
 - **PyPI publish hardening** (`.github/workflows/publish.yml`): `twine check dist/*` metadata validation, `archi2likec4 --version` smoke-test, tag-vs-`pyproject.toml` version consistency check
+- **`NOTES.md`** restored in repo: iteration history (1–17) and v2.0 backlog preserved from archived branch
+
+### Changed
+- **Deployment views**: `.**` deep wildcard replaced with star-chain includes (LikeC4 `.**` broken in deployment views)
+- **Output cleanup**: removed `entities.c4`, `persistence-map.c4`, `solutions/`, `datastore-mapping.c4`, `deployment-architecture.c4`; dead `generators/relationships.py` removed
+- **Generated `CLAUDE.md`** (`generators/claude_md.py`): conventions file emitted into output directory for target repo
+- **CI actions bumped**: checkout v6, setup-python v6, setup-node v6, upload-artifact v7, pypi-publish v1.14
+
+### Fixed
+- **Deployment view scoping** (#41–#46): environment kind declaration, duplicate node names, hypervisor detection, env mismatch for dev/test views
+- **`make_id()`**: hyphens replaced with underscores — LikeC4 parses `-` as minus
 
 ## [1.3.0] — 2026-03-20
 
@@ -76,7 +91,7 @@ All notable changes to this project will be documented in this file.
 
 ### Removed
 - `convert.py` root script (duplicated `archi2likec4` console_scripts entrypoint)
-- `NOTES.md` (development scratch notes; added to `.gitignore`)
+- `NOTES.md` from `.gitignore` (later restored to repo in Unreleased)
 
 ## [1.0.0] — 2026-03-09
 

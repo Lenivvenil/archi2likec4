@@ -33,14 +33,16 @@ parse  →  build  →  validate  →  generate
 | `archi2likec4/builders/integrations.py` | Integration building and interface path resolution |
 | `archi2likec4/builders/data.py` | Data entities and dataStore detection |
 | `archi2likec4/builders/deployment.py` | Deployment topology and node mapping; exports `DeploymentMappingContext` |
+| `archi2likec4/builders/_paths.py` | Path utilities for deployment tree traversal |
 | `archi2likec4/builders/_result.py` | `BuildResult` NamedTuple and `BuildDiagnostics` dataclass — data contracts between build and generate phases |
+| `archi2likec4/generators/_common.py` | Shared helpers — `truncate_desc()`, `render_metadata()` |
 | `archi2likec4/generators/spec.py` | LikeC4 spec file (kinds, tags) |
 | `archi2likec4/generators/domains.py` | Domain and subdomain `.c4` files |
 | `archi2likec4/generators/systems.py` | System detail `.c4` files |
 | `archi2likec4/generators/entities.py` | Data entity `.c4` files |
-| `archi2likec4/generators/relationships.py` | Cross-domain relationship files |
 | `archi2likec4/generators/deployment.py` | Deployment view `.c4` files |
 | `archi2likec4/generators/views.py` | Solution and system views; exports `ViewContext`, `build_view_context()` |
+| `archi2likec4/generators/claude_md.py` | Generated `CLAUDE.md` for output repo |
 | `archi2likec4/generators/audit.py` | `AUDIT.md` quality report |
 | `archi2likec4/templates/` | Jinja2 HTML templates for Flask web UI |
 | `archi2likec4/exceptions.py` | Domain exceptions — `Archi2LikeC4Error`, `ConfigError`, `ParseError`, `ValidationError` |
