@@ -27,8 +27,6 @@ architectural_repository/
 output_before_promote/
 prototype/
 
-# Personal notes
-NOTES.md
 
 # IDE / OS
 .DS_Store
