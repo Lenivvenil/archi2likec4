@@ -31,16 +31,16 @@ web = [
 
 [package.metadata]
 requires-dist = [
-    { name = "defusedxml", specifier = ">=0.7" },
-    { name = "flask", marker = "extra == 'dev'", specifier = ">=2.3" },
-    { name = "flask", marker = "extra == 'web'", specifier = ">=2.3" },
+    { name = "defusedxml", specifier = ">=0.7,<1.0" },
+    { name = "flask", marker = "extra == 'dev'", specifier = ">=2.3,<4.0" },
+    { name = "flask", marker = "extra == 'web'", specifier = ">=2.3,<4.0" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
     { name = "pygments", marker = "extra == 'dev'", specifier = ">=2.20" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=4.0" },
-    { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6.0" },
-    { name = "pyyaml", marker = "extra == 'federation'", specifier = ">=6.0" },
-    { name = "pyyaml", marker = "extra == 'web'", specifier = ">=6.0" },
+    { name = "pyyaml", marker = "extra == 'dev'", specifier = ">=6.0,<7.0" },
+    { name = "pyyaml", marker = "extra == 'federation'", specifier = ">=6.0,<7.0" },
+    { name = "pyyaml", marker = "extra == 'web'", specifier = ">=6.0,<7.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.4" },
     { name = "tomli", marker = "python_full_version < '3.11' and extra == 'dev'", specifier = ">=2.0" },
 ]
