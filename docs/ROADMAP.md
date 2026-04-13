@@ -1,6 +1,6 @@
 # archi2likec4 Roadmap
 
-Post-1.1 ideas and planned improvements. Not committed, not prioritised — just a reference for future decisions.
+Post-1.1 ideas and planned improvements. These items are now tracked as [GitHub issues](https://github.com/Lenivvenil/archi2likec4/issues) with milestones v1.4.0 and v2.0. See also [Vision discussion #71](https://github.com/Lenivvenil/archi2likec4/discussions/71).
 
 ---
 
