@@ -229,4 +229,12 @@ Python >= 3.10. Базовая конвертация — zero dependencies (std
 Опционально: `[web]` — Flask + PyYAML (аудит-дашборд), `[federation]` — PyYAML (федерация).
 YAML-конфиг (`.archi2likec4.yaml`) также требует PyYAML: `pip install pyyaml`.
 
-[MIT](LICENSE) | [Contributing](CONTRIBUTING.md)
+## Contributing
+
+We welcome contributions! See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, testing, and PR guidelines.
+
+For security issues, see [SECURITY.md](SECURITY.md).
+
+## License
+
+[MIT](LICENSE)
