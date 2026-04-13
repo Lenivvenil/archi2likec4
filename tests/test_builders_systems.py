@@ -1021,5 +1021,41 @@ class TestBuildDataAccessMissingEntity:
         assert result == []
 
 
+# ── No private cross-imports between builder submodules ───────────────────
+
+
+class TestBuilderImportStructure:
+    """Verify builder submodules don't import private (_-prefixed) symbols from siblings."""
+
+    def test_no_private_cross_imports_in_builders(self) -> None:
+        """Builder submodules must only import public symbols from sibling modules."""
+        import ast
+        from pathlib import Path
+
+        builders_dir = Path(__file__).parent.parent / 'archi2likec4' / 'builders'
+        submodules = [f for f in builders_dir.glob('*.py') if f.name != '__init__.py']
+
+        violations = []
+        for mod_path in submodules:
+            source = mod_path.read_text(encoding='utf-8')
+            tree = ast.parse(source, filename=str(mod_path))
+            for node in ast.walk(tree):
+                if isinstance(node, ast.ImportFrom):
+                    module = node.module or ''
+                    # Check relative imports within builders package
+                    if node.level == 1 and not module.startswith('..'):
+                        for alias in node.names:
+                            if alias.name.startswith('_'):
+                                violations.append(
+                                    f"{mod_path.name}: imports private '{alias.name}' "
+                                    f"from '.{module}'"
+                                )
+
+        assert not violations, (
+            "Builder submodules must not import private (_-prefixed) symbols from siblings:\n"
+            + '\n'.join(violations)
+        )
+
+
 # ── data.py edge cases (coverage uplift) ─────────────────────────────────
 

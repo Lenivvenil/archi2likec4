@@ -7,6 +7,7 @@ import pytest
 
 from archi2likec4.config import (
     _DEFAULT_DOMAIN_RENAMES,
+    _DEFAULT_EXTRA_DOMAIN_PATTERNS,
     _DEFAULT_PROMOTE_CHILDREN,
     _DEFAULT_SPEC_COLORS,
     _DEFAULT_SPEC_SHAPES,
@@ -47,6 +48,22 @@ class TestConvertConfigDefaults:
         assert config.strict is False
         assert config.verbose is False
         assert config.dry_run is False
+
+    def test_organization_specific_defaults_are_empty(self) -> None:
+        """Org-specific defaults must be empty — config via YAML, not hardcoded."""
+        assert _DEFAULT_DOMAIN_RENAMES == {}, (
+            "_DEFAULT_DOMAIN_RENAMES must be empty; org-specific values belong in .archi2likec4.yaml"
+        )
+        assert _DEFAULT_EXTRA_DOMAIN_PATTERNS == [], (
+            "_DEFAULT_EXTRA_DOMAIN_PATTERNS must be empty; org-specific values belong in .archi2likec4.yaml"
+        )
+        assert _DEFAULT_PROMOTE_CHILDREN == {}, (
+            "_DEFAULT_PROMOTE_CHILDREN must be empty; org-specific values belong in .archi2likec4.yaml"
+        )
+        config = ConvertConfig()
+        assert config.domain_renames == {}
+        assert config.extra_domain_patterns == []
+        assert config.promote_children == {}
 
 
 class TestLoadConfig:
