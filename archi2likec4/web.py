@@ -99,7 +99,9 @@ def create_app(
 
         from markupsafe import Markup
         def csrf_field():
-            return Markup(f'<input type="hidden" name="_csrf_token" value="{html.escape(token)}">')
+            return Markup(  # nosec B704 — token is server-generated and html.escape'd
+                f'<input type="hidden" name="_csrf_token" value="{html.escape(token)}">'
+            )
 
         return {'csrf_token': token, 'csrf_field': csrf_field}
 
