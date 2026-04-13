@@ -132,28 +132,28 @@ pip install "archi2likec4[web]"
 archi2likec4 web
 ```
 
-Дашборд на `localhost:8090`: метрики модели, 10 QA-инцидентов, one-click ремедиации (назначить домен, промоутить подсистему, подавить инцидент). Все решения — на странице `/remediations`. Тёмная тема, русский и английский язык.
+Дашборд на `localhost:8090`: метрики модели, GAP-аудит зрелости, one-click ремедиации (назначить домен, промоутить подсистему, подавить инцидент). Все решения — на странице `/remediations`. Русский и английский язык.
 
 ---
 
-## Quality Audit
+## Maturity Audit
 
-Каждый запуск генерирует `AUDIT.md` — реестр инцидентов для владельцев ArchiMate-модели.
+Каждый запуск генерирует `MATURITY.md` + `maturity.json` — оценку зрелости ArchiMate-модели по 10 GAP-детекторам.
 
-| | Что проверяется |
-|---|---|
-| **QA-1** Critical | Системы без домена |
-| **QA-2** High | Пустые карточки (нет ни одного заполненного свойства) |
-| **QA-3** High | Системы в папке `!РАЗБОР` |
-| **QA-4** Medium | Кандидаты на декомпозицию (10+ подсистем) |
-| **QA-5** Medium | Системы без documentation |
-| **QA-6** Low | Осиротевшие функции |
-| **QA-7** Critical | Нерезолвленные интеграции |
-| **QA-8** High | Элементы solution views, не найденные в модели |
-| **QA-9** Medium | Системы без deployment-маппинга |
-| **QA-10** Medium | Проблемы иерархии развёртывания |
+| GAP | Severity | Что проверяется |
+|-----|----------|-----------------|
+| **GAP-DEPLOY** | blocker | Система не развёрнута ни на одном узле инфраструктуры |
+| **GAP-ZONE** | blocker | Система развёрнута только на сетевой зоне (без реальной VM) |
+| **GAP-DOMAIN** | degraded | Система в неназначенном домене |
+| **GAP-INTEG** | degraded | Система без интеграций |
+| **GAP-SHALLOW** | degraded | Система без подсистем и функций |
+| **GAP-ORPHAN** | cosmetic | VM/сервер без приложений |
+| **GAP-DUP** | degraded | Дублированное определение элемента |
+| **GAP-DESC** | cosmetic | Отсутствует описание системы |
+| **GAP-REF** | degraded | Битая ссылка в view |
+| **GAP-ENV** | degraded | Несоответствие окружения (dev/test/prod) |
 
-Пустые категории не отображаются. Подавленные — учитываются прозрачно.
+Scoring: 100 - Σ штрафов → tiers: complete (90+), partial (70+), skeletal (40+), stub (0+).
 
 ---
 
@@ -166,7 +166,7 @@ graph LR
   B --> V["Validate"]
   V --> G["Generate"]
   G --> C4[".c4 files"]
-  G --> AUDIT["AUDIT.md"]
+  G --> AUDIT["MATURITY.md"]
 
   P -. "ParseResult" .-> B
   B -. "BuildResult" .-> V
@@ -182,9 +182,9 @@ archi2likec4/
   config.py         ConvertConfig, YAML-загрузка, валидация
   parsers.py        coArchi XML → dataclasses
   builders/         сборка систем, доменов, интеграций, deployment (пакет)
-  generators/       dataclasses → .c4 контент + AUDIT.md (пакет)
-  templates/        Jinja2-шаблоны .c4 и AUDIT.md
-  audit_data.py     compute_audit_incidents() — структурированные QA-данные
+  generators/       dataclasses → .c4 контент + MATURITY.md (пакет)
+  maturity/         GAP-детекторы, scoring, scaffold, reporters
+  templates/        Jinja2-шаблоны для Web UI
   i18n.py           каталог сообщений ru/en
   web.py            Flask UI (dashboard, ремедиации, иерархия)
   pipeline.py       convert() API, main() CLI, оркестрация
@@ -222,7 +222,7 @@ assert result.files_written == 0
 
 ```bash
 pip install -e ".[dev]"
-python -m pytest tests/ -v   # 586+ тестов
+python -m pytest tests/ -v   # 1100+ тестов
 ```
 
 Python >= 3.10. Базовая конвертация — zero dependencies (stdlib only).

@@ -43,10 +43,11 @@ parse  →  build  →  validate  →  generate
 | `archi2likec4/generators/deployment.py` | Deployment view `.c4` files |
 | `archi2likec4/generators/views.py` | Solution and system views; exports `ViewContext`, `build_view_context()` |
 | `archi2likec4/generators/claude_md.py` | Generated `CLAUDE.md` for output repo |
-| `archi2likec4/generators/audit.py` | `AUDIT.md` quality report |
+| `archi2likec4/generators/audit.py` | `MATURITY.md` quality report |
+| `archi2likec4/maturity/` | GAP-based maturity auditor — `gaps.py`, `detectors.py`, `scoring.py`, `scaffold.py`, `reporters.py` |
 | `archi2likec4/templates/` | Jinja2 HTML templates for Flask web UI |
 | `archi2likec4/exceptions.py` | Domain exceptions — `Archi2LikeC4Error`, `ConfigError`, `ParseError`, `ValidationError` |
-| `archi2likec4/audit_data.py` | QA incident computation |
+| `archi2likec4/audit_data.py` | Legacy QA incident computation (used by web UI) |
 | `archi2likec4/web.py` | Flask app orchestrator — CSRF, error handlers, blueprint registration (optional) |
 | `archi2likec4/web_routes.py` | Flask Blueprint with audit dashboard route handlers |
 | `archi2likec4/utils.py` | Shared utilities — `make_id()`, `transliterate()`, `escape_str()` |

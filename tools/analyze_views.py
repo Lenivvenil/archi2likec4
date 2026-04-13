@@ -3,11 +3,11 @@
 
 Usage:
     likec4 export json -o /tmp/likec4-model.json
-    python scripts/analyze_views.py /tmp/likec4-model.json [view_filter]
+    python tools/analyze_views.py /tmp/likec4-model.json [view_filter]
 
 Examples:
-    python scripts/analyze_views.py /tmp/likec4-model.json deployment_aim_prod
-    python scripts/analyze_views.py /tmp/likec4-model.json deploy  # all deployment views
+    python tools/analyze_views.py /tmp/likec4-model.json deployment_aim_prod
+    python tools/analyze_views.py /tmp/likec4-model.json deploy  # all deployment views
 """
 
 import json
