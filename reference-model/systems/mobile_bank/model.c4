@@ -1,0 +1,62 @@
+// ── Mobile Bank — Functional Architecture ───────────────────
+model {
+  extend bank.business.channels.mobile_bank {
+
+    auth = subsystem 'Authentication' {
+      description 'User login, biometrics, session management'
+      technology 'Swift, Kotlin'
+
+      login_biometric = appFunction 'Biometric Login' {
+        description 'Face ID / fingerprint authentication'
+      }
+      login_pin = appFunction 'PIN Login' {
+        description 'PIN-code authentication with rate limiting'
+      }
+      manage_session = appFunction 'Manage Session' {
+        description 'Token refresh, session timeout, forced logout'
+      }
+    }
+
+    payments_ui = subsystem 'Payments' {
+      description 'Payment initiation and history UI'
+      technology 'Swift, Kotlin'
+
+      p2p_transfer = appFunction 'P2P Transfer' {
+        description 'Person-to-person transfer by phone or card number'
+      }
+      pay_bill = appFunction 'Pay Bill' {
+        description 'Utility and service payment with template support'
+      }
+      payment_history = appFunction 'Payment History' {
+        description 'Transaction list with search and filters'
+      }
+    }
+
+    accounts_ui = subsystem 'Accounts' {
+      description 'Account and card overview'
+      technology 'Swift, Kotlin'
+
+      view_balance = appFunction 'View Balance' {
+        description 'Real-time balance and recent transactions'
+      }
+      view_statements = appFunction 'View Statements' {
+        description 'Monthly statements with PDF export'
+      }
+      manage_cards = appFunction 'Manage Cards' {
+        description 'Block/unblock, set limits, view PIN'
+      }
+    }
+
+    settings = subsystem 'Settings' {
+      description 'App settings and user preferences'
+      technology 'Swift, Kotlin'
+
+      notification_prefs = appFunction 'Notification Preferences' {
+        description 'Push/SMS/email toggle per event type'
+      }
+      security_settings = appFunction 'Security Settings' {
+        description 'Change PIN, enable biometrics, trusted devices'
+      }
+    }
+  }
+}

@@ -1,0 +1,26 @@
+deployment {
+  extend prod {
+    dc2 = site 'DC-2 St. Petersburg' {
+      description 'Disaster recovery: warm standby'
+      technology 'Tier III'
+
+      dr_app = segment 'Application Zone' {
+        dr_k8s = cluster 'k8s-dr' {
+          technology 'Kubernetes 1.29, passive standby'
+        }
+      }
+
+      dr_data = segment 'Data Zone' {
+        dr_oracle = storage 'Oracle Data Guard' {
+          technology 'Physical Standby, async redo apply'
+        }
+        dr_pg = storage 'PostgreSQL Replica' {
+          technology 'Streaming replication, 15min lag'
+        }
+        dr_kafka = infraSoftware 'Kafka MirrorMaker' {
+          technology 'MirrorMaker 2, topic replication'
+        }
+      }
+    }
+  }
+}

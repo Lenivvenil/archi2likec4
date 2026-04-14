@@ -1,17 +1,31 @@
 views {
-  // L0 — Enterprise Landscape (для CTO, новичков)
+  // L0 — Enterprise Landscape: domainGroup → domain → system
   view index {
     title 'Demo Bank — System Landscape'
     include bank
-    include bank.channels with { navigateTo domain_channels }
-    include bank.products with { navigateTo domain_products }
-    include bank.payments with { navigateTo domain_payments }
-    include bank.risk with { navigateTo domain_risk }
-    include bank.platform with { navigateTo domain_platform }
-    include bank.analytics with { navigateTo domain_analytics }
+    include bank.business with { navigateTo domain_channels }
+    include bank.business.channels
+    include bank.business.channels.*
+    include bank.business.products
+    include bank.business.products.*
+    include bank.business.payments
+    include bank.business.payments.*
+    include bank.support with { navigateTo domain_risk }
+    include bank.support.risk
+    include bank.support.risk.*
+    include bank.support.notifications
+    include bank.support.notifications.*
+    include bank.tech with { navigateTo domain_platform }
+    include bank.tech.platform
+    include bank.tech.platform.*
+    include bank.tech.analytics
+    include bank.tech.analytics.*
     include customer, operator, cbr, visa, swift
-    include customer -> bank.*, operator -> bank.*
-    include bank.* -> cbr, bank.* -> visa, bank.* -> swift
+    include customer -> bank.business.channels.*
+    include operator -> bank.business.channels.*
+    include bank.business.payments.* -> cbr
+    include bank.business.payments.* -> visa
+    include bank.business.payments.* -> swift
     autoLayout TopBottom
   }
 }

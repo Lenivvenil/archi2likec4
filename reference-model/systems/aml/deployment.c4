@@ -1,0 +1,14 @@
+// ── AML/KYC — Deployment ────────────────────────────────────
+deployment {
+  extend prod.dc1.app.k8s.ns_risk {
+    instanceOf bank.support.risk.aml
+  }
+}
+
+views {
+  deployment view aml_deployment {
+    title 'AML/KYC — Production Deployment'
+    include prod.dc1.app.k8s.ns_risk.*
+    autoLayout TopBottom
+  }
+}

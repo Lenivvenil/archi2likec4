@@ -1,0 +1,32 @@
+// ── IAM / SSO — Functional Architecture ─────────────────────
+model {
+  extend bank.tech.platform.iam {
+
+    authn = subsystem 'Authentication' {
+      description 'User authentication and session management'
+      technology 'Keycloak'
+
+      login = appFunction 'Login' {
+        description 'Authenticate user via password, OTP, or biometrics'
+      }
+      issue_token = appFunction 'Issue Token' {
+        description 'Generate JWT access and refresh tokens'
+      }
+      refresh_session = appFunction 'Refresh Session' {
+        description 'Extend session via refresh token rotation'
+      }
+    }
+
+    authz = subsystem 'Authorization' {
+      description 'Role and permission management'
+      technology 'Keycloak'
+
+      check_permission = appFunction 'Check Permission' {
+        description 'Evaluate user roles against resource policies'
+      }
+      manage_roles = appFunction 'Manage Roles' {
+        description 'CRUD operations on roles and role assignments'
+      }
+    }
+  }
+}

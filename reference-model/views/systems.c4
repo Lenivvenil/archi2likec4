@@ -1,30 +1,95 @@
 views {
-  // Container views — только для декомпозированных систем
-  view system_corebanking of bank.products.core_banking {
-    title 'Core Banking (ABS) — Containers'
+  // System views — функциональная архитектура (L3 → L4 → L5)
+  // Drill-down: subsystems + appFunctions + internal/external relationships
+
+  view system_corebanking of bank.business.products.core_banking {
+    title 'Core Banking — Functional Architecture'
     include *
-    include -> bank.products.core_banking ->
+    include -> bank.business.products.core_banking ->
     autoLayout TopBottom
   }
 
-  view system_paymenthub of bank.payments.payment_hub {
-    title 'Payment Hub — Containers'
+  view system_paymenthub of bank.business.payments.payment_hub {
+    title 'Payment Hub — Functional Architecture'
     include *
-    include -> bank.payments.payment_hub ->
+    include -> bank.business.payments.payment_hub ->
     autoLayout TopBottom
   }
 
-  view system_apigateway of bank.platform.api_gateway {
-    title 'API Gateway — Containers'
+  view system_cardprocessing of bank.business.payments.card_processing {
+    title 'Card Processing — Functional Architecture'
     include *
-    include -> bank.platform.api_gateway ->
+    include -> bank.business.payments.card_processing ->
     autoLayout TopBottom
   }
 
-  view system_cardprocessing of bank.payments.card_processing {
-    title 'Card Processing — Containers'
+  view system_apigateway of bank.tech.platform.api_gateway {
+    title 'API Gateway — Functional Architecture'
     include *
-    include -> bank.payments.card_processing ->
+    include -> bank.tech.platform.api_gateway ->
+    autoLayout TopBottom
+  }
+
+  view system_antifraud of bank.support.risk.anti_fraud {
+    title 'Anti-Fraud — Functional Architecture'
+    include *
+    include -> bank.support.risk.anti_fraud ->
+    autoLayout TopBottom
+  }
+
+  view system_aml of bank.support.risk.aml {
+    title 'AML/KYC — Functional Architecture'
+    include *
+    include -> bank.support.risk.aml ->
+    autoLayout TopBottom
+  }
+
+  view system_notification_center of bank.support.notifications.notification_center {
+    title 'Notification Center — Functional Architecture'
+    include *
+    include -> bank.support.notifications.notification_center ->
+    autoLayout TopBottom
+  }
+
+  view system_dwh of bank.tech.analytics.dwh {
+    title 'Data Warehouse — Functional Architecture'
+    include *
+    include -> bank.tech.analytics.dwh ->
+    autoLayout TopBottom
+  }
+
+  view system_iam of bank.tech.platform.iam {
+    title 'IAM / SSO — Functional Architecture'
+    include *
+    include -> bank.tech.platform.iam ->
+    autoLayout TopBottom
+  }
+
+  view system_mobile_bank of bank.business.channels.mobile_bank {
+    title 'Mobile Bank — Functional Architecture'
+    include *
+    include -> bank.business.channels.mobile_bank ->
+    autoLayout TopBottom
+  }
+
+  view system_internet_bank of bank.business.channels.internet_bank {
+    title 'Internet Bank — Functional Architecture'
+    include *
+    include -> bank.business.channels.internet_bank ->
+    autoLayout TopBottom
+  }
+
+  view system_product_catalog of bank.business.products.product_catalog {
+    title 'Product Catalog — Functional Architecture'
+    include *
+    include -> bank.business.products.product_catalog ->
+    autoLayout TopBottom
+  }
+
+  view system_reporting_engine of bank.tech.analytics.reporting_engine {
+    title 'Reporting Engine — Functional Architecture'
+    include *
+    include -> bank.tech.analytics.reporting_engine ->
     autoLayout TopBottom
   }
 }

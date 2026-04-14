@@ -1,0 +1,9 @@
+model {
+  extend bank.support.notifications {
+    notification_center = system 'Notification Center' {
+      #pii
+      description 'Omnichannel notifications: SMS, email, push'
+      technology 'Java 17, Kafka'
+    }
+  }
+}

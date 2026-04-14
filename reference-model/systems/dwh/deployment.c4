@@ -1,0 +1,14 @@
+// ── Data Warehouse — Deployment ──────────────────────────────
+deployment {
+  extend prod.dc1.data.clickhouse {
+    instanceOf bank.tech.analytics.dwh
+  }
+}
+
+views {
+  deployment view dwh_deployment {
+    title 'Data Warehouse — Production Deployment'
+    include prod.dc1.data.clickhouse.*
+    autoLayout TopBottom
+  }
+}

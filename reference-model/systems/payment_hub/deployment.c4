@@ -1,0 +1,24 @@
+// ── Payment Hub — Deployment ─────────────────────────────────
+deployment {
+  extend prod.dc1.app.k8s.ns_payments {
+    instanceOf bank.business.payments.payment_hub.orchestrator
+    instanceOf bank.business.payments.payment_hub.clearing
+    instanceOf bank.business.payments.payment_hub.swift_adapter
+  }
+  extend prod.dc1.data.pg_cluster {
+    instanceOf bank.business.payments.payment_hub
+  }
+  extend prod.dc1.data.kafka {
+    instanceOf bank.business.payments.payment_hub
+  }
+}
+
+views {
+  deployment view payment_hub_deployment {
+    title 'Payment Hub — Production Deployment'
+    include prod.dc1.app.k8s.ns_payments.*
+    include prod.dc1.data.pg_cluster.*
+    include prod.dc1.data.kafka.*
+    autoLayout TopBottom
+  }
+}

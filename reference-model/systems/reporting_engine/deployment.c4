@@ -1,0 +1,14 @@
+// ── Reporting Engine — Deployment ────────────────────────────
+deployment {
+  extend prod.dc1.app.k8s.ns_core {
+    instanceOf bank.tech.analytics.reporting_engine
+  }
+}
+
+views {
+  deployment view reporting_engine_deployment {
+    title 'Reporting Engine — Production Deployment'
+    include prod.dc1.app.k8s.ns_core.*
+    autoLayout TopBottom
+  }
+}

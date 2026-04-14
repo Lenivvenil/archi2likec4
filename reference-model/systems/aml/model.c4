@@ -1,0 +1,36 @@
+// ── AML/KYC — Functional Architecture ───────────────────────
+model {
+  extend bank.support.risk.aml {
+
+    screening = subsystem 'Screening' {
+      #pii
+      description 'Sanctions and PEP screening'
+      technology 'Java 17, Elasticsearch'
+
+      check_sanctions = appFunction 'Check Sanctions' {
+        description 'Screen customer against OFAC, EU, UN lists'
+      }
+      check_pep = appFunction 'Check PEP' {
+        description 'Politically exposed person identification'
+      }
+    }
+
+    kyc = subsystem 'KYC Processing' {
+      #pii
+      description 'Customer due diligence workflow'
+      technology 'Java 17'
+
+      collect_documents = appFunction 'Collect Documents' {
+        description 'Request and validate identity documents'
+      }
+      assess_risk = appFunction 'Assess Risk' {
+        description 'Calculate customer risk level (low/medium/high)'
+      }
+      approve_onboarding = appFunction 'Approve Onboarding' {
+        description 'Final approval or rejection of customer'
+      }
+    }
+
+    screening -[sync]-> kyc 'Screening results'
+  }
+}

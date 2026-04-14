@@ -1,0 +1,31 @@
+// ── Data Warehouse — Functional Architecture ────────────────
+model {
+  extend bank.tech.analytics.dwh {
+
+    ingestion = subsystem 'Data Ingestion' {
+      description 'CDC and batch data loading from source systems'
+      technology 'Debezium, Kafka Connect'
+
+      cdc_capture = appFunction 'CDC Capture' {
+        description 'Capture change data from source databases'
+      }
+      transform_load = appFunction 'Transform & Load' {
+        description 'Apply transformations and load into analytical tables'
+      }
+    }
+
+    analytical = subsystem 'Analytical Engine' {
+      description 'Aggregation, materialized views, query optimization'
+      technology 'ClickHouse'
+
+      build_aggregates = appFunction 'Build Aggregates' {
+        description 'Create daily/monthly aggregation tables'
+      }
+      serve_queries = appFunction 'Serve Queries' {
+        description 'Execute analytical SQL queries from reporting tools'
+      }
+    }
+
+    ingestion -[sync]-> analytical 'Transformed data'
+  }
+}

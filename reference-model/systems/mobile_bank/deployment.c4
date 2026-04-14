@@ -1,0 +1,14 @@
+// ── Mobile Bank — Deployment ─────────────────────────────────
+deployment {
+  extend prod.dc1.dmz.web_server.vm_mobile {
+    instanceOf bank.business.channels.mobile_bank
+  }
+}
+
+views {
+  deployment view mobile_bank_deployment {
+    title 'Mobile Bank — Production Deployment'
+    include prod.dc1.dmz.web_server.vm_mobile.*
+    autoLayout TopBottom
+  }
+}

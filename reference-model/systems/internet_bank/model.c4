@@ -1,0 +1,47 @@
+// ── Internet Bank — Functional Architecture ─────────────────
+model {
+  extend bank.business.channels.internet_bank {
+
+    portal = subsystem 'Customer Portal' {
+      description 'Retail customer web interface'
+      technology 'TypeScript, React'
+
+      dashboard = appFunction 'Dashboard' {
+        description 'Account overview, quick actions, notifications'
+      }
+      transfer_form = appFunction 'Transfer Form' {
+        description 'Payment initiation with validation and confirmation'
+      }
+      statement_viewer = appFunction 'Statement Viewer' {
+        description 'Interactive transaction history with export'
+      }
+    }
+
+    backoffice = subsystem 'Back-Office' {
+      description 'Operator workspace for support and operations'
+      technology 'TypeScript, React'
+
+      customer_search = appFunction 'Customer Search' {
+        description 'Find customer by name, ID, phone, account'
+      }
+      operation_journal = appFunction 'Operation Journal' {
+        description 'Audit log of all operator actions'
+      }
+      manual_adjustment = appFunction 'Manual Adjustment' {
+        description 'Corrections, reversals, fee overrides'
+      }
+    }
+
+    frontend_infra = subsystem 'Frontend Infrastructure' {
+      description 'Shared UI framework, auth, API client'
+      technology 'TypeScript, React'
+
+      api_client = appFunction 'API Client' {
+        description 'HTTP client with retry, auth token refresh'
+      }
+      error_handling = appFunction 'Error Handling' {
+        description 'Global error boundary, user-friendly messages'
+      }
+    }
+  }
+}

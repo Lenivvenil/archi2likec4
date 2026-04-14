@@ -1,0 +1,45 @@
+// ── API Gateway — Functional Architecture ───────────────────
+model {
+  extend bank.tech.platform.api_gateway {
+
+    rate_limiting = subsystem 'Rate Limiting' {
+      description 'Request throttling per client and endpoint'
+      technology 'Spring Cloud Gateway, Redis'
+
+      check_quota = appFunction 'Check Quota' {
+        description 'Verify request count against configured limits'
+      }
+      throttle = appFunction 'Throttle' {
+        description 'Reject or delay requests exceeding quota'
+      }
+    }
+
+    auth = subsystem 'Authentication' {
+      description 'JWT validation, scope checking, token refresh'
+      technology 'Spring Security, OAuth2'
+
+      validate_token = appFunction 'Validate Token' {
+        description 'Verify JWT signature, expiry, and claims'
+      }
+      check_scopes = appFunction 'Check Scopes' {
+        description 'Match token scopes against endpoint requirements'
+      }
+    }
+
+    routing = subsystem 'API Routing' {
+      description 'Request routing to backend services'
+      technology 'Spring Cloud Gateway'
+
+      resolve_route = appFunction 'Resolve Route' {
+        description 'Map incoming URL to backend service endpoint'
+      }
+      transform_request = appFunction 'Transform Request' {
+        description 'Header enrichment, path rewriting'
+      }
+    }
+
+    // Internal flow
+    rate_limiting -[sync]-> auth 'Validated request'
+    auth -[sync]-> routing 'Authenticated request'
+  }
+}

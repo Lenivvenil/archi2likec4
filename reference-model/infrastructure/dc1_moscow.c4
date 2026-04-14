@@ -1,0 +1,74 @@
+deployment {
+  extend prod {
+    dc1 = site 'DC-1 Moscow' {
+      description 'Primary site'
+      technology 'Tier III'
+
+      dmz = segment 'DMZ' {
+        description 'Internet-facing zone, WAF-protected'
+
+        waf = infraSoftware 'WAF (ModSecurity)' {
+          technology 'Nginx + ModSecurity'
+        }
+        lb = infraSoftware 'Load Balancer' {
+          technology 'Nginx, L7'
+        }
+        web_server = server 'esxi-dmz-01' {
+          technology 'Dell R750, ESXi 8.0'
+          vm_web = vm 'vm-web-01' {
+            technology 'RHEL 9, 8 vCPU, 16GB'
+          }
+          vm_mobile = vm 'vm-mobile-bff-01' {
+            technology 'RHEL 9, 8 vCPU, 16GB'
+          }
+        }
+      }
+
+      app = segment 'Application Zone' {
+        description 'Internal application services'
+
+        k8s = cluster 'k8s-prod' {
+          technology 'Kubernetes 1.29, Rancher'
+
+          ns_payments = namespace 'payments' {}
+          ns_core = namespace 'core-banking' {}
+          ns_cards = namespace 'cards' {}
+          ns_risk = namespace 'risk' {}
+          ns_platform = namespace 'platform' {}
+          ns_notifications = namespace 'notifications' {}
+        }
+      }
+
+      data = segment 'Data Zone' {
+        description 'Database and storage segment'
+
+        oracle_rac = storage 'Oracle RAC' {
+          technology 'Oracle 19c, 512GB RAM'
+        }
+        pg_cluster = storage 'PostgreSQL + Patroni' {
+          technology 'PostgreSQL 15.6, Patroni, pgBouncer'
+        }
+        kafka = infraSoftware 'Kafka Cluster' {
+          technology 'Apache Kafka 3.7, 3 brokers, NVMe'
+        }
+        clickhouse = storage 'ClickHouse' {
+          technology 'ClickHouse 24.3, NVMe'
+        }
+      }
+
+      mgmt = segment 'Management Zone' {
+        description 'Monitoring, logging, secrets'
+
+        prometheus = infraSoftware 'Prometheus + Grafana' {
+          technology 'Prometheus 2.51, Grafana 10.4'
+        }
+        elk = infraSoftware 'ELK Stack' {
+          technology 'Elasticsearch 8.13, Kibana, Filebeat'
+        }
+        vault = infraSoftware 'HashiCorp Vault' {
+          technology 'Vault 1.16, HA mode'
+        }
+      }
+    }
+  }
+}

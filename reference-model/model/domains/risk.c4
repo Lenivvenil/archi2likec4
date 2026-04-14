@@ -1,0 +1,15 @@
+model {
+  extend bank.support.risk {
+    anti_fraud = system 'Anti-Fraud' {
+      #critical
+      description 'Real-time fraud detection: ML models, rules engine'
+      technology 'Python 3.11, scikit-learn'
+    }
+    aml = system 'AML/KYC' {
+      #critical
+      #pii
+      description 'Anti-money laundering, KYC, sanctions screening'
+      technology 'Java 17, Elasticsearch'
+    }
+  }
+}

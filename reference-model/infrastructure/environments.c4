@@ -1,0 +1,12 @@
+deployment {
+  environment prod 'Production' {
+    #critical
+    description 'Production environment: 2 sites, active-passive'
+    technology 'VMware + Kubernetes'
+  }
+
+  environment staging 'Staging' {
+    description 'Pre-production testing, reduced scale'
+    technology 'Kubernetes'
+  }
+}

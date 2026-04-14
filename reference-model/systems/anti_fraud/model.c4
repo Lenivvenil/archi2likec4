@@ -1,0 +1,34 @@
+// ── Anti-Fraud — Functional Architecture ────────────────────
+model {
+  extend bank.support.risk.anti_fraud {
+
+    detection = subsystem 'Detection Engine' {
+      description 'Real-time fraud detection: ML models and rules'
+      technology 'Python 3.11, scikit-learn'
+
+      score_transaction = appFunction 'Score Transaction' {
+        description 'Calculate fraud risk score using ML model'
+      }
+      apply_rules = appFunction 'Apply Rules' {
+        description 'Check transaction against business rules engine'
+      }
+    }
+
+    case_mgmt = subsystem 'Case Management' {
+      description 'Investigation workflow for flagged transactions'
+      technology 'Python 3.11'
+
+      create_alert = appFunction 'Create Alert' {
+        description 'Generate alert from high-risk score or rule hit'
+      }
+      investigate = appFunction 'Investigate Case' {
+        description 'Analyst review workflow with evidence collection'
+      }
+      resolve = appFunction 'Resolve Case' {
+        description 'Mark case as confirmed fraud or false positive'
+      }
+    }
+
+    detection -[sync]-> case_mgmt 'High-risk alerts'
+  }
+}

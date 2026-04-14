@@ -1,0 +1,14 @@
+// ── Internet Bank — Deployment ───────────────────────────────
+deployment {
+  extend prod.dc1.dmz.web_server.vm_web {
+    instanceOf bank.business.channels.internet_bank
+  }
+}
+
+views {
+  deployment view internet_bank_deployment {
+    title 'Internet Bank — Production Deployment'
+    include prod.dc1.dmz.web_server.vm_web.*
+    autoLayout TopBottom
+  }
+}

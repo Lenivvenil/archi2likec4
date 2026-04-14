@@ -1,0 +1,34 @@
+// ── Notification Center — Functional Architecture ───────────
+model {
+  extend bank.support.notifications.notification_center {
+
+    delivery = subsystem 'Delivery Engine' {
+      description 'Multi-channel message delivery'
+      technology 'Java 17, Kafka'
+
+      send_sms = appFunction 'Send SMS' {
+        description 'Deliver notification via SMS gateway'
+      }
+      send_email = appFunction 'Send Email' {
+        description 'Deliver notification via SMTP'
+      }
+      send_push = appFunction 'Send Push' {
+        description 'Deliver push notification to mobile app'
+      }
+    }
+
+    templates = subsystem 'Template Management' {
+      description 'Notification templates and personalization'
+      technology 'Java 17'
+
+      render_template = appFunction 'Render Template' {
+        description 'Fill template with customer data and parameters'
+      }
+      manage_preferences = appFunction 'Manage Preferences' {
+        description 'Customer notification channel preferences'
+      }
+    }
+
+    templates -[sync]-> delivery 'Rendered messages'
+  }
+}

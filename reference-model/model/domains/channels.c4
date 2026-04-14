@@ -1,0 +1,14 @@
+model {
+  extend bank.business.channels {
+    mobile_bank = system 'Mobile Bank' {
+      #pii
+      description 'iOS/Android mobile banking application'
+      technology 'Swift, Kotlin'
+    }
+    internet_bank = system 'Internet Bank' {
+      #pii
+      description 'Web banking portal for retail and back-office'
+      technology 'TypeScript, React'
+    }
+  }
+}

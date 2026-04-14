@@ -1,0 +1,18 @@
+deployment {
+  extend staging {
+    staging_dc = site 'Staging Moscow' {
+      description 'Staging site, co-located with production'
+
+      staging_k8s = cluster 'k8s-staging' {
+        technology 'Kubernetes 1.29, single control plane'
+        ns_all = namespace 'staging' {}
+      }
+      staging_db = storage 'PostgreSQL' {
+        technology 'PostgreSQL 15, single node, all schemas'
+      }
+      staging_kafka = infraSoftware 'Kafka' {
+        technology 'Single broker'
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+// ── Core Banking — Deployment ────────────────────────────────
+deployment {
+  extend prod.dc1.app.k8s.ns_core {
+    instanceOf bank.business.products.core_banking.accounts
+    instanceOf bank.business.products.core_banking.general_ledger
+    instanceOf bank.business.products.core_banking.customer_mgmt
+  }
+  extend prod.dc1.data.oracle_rac {
+    instanceOf bank.business.products.core_banking
+  }
+}
+
+views {
+  deployment view core_banking_deployment {
+    title 'Core Banking — Production Deployment'
+    include prod.dc1.app.k8s.ns_core.*
+    include prod.dc1.data.oracle_rac.*
+    autoLayout TopBottom
+  }
+}

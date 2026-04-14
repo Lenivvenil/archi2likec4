@@ -1,0 +1,32 @@
+// ── Product Catalog — Functional Architecture ───────────────
+model {
+  extend bank.business.products.product_catalog {
+
+    catalog_mgmt = subsystem 'Catalog Management' {
+      description 'Product definitions, pricing rules, and versioning'
+      technology 'Java 17, Spring Boot'
+
+      create_product = appFunction 'Create Product' {
+        description 'Define new product: type, currency, term, limits'
+      }
+      update_pricing = appFunction 'Update Pricing' {
+        description 'Modify interest rates, fees, and conditions'
+      }
+      version_product = appFunction 'Version Product' {
+        description 'Create new version with effective date'
+      }
+    }
+
+    eligibility = subsystem 'Eligibility Engine' {
+      description 'Customer eligibility checks for products'
+      technology 'Java 17, Spring Boot'
+
+      check_eligibility = appFunction 'Check Eligibility' {
+        description 'Evaluate customer against product requirements'
+      }
+      recommend_products = appFunction 'Recommend Products' {
+        description 'Suggest products based on customer profile'
+      }
+    }
+  }
+}

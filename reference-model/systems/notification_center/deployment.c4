@@ -1,0 +1,14 @@
+// ── Notification Center — Deployment ─────────────────────────
+deployment {
+  extend prod.dc1.app.k8s.ns_notifications {
+    instanceOf bank.support.notifications.notification_center
+  }
+}
+
+views {
+  deployment view notification_center_deployment {
+    title 'Notification Center — Production Deployment'
+    include prod.dc1.app.k8s.ns_notifications.*
+    autoLayout TopBottom
+  }
+}

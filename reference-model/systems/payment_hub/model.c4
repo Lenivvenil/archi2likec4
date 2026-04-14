@@ -1,0 +1,59 @@
+// ── Payment Hub — Functional Architecture ───────────────────
+model {
+  extend bank.business.payments.payment_hub {
+
+    orchestrator = subsystem 'Payment Orchestrator' {
+      description 'Payment workflow: validation, routing, execution'
+      technology 'Java 17, Spring Boot'
+
+      validate_payment = appFunction 'Validate Payment' {
+        description 'Check limits, sanctions, balance sufficiency'
+      }
+      route_payment = appFunction 'Route Payment' {
+        description 'Select processing channel: internal, SWIFT, card'
+      }
+      execute_payment = appFunction 'Execute Payment' {
+        description 'Debit source, credit destination, confirm'
+      }
+    }
+
+    clearing = subsystem 'Clearing Engine' {
+      description 'Settlement and reconciliation processing'
+      technology 'Java 17'
+
+      calc_net_position = appFunction 'Calculate Net Position' {
+        description 'Netting of bilateral obligations across participants'
+      }
+      gen_settlement = appFunction 'Generate Settlement' {
+        description 'Create settlement instructions for correspondent banks'
+      }
+      reconcile = appFunction 'Reconcile' {
+        description 'Match incoming settlements against expected payments'
+      }
+    }
+
+    swift_adapter = subsystem 'SWIFT Adapter' {
+      #critical
+      description 'SWIFT FIN message formatting and delivery'
+      technology 'Java 17, IBM MQ'
+
+      format_mt103 = appFunction 'Format MT103' {
+        description 'Build customer credit transfer message'
+      }
+      format_mt202 = appFunction 'Format MT202' {
+        description 'Build financial institution transfer message'
+      }
+      send_fin = appFunction 'Send FIN Message' {
+        description 'Deliver message to SWIFT network via MQ'
+      }
+    }
+
+    // Internal relationships
+    orchestrator -[sync]-> clearing 'Settlement requests' {
+      technology 'gRPC'
+    }
+    orchestrator -[sync]-> swift_adapter 'International transfers' {
+      technology 'REST/JSON'
+    }
+  }
+}

@@ -1,0 +1,32 @@
+// ── Reporting Engine — Functional Architecture ──────────────
+model {
+  extend bank.tech.analytics.reporting_engine {
+
+    regulatory = subsystem 'Regulatory Reporting' {
+      description 'Mandatory reports for Central Bank and regulators'
+      technology 'Python 3.11, pandas'
+
+      generate_cbr = appFunction 'Generate CBR Reports' {
+        description 'Build mandatory Central Bank reporting forms'
+      }
+      generate_aml_reports = appFunction 'Generate AML Reports' {
+        description 'Suspicious activity reports, CTR filings'
+      }
+      validate_report = appFunction 'Validate Report' {
+        description 'Schema and business rule validation before submission'
+      }
+    }
+
+    management = subsystem 'Management Reporting' {
+      description 'Business intelligence and executive dashboards'
+      technology 'Python 3.11, pandas'
+
+      build_dashboard = appFunction 'Build Dashboard' {
+        description 'Aggregate KPIs: revenue, volume, SLA compliance'
+      }
+      schedule_report = appFunction 'Schedule Report' {
+        description 'Cron-based report generation and email delivery'
+      }
+    }
+  }
+}

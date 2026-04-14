@@ -1,47 +1,66 @@
 views {
-  view domain_channels of bank.channels {
-    title 'Channels Domain'
+  // Domain views — интеграционная архитектура конкретного домена
+  // Системы домена + все входящие/исходящие связи с другими доменами
+
+  view domain_channels of bank.business.channels {
+    title 'Channels — Integration Architecture'
     include *
-    include -> bank.channels.* ->
+    include -> bank.business.channels.* ->
+    include bank.business.channels.mobile_bank with { navigateTo system_mobile_bank }
+    include bank.business.channels.internet_bank with { navigateTo system_internet_bank }
     autoLayout TopBottom
   }
 
-  view domain_products of bank.products {
-    title 'Products & Accounts Domain'
+  view domain_products of bank.business.products {
+    title 'Products & Accounts — Integration Architecture'
     include *
-    include bank.products.core_banking with { navigateTo system_corebanking }
-    include -> bank.products.* ->
+    include -> bank.business.products.* ->
+    include bank.business.products.core_banking with { navigateTo system_corebanking }
+    include bank.business.products.product_catalog with { navigateTo system_product_catalog }
     autoLayout TopBottom
   }
 
-  view domain_payments of bank.payments {
-    title 'Payments Domain'
+  view domain_payments of bank.business.payments {
+    title 'Payments — Integration Architecture'
     include *
-    include bank.payments.payment_hub with { navigateTo system_paymenthub }
-    include bank.payments.card_processing with { navigateTo system_cardprocessing }
-    include -> bank.payments.* ->
+    include -> bank.business.payments.* ->
+    include bank.business.payments.payment_hub with { navigateTo system_paymenthub }
+    include bank.business.payments.card_processing with { navigateTo system_cardprocessing }
     autoLayout TopBottom
   }
 
-  view domain_risk of bank.risk {
-    title 'Risk & Compliance Domain'
+  view domain_risk of bank.support.risk {
+    title 'Risk & Compliance — Integration Architecture'
     include *
-    include -> bank.risk.* ->
+    include -> bank.support.risk.* ->
+    include bank.support.risk.anti_fraud with { navigateTo system_antifraud }
+    include bank.support.risk.aml with { navigateTo system_aml }
     autoLayout TopBottom
   }
 
-  view domain_platform of bank.platform {
-    title 'Platform Domain'
+  view domain_notifications of bank.support.notifications {
+    title 'Notifications — Integration Architecture'
     include *
-    include bank.platform.api_gateway with { navigateTo system_apigateway }
-    include -> bank.platform.* ->
+    include -> bank.support.notifications.* ->
+    include bank.support.notifications.notification_center with { navigateTo system_notification_center }
     autoLayout TopBottom
   }
 
-  view domain_analytics of bank.analytics {
-    title 'Data & Analytics Domain'
+  view domain_platform of bank.tech.platform {
+    title 'Platform — Integration Architecture'
     include *
-    include -> bank.analytics.* ->
+    include -> bank.tech.platform.* ->
+    include bank.tech.platform.api_gateway with { navigateTo system_apigateway }
+    include bank.tech.platform.iam with { navigateTo system_iam }
+    autoLayout TopBottom
+  }
+
+  view domain_analytics of bank.tech.analytics {
+    title 'Data & Analytics — Integration Architecture'
+    include *
+    include -> bank.tech.analytics.* ->
+    include bank.tech.analytics.dwh with { navigateTo system_dwh }
+    include bank.tech.analytics.reporting_engine with { navigateTo system_reporting_engine }
     autoLayout TopBottom
   }
 }

@@ -2,73 +2,52 @@ specification {
   color data-green #2E7D32
   color infra-gray #546E7A
 
-  // --- Structural ---
+  // ── Element hierarchy (L1–L5) ─────────────────────────────
   element enterprise {
     notation 'Enterprise'
     style { shape rectangle; color primary; size xlarge }
   }
+  element domainGroup {
+    notation 'Domain Group'
+    style { shape rectangle; color amber; size large }
+  }
   element domain {
     notation 'Business Domain'
-    style { shape rectangle; color secondary; size large }
+    style { shape rectangle; color secondary }
   }
   element system {
     notation 'Application System'
     style { shape rectangle; color primary }
+  }
+  element subsystem {
+    notation 'Subsystem / Module'
+    style { shape rectangle; color indigo }
+  }
+  element appFunction {
+    notation 'Application Function'
+    style { shape rectangle; color slate; size small }
   }
   element externalSystem {
     notation 'External System'
     style { shape rectangle; color muted }
   }
 
-  // --- Containers (C4 L2) ---
-  element service {
-    notation 'Service / Microservice'
-    style { shape rectangle; color indigo }
-  }
-  element webapp {
-    notation 'Web Application'
-    style { shape browser; color green }
-  }
-  element mobileApp {
-    notation 'Mobile Application'
-    style { shape mobile; color green }
-  }
-  element api {
-    notation 'API Endpoint'
-    style { shape rectangle; color indigo; size small }
-  }
-  element database {
-    notation 'Database'
-    style { shape storage; color amber }
-  }
-  element messageQueue {
-    notation 'Message Queue / Broker'
-    style { shape queue; color amber }
-  }
-
-  // --- Components (C4 L3) ---
-  element component {
-    notation 'Component'
-    style { shape component; color secondary }
-  }
-
-  // --- Data & Actors ---
+  // ── Data & Actors ─────────────────────────────────────────
   element dataObject {
     notation 'Data Object'
-    style { shape rectangle; color data-green }
+    style { shape document; color data-green }
   }
   element actor {
     notation 'Actor'
     style { shape person; color green }
   }
 
-  // --- Synchronous integration ---
+  // ── Relationships ─────────────────────────────────────────
   relationship sync {
     color green
     line solid
     head normal
   }
-  // --- Asynchronous messaging ---
   relationship async {
     color amber
     line dashed
@@ -84,7 +63,6 @@ specification {
     line dotted
     tail diamond
   }
-  // --- Data ownership & access ---
   relationship owns {
     color primary
     line dotted
@@ -101,54 +79,42 @@ specification {
     head normal
   }
 
-  // Blast radius: Tier-1 системы, SLA 99.99%
+  // ── Tags ──────────────────────────────────────────────────
   tag critical
-  // PCI-DSS audit scope (cardholder data environment)
   tag pci_dss
-  // Contains/processes PII (personal identifiable information)
   tag pii
-  // System of record for data object (ровно один owner)
   tag golden_source
-  // Lifecycle: система выводится из эксплуатации
   tag deprecated
-  // Lifecycle: система запланирована, ещё не в production
   tag planned
 
+  // ── Deployment nodes ──────────────────────────────────────
   deploymentNode environment {
     notation 'Environment'
     style { color primary }
   }
-  deploymentNode datacenter {
-    notation 'Data Center'
-    style { color secondary }
+  deploymentNode site {
+    notation 'Site / Data Center'
+    style { color secondary; border dashed }
   }
-  deploymentNode networkSegment {
+  deploymentNode segment {
     notation 'Network Segment'
-    style { color muted; border dashed }
+    style { color amber; border dotted }
   }
-  deploymentNode physicalServer {
+  deploymentNode cluster {
+    notation 'Cluster'
+    style { color indigo; icon tech:kubernetes }
+  }
+  deploymentNode server {
     notation 'Physical Server'
     style { color infra-gray; icon tech:linux }
-  }
-  deploymentNode hypervisor {
-    notation 'Hypervisor'
-    style { color infra-gray }
   }
   deploymentNode vm {
     notation 'Virtual Machine'
     style { color indigo; multiple true }
   }
-  deploymentNode k8sCluster {
-    notation 'Kubernetes Cluster'
-    style { color indigo; icon tech:kubernetes }
-  }
-  deploymentNode k8sNamespace {
-    notation 'Kubernetes Namespace'
-    style { color indigo; border dashed }
-  }
-  deploymentNode container {
-    notation 'Container'
-    style { color green; icon tech:docker; size small }
+  deploymentNode namespace {
+    notation 'Namespace'
+    style { color sky; border dashed }
   }
   deploymentNode storage {
     notation 'Storage'

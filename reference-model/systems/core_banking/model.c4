@@ -1,0 +1,59 @@
+// ── Core Banking (ABS) — Functional Architecture ────────────
+model {
+  extend bank.business.products.core_banking {
+
+    accounts = subsystem 'Accounts Module' {
+      description 'Account lifecycle management'
+      technology 'Java 17, Spring Boot'
+
+      open_account = appFunction 'Open Account' {
+        description 'Create new current, savings, or card account'
+      }
+      close_account = appFunction 'Close Account' {
+        description 'Close account with balance validation and archival'
+      }
+      freeze_account = appFunction 'Freeze / Unfreeze' {
+        description 'Temporary block and unblock operations on account'
+      }
+    }
+
+    general_ledger = subsystem 'General Ledger' {
+      description 'Double-entry bookkeeping and balance calculations'
+      technology 'Java 17, Spring Boot'
+
+      post_entry = appFunction 'Post Entry' {
+        description 'Record debit/credit journal entry with validation'
+      }
+      calc_balance = appFunction 'Calculate Balance' {
+        description 'Real-time and end-of-day balance computation'
+      }
+      close_period = appFunction 'Close Period' {
+        description 'Monthly/quarterly GL period closing and reconciliation'
+      }
+    }
+
+    customer_mgmt = subsystem 'Customer Management' {
+      #pii
+      description 'Customer master data: profiles, contacts, documents'
+      technology 'Java 17, Spring Boot'
+
+      register_customer = appFunction 'Register Customer' {
+        description 'Create customer profile from KYC data'
+      }
+      update_profile = appFunction 'Update Profile' {
+        description 'Modify customer personal data and contacts'
+      }
+      merge_duplicates = appFunction 'Merge Duplicates' {
+        description 'De-duplication of customer records'
+      }
+    }
+
+    // Internal relationships
+    accounts -> general_ledger 'Post accounting entries' {
+      technology 'In-process call'
+    }
+    accounts -> customer_mgmt 'Customer lookup' {
+      technology 'In-process call'
+    }
+  }
+}

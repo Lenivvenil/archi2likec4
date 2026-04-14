@@ -1,87 +1,87 @@
 model {
   // --- Actors → Channels ---
-  customer -> bank.channels.mobile_bank 'Mobile banking' {
+  customer -> bank.business.channels.mobile_bank 'Mobile banking' {
     technology 'HTTPS'
   }
-  customer -> bank.channels.internet_bank 'Web banking' {
+  customer -> bank.business.channels.internet_bank 'Web banking' {
     technology 'HTTPS'
   }
-  operator -> bank.channels.internet_bank 'Back-office operations' {
+  operator -> bank.business.channels.internet_bank 'Back-office operations' {
     technology 'HTTPS'
   }
 
   // --- Channels → Platform ---
-  bank.channels.mobile_bank -[sync]-> bank.platform.api_gateway 'All API calls' {
+  bank.business.channels.mobile_bank -[sync]-> bank.tech.platform.api_gateway 'All API calls' {
     technology 'REST/JSON, mTLS'
   }
-  bank.channels.internet_bank -[sync]-> bank.platform.api_gateway 'All API calls' {
+  bank.business.channels.internet_bank -[sync]-> bank.tech.platform.api_gateway 'All API calls' {
     technology 'REST/JSON, mTLS'
   }
 
   // --- Platform → Auth ---
-  bank.platform.api_gateway -[sync]-> bank.platform.iam 'Token validation' {
+  bank.tech.platform.api_gateway -[sync]-> bank.tech.platform.iam 'Token validation' {
     technology 'REST, OAuth2'
   }
 
   // --- Platform → Core ---
-  bank.platform.api_gateway -[sync]-> bank.products.core_banking 'Account operations' {
+  bank.tech.platform.api_gateway -[sync]-> bank.business.products.core_banking 'Account operations' {
     technology 'REST/JSON'
   }
-  bank.platform.api_gateway -[sync]-> bank.payments.payment_hub 'Payment initiation' {
+  bank.tech.platform.api_gateway -[sync]-> bank.business.payments.payment_hub 'Payment initiation' {
     technology 'REST/JSON'
   }
 
   // --- Core integrations ---
-  bank.payments.payment_hub -[sync]-> bank.products.core_banking 'Debit/credit operations' {
+  bank.business.payments.payment_hub -[sync]-> bank.business.products.core_banking 'Debit/credit operations' {
     technology 'gRPC, Protobuf'
   }
-  bank.payments.payment_hub -[async]-> bank.risk.aml 'AML screening requests' {
+  bank.business.payments.payment_hub -[async]-> bank.support.risk.aml 'AML screening requests' {
     technology 'Kafka, Avro'
   }
-  bank.payments.payment_hub -[sync]-> bank.payments.card_processing 'Card transactions' {
+  bank.business.payments.payment_hub -[sync]-> bank.business.payments.card_processing 'Card transactions' {
     technology 'REST/JSON'
   }
-  bank.payments.payment_hub -[async]-> bank.notifications.notification_center 'Payment notifications' {
+  bank.business.payments.payment_hub -[async]-> bank.support.notifications.notification_center 'Payment notifications' {
     technology 'Kafka, Avro'
   }
 
   // --- External ---
-  bank.payments.card_processing -[sync]-> visa 'Card authorization' {
+  bank.business.payments.card_processing -[sync]-> visa 'Card authorization' {
     technology 'ISO 8583'
   }
-  bank.payments.payment_hub -[sync]-> swift 'International transfers' {
+  bank.business.payments.payment_hub -[sync]-> swift 'International transfers' {
     technology 'MQ, MT103/MT202'
   }
 
   // --- Risk ---
-  bank.risk.aml -[sync]-> bank.products.core_banking 'Customer data lookup' {
+  bank.support.risk.aml -[sync]-> bank.business.products.core_banking 'Customer data lookup' {
     technology 'REST/JSON'
   }
-  bank.risk.anti_fraud -[async]-> bank.payments.payment_hub 'Fraud alerts' {
+  bank.support.risk.anti_fraud -[async]-> bank.business.payments.payment_hub 'Fraud alerts' {
     technology 'Kafka, Avro'
   }
-  bank.risk.aml -[sync]-> cbr 'SAR reports, sanctions lists' {
+  bank.support.risk.aml -[sync]-> cbr 'SAR reports, sanctions lists' {
     technology 'SOAP/XML, SFTP'
   }
 
   // --- Analytics ---
-  bank.analytics.dwh -[reads]-> bank.products.core_banking 'Replicated data' {
+  bank.tech.analytics.dwh -[reads]-> bank.business.products.core_banking 'Replicated data' {
     technology 'CDC, Debezium'
   }
-  bank.analytics.reporting_engine -[reads]-> bank.analytics.dwh 'Analytical queries' {
+  bank.tech.analytics.reporting_engine -[reads]-> bank.tech.analytics.dwh 'Analytical queries' {
     technology 'SQL/JDBC'
   }
-  bank.analytics.reporting_engine -[sync]-> cbr 'Regulatory reports' {
+  bank.tech.analytics.reporting_engine -[sync]-> cbr 'Regulatory reports' {
     technology 'SFTP'
   }
 
   // --- Auth ---
-  bank.platform.iam -[reads]-> bank.products.core_banking 'User directory sync' {
+  bank.tech.platform.iam -[reads]-> bank.business.products.core_banking 'User directory sync' {
     technology 'LDAP'
   }
 
   // --- Notifications from core ---
-  bank.products.core_banking -[async]-> bank.notifications.notification_center 'Account events' {
+  bank.business.products.core_banking -[async]-> bank.support.notifications.notification_center 'Account events' {
     technology 'Kafka, Avro'
   }
 }

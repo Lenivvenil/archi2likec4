@@ -1,20 +1,21 @@
 views {
-  deployment view deploy_production {
-    title 'Production Deployment — DC-1 Primary'
+  // Deployment overview — star-chain includes (** не работает в deployment views)
+  deployment view deployment_overview {
+    title 'Deployment Architecture — All Environments'
     include prod
-    include prod.dc1.**
-    autoLayout TopBottom
-  }
-
-  deployment view deploy_dr {
-    title 'Disaster Recovery — Both Data Centers'
-    include prod.**
-    autoLayout TopBottom
-  }
-
-  deployment view deploy_staging {
-    title 'Staging Environment'
-    include staging.**
+    include prod.*
+    include prod.dc1.*
+    include prod.dc1.dmz.*
+    include prod.dc1.app.*
+    include prod.dc1.app.k8s.*
+    include prod.dc1.data.*
+    include prod.dc1.mgmt.*
+    include prod.dc2.*
+    include prod.dc2.dr_app.*
+    include prod.dc2.dr_data.*
+    include staging
+    include staging.*
+    include staging.staging_dc.*
     autoLayout TopBottom
   }
 }

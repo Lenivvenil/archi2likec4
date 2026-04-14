@@ -1,0 +1,14 @@
+// ── API Gateway — Deployment ─────────────────────────────────
+deployment {
+  extend prod.dc1.dmz.web_server.vm_web {
+    instanceOf bank.tech.platform.api_gateway
+  }
+}
+
+views {
+  deployment view api_gateway_deployment {
+    title 'API Gateway — Production Deployment'
+    include prod.dc1.dmz.web_server.vm_web.*
+    autoLayout TopBottom
+  }
+}

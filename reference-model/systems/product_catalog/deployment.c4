@@ -1,0 +1,14 @@
+// ── Product Catalog — Deployment ─────────────────────────────
+deployment {
+  extend prod.dc1.app.k8s.ns_core {
+    instanceOf bank.business.products.product_catalog
+  }
+}
+
+views {
+  deployment view product_catalog_deployment {
+    title 'Product Catalog — Production Deployment'
+    include prod.dc1.app.k8s.ns_core.*
+    autoLayout TopBottom
+  }
+}

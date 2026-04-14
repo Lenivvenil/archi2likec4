@@ -1,0 +1,58 @@
+// ── Card Processing — Functional Architecture ───────────────
+model {
+  extend bank.business.payments.card_processing {
+
+    issuing = subsystem 'Issuing' {
+      #pci_dss
+      description 'Card issuance, lifecycle, limits management'
+      technology 'Java 17'
+
+      issue_card = appFunction 'Issue Card' {
+        description 'Generate card number, set limits, activate'
+      }
+      manage_limits = appFunction 'Manage Limits' {
+        description 'Set and modify daily/monthly transaction limits'
+      }
+      block_card = appFunction 'Block / Unblock Card' {
+        description 'Temporary and permanent card blocking'
+      }
+    }
+
+    acquiring = subsystem 'Acquiring' {
+      #pci_dss
+      description 'Authorization, capture, reversal processing'
+      technology 'Java 17'
+
+      authorize = appFunction 'Authorize Transaction' {
+        description 'Real-time authorization against limits and balance'
+      }
+      capture = appFunction 'Capture Transaction' {
+        description 'Confirm previously authorized transaction'
+      }
+      reverse = appFunction 'Reverse Transaction' {
+        description 'Full or partial reversal of captured transaction'
+      }
+    }
+
+    hsm = subsystem 'HSM Integration' {
+      #pci_dss
+      description 'Hardware Security Module: PIN, keys, crypto operations'
+      technology 'Java 17, PKCS#11'
+
+      generate_keys = appFunction 'Generate Keys' {
+        description 'Create and rotate cryptographic keys'
+      }
+      verify_pin = appFunction 'Verify PIN' {
+        description 'PIN verification via HSM hardware'
+      }
+    }
+
+    // Internal relationships
+    issuing -[sync]-> hsm 'Key operations' {
+      technology 'PKCS#11'
+    }
+    acquiring -[sync]-> hsm 'PIN verification' {
+      technology 'PKCS#11'
+    }
+  }
+}
