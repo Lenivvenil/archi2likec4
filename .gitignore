@@ -41,3 +41,8 @@ prototype/
 # Local tool configs
 .ralphex/
 .claude/settings.local.json
+
+# Downloaded packages / temp scripts
+*.tgz
+*.tar.gz
+test_longpath.py
