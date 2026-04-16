@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx likec4:*)",
+      "Bash(taskkill /F /PID 17008)",
+      "Bash(npx --yes likec4 serve)",
+      "Bash(tasklist /FI \"PID eq 13980\")",
+      "Bash(powershell -Command \"Get-Process -Id 13980 -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,CPU\")",
+      "Bash(npm config:*)",
+      "Bash(powershell -Command \"[System.Net.WebRequest]::DefaultWebProxy.GetProxy\\('https://registry.npmjs.org'\\)\")",
+      "Bash(powershell -Command ':*)",
+      "Bash(powershell -Command \"Test-NetConnection -ComputerName registry.npmjs.org -Port 443 -InformationLevel Quiet\")",
+      "Bash(curl.exe -sk \"https://github.com\" -o /dev/null -w \"%{http_code}\")",
+      "Bash(curl.exe -sk \"https://registry.npmjs.org/likec4/latest\" -o /dev/null -w \"%{http_code}\")",
+      "Bash(curl.exe -sk \"https://api.github.com/repos/likec4/likec4/releases/latest\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\(d.get\\('tag_name',''\\)\\); [print\\(a['name'], a['browser_download_url']\\) for a in d.get\\('assets',[]\\) if 'win' in a['name'].lower\\(\\) or 'exe' in a['name'].lower\\(\\) or 'standalone' in a['name'].lower\\(\\)]\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); [print\\(a['name'], '|', a['browser_download_url']\\) for a in d.get\\('assets',[]\\)]\")",
+      "Bash(curl.exe -sk \"https://api.github.com/repos/likec4/likec4/releases/latest\" -o \"C:/Users/kamil_m/AppData/Local/Temp/likec4_release.json\")",
+      "Bash(python -c ':*)",
+      "Bash(curl.exe -sk \"https://cdn.jsdelivr.net/npm/likec4/package.json\" -o /dev/null -w \"%{http_code}\")",
+      "Bash(curl.exe -sk \"https://registry.yarnpkg.com/likec4/latest\" -o /dev/null -w \"%{http_code}\")",
+      "Bash(curl.exe -sk \"https://r.cnpmjs.org/likec4/latest\" -o /dev/null -w \"%{http_code}\")",
+      "Bash(curl.exe -sk \"https://unpkg.com/likec4/package.json\" -o /dev/null -w \"%{http_code}\")",
+      "Bash(curl.exe -skL \"https://unpkg.com/likec4/package.json\")",
+      "Bash(python -c \"import sys,json; d=json.load\\(sys.stdin\\); print\\('version:', d.get\\('version'\\)\\); print\\('dist:', d.get\\('dist',{}\\).get\\('tarball',''\\)\\)\")",
+      "Read(//c/Users/kamil_m/Downloads/**)",
+      "Read(//c/Users/kamil_m/Desktop/**)",
+      "Bash(ls d:/claude/archi-git/archi2likec4/likec4*.t*)",
+      "Bash(npm install:*)",
+      "Bash(likec4 serve:*)",
+      "Read(//c/Users/kamil_m/AppData/Roaming/npm/**)",
+      "Bash(npm list:*)",
+      "Bash(powershell -Command \"Get-Process -Id 17300 -ErrorAction SilentlyContinue | Select-Object Id,ProcessName,CPU\")",
+      "Read(//c/Users/kamil_m/AppData/Local/npm-cache/_logs/**)",
+      "Bash(powershell -Command \"Stop-Process -Id 17300 -Force\")",
+      "Read(//c/Users/kamil_m/AppData/Local/Temp/likec4-pkg/package/**)",
+      "Bash(node \"C:/Users/kamil_m/AppData/Local/Temp/likec4-pkg/package/bin/likec4.mjs\" serve)",
+      "Bash(curl.exe -skL \"https://api.github.com/repos/likec4/likec4/releases?per_page=5\" -o \"C:/Users/kamil_m/AppData/Local/Temp/likec4_releases.json\")",
+      "Bash(curl.exe -sk \"https://marketplace.visualstudio.com/_apis/public/gallery\" -o /dev/null -w \"%{http_code}\")"
+    ],
+    "additionalDirectories": [
+      "C:\\Users\\kamil_m\\.claude\\projects\\d--claude-archi-git-archi2likec4"
+    ]
+  }
+}

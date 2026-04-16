@@ -1,7 +1,9 @@
 """Parsers: extract ArchiMate elements from coArchi XML files."""
 
 import logging
+import os
 import re
+import sys
 from pathlib import Path
 
 import defusedxml.ElementTree as ET
@@ -24,6 +26,21 @@ from .utils import make_id
 logger = logging.getLogger(__name__)
 
 
+def _to_str(path: Path) -> str:
+    """Return a path string safe for Windows file operations.
+
+    On Windows, prepends the \\?\\ extended-path prefix so that paths longer
+    than MAX_PATH (260 chars) can be opened without requiring a system-wide
+    registry change.  No-op on other platforms.
+    """
+    if sys.platform != 'win32':
+        return str(path)
+    s = os.path.abspath(str(path))
+    if not s.startswith('\\\\?\\'):
+        s = '\\\\?\\' + s
+    return s
+
+
 # ── Helpers ──────────────────────────────────────────────────────────────
 
 def _detect_special_folder(xml_path: Path) -> str:
@@ -41,9 +58,9 @@ def _detect_special_folder(xml_path: Path) -> str:
     current = xml_path.parent
     while current != model_root and current.name != 'application' and current != current.parent:
         folder_xml = current / 'folder.xml'
-        if folder_xml.exists():
+        if os.path.exists(_to_str(folder_xml)):
             try:
-                tree = ET.parse(folder_xml)
+                tree = ET.parse(_to_str(folder_xml))
                 root = tree.getroot()
                 folder_name: str = root.get('name', '') or ''
                 if folder_name.startswith('!'):
@@ -59,9 +76,9 @@ def _is_in_trash(xml_path: Path, base_dir: Path) -> bool:
     current = xml_path.parent
     while current != base_dir and current != current.parent:
         folder_xml = current / 'folder.xml'
-        if folder_xml.exists():
+        if os.path.exists(_to_str(folder_xml)):
             try:
-                tree = ET.parse(folder_xml)
+                tree = ET.parse(_to_str(folder_xml))
                 root = tree.getroot()
                 name = root.get('name', '').strip().lower()
                 if name == 'trash':
@@ -84,7 +101,7 @@ def _find_parent_component(xml_path: Path, app_dir: Path) -> str:
         ac_xmls = list(current.glob('ApplicationComponent_*.xml'))
         if len(ac_xmls) == 1:
             try:
-                tree = ET.parse(ac_xmls[0])
+                tree = ET.parse(_to_str(ac_xmls[0]))
                 root = tree.getroot()
                 archi_id: str = root.get('id', '') or ''
                 if archi_id:
@@ -95,16 +112,16 @@ def _find_parent_component(xml_path: Path, app_dir: Path) -> str:
             # Multiple components: try to match by folder name
             folder_xml = current / 'folder.xml'
             folder_name = ''
-            if folder_xml.exists():
+            if os.path.exists(_to_str(folder_xml)):
                 try:
-                    ft = ET.parse(folder_xml)
+                    ft = ET.parse(_to_str(folder_xml))
                     folder_name = ft.getroot().get('name', '').strip().lower()
                 except ET.ParseError:
                     logger.warning('Skipping malformed folder.xml: %s', folder_xml)
             if folder_name:
                 for ac_xml in ac_xmls:
                     try:
-                        tree = ET.parse(ac_xml)
+                        tree = ET.parse(_to_str(ac_xml))
                         root = tree.getroot()
                         ac_name = root.get('name', '').strip().lower()
                         archi_id = root.get('id', '') or ''
@@ -200,7 +217,7 @@ def parse_application_components(model_root: Path) -> list[AppComponent]:
         if _is_in_trash(xml_path, app_dir):
             continue
         try:
-            tree = ET.parse(xml_path)
+            tree = ET.parse(_to_str(xml_path))
         except ET.ParseError as e:
             logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
@@ -241,7 +258,7 @@ def parse_application_interfaces(model_root: Path) -> list[AppInterface]:
         if _is_in_trash(xml_path, app_dir):
             continue
         try:
-            tree = ET.parse(xml_path)
+            tree = ET.parse(_to_str(xml_path))
         except ET.ParseError as e:
             logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
@@ -275,7 +292,7 @@ def parse_data_objects(model_root: Path) -> list[DataObject]:
         if _is_in_trash(xml_path, app_dir):
             continue
         try:
-            tree = ET.parse(xml_path)
+            tree = ET.parse(_to_str(xml_path))
         except ET.ParseError as e:
             logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
@@ -310,7 +327,7 @@ def parse_application_functions(model_root: Path) -> list[AppFunction]:
         if _is_in_trash(xml_path, app_dir):
             continue
         try:
-            tree = ET.parse(xml_path)
+            tree = ET.parse(_to_str(xml_path))
         except ET.ParseError as e:
             logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
@@ -367,7 +384,7 @@ def parse_technology_elements(model_root: Path) -> list[TechElement]:
         if _is_in_trash(xml_path, tech_dir):
             continue
         try:
-            tree = ET.parse(xml_path)
+            tree = ET.parse(_to_str(xml_path))
         except ET.ParseError as e:
             logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
@@ -444,7 +461,7 @@ def parse_relationships(model_root: Path) -> list[RawRelationship]:
         if rel_type not in relevant_types:
             continue
         try:
-            tree = ET.parse(xml_path)
+            tree = ET.parse(_to_str(xml_path))
         except ET.ParseError as e:
             logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
@@ -488,7 +505,7 @@ def _find_functional_areas_dir(diagrams_dir: Path) -> Path | None:
         if not folder_xml.exists():
             continue
         try:
-            tree = ET.parse(folder_xml)
+            tree = ET.parse(_to_str(folder_xml))
             name = tree.getroot().get('name', '').strip()
             if name.lower().replace(' ', '_') == 'functional_areas':
                 return child
@@ -524,7 +541,7 @@ def parse_domain_mapping(
         if not folder_xml.exists():
             continue
         try:
-            tree = ET.parse(folder_xml)
+            tree = ET.parse(_to_str(folder_xml))
             domain_name = tree.getroot().get('name', '').strip()
         except ET.ParseError:
             logger.warning('Skipping malformed folder.xml: %s', folder_xml)
@@ -541,7 +558,7 @@ def parse_domain_mapping(
         archi_ids: set[str] = set()
         for view_xml in domain_dir.rglob('ArchimateDiagramModel_*.xml'):
             try:
-                tree = ET.parse(view_xml)
+                tree = ET.parse(_to_str(view_xml))
             except ET.ParseError:
                 logger.warning('Skipping malformed diagram XML: %s', view_xml)
                 continue
@@ -591,7 +608,7 @@ def parse_subdomains(
         if not folder_xml.exists():
             continue
         try:
-            tree = ET.parse(folder_xml)
+            tree = ET.parse(_to_str(folder_xml))
             domain_name = tree.getroot().get('name', '').strip()
         except ET.ParseError:
             logger.warning('Skipping malformed folder.xml: %s', folder_xml)
@@ -614,7 +631,7 @@ def parse_subdomains(
             if not sub_folder_xml.exists():
                 continue
             try:
-                sub_tree = ET.parse(sub_folder_xml)
+                sub_tree = ET.parse(_to_str(sub_folder_xml))
                 subdomain_name = sub_tree.getroot().get('name', '').strip()
             except ET.ParseError:
                 logger.warning('Skipping malformed folder.xml: %s', sub_folder_xml)
@@ -630,7 +647,7 @@ def parse_subdomains(
                 if _is_in_trash(view_xml, subdomain_dir):
                     continue
                 try:
-                    view_tree = ET.parse(view_xml)
+                    view_tree = ET.parse(_to_str(view_xml))
                 except ET.ParseError:
                     logger.warning('Skipping malformed diagram XML: %s', view_xml)
                     continue
@@ -660,7 +677,7 @@ def parse_location_elements(model_root: Path) -> list[TechElement]:
         if _is_in_trash(xml_path, other_dir):
             continue
         try:
-            tree = ET.parse(xml_path)
+            tree = ET.parse(_to_str(xml_path))
         except ET.ParseError as e:
             logger.warning('Cannot parse %s: %s', xml_path, e)
             continue
@@ -721,7 +738,7 @@ def parse_solution_views(
         if _is_in_trash(xml_path, diagrams_dir):
             continue
         try:
-            tree = ET.parse(xml_path)
+            tree = ET.parse(_to_str(xml_path))
         except ET.ParseError as e:
             logger.warning('Cannot parse %s: %s', xml_path, e)
             parse_errors += 1
