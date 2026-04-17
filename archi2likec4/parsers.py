@@ -557,6 +557,8 @@ def parse_domain_mapping(
         # Recursively find all diagram XMLs and extract AppComponent refs
         archi_ids: set[str] = set()
         for view_xml in domain_dir.rglob('ArchimateDiagramModel_*.xml'):
+            if _is_in_trash(view_xml, domain_dir):
+                continue
             try:
                 tree = ET.parse(_to_str(view_xml))
             except ET.ParseError:
@@ -644,7 +646,7 @@ def parse_subdomains(
 
             component_ids: set[str] = set()
             for view_xml in sorted(subdomain_dir.rglob('ArchimateDiagramModel_*.xml')):
-                if _is_in_trash(view_xml, subdomain_dir):
+                if _is_in_trash(view_xml, diagrams_dir):
                     continue
                 try:
                     view_tree = ET.parse(_to_str(view_xml))

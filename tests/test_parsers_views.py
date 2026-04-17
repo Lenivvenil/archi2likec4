@@ -380,6 +380,30 @@ class TestParseDomainMappingEdgeCases:
         result = parse_domain_mapping(tmp_path)
         assert result == []
 
+    def test_trash_subfolder_inside_domain_skipped(self, tmp_path):
+        """Diagrams inside a trash subfolder within a domain are excluded."""
+        diagrams = tmp_path / 'diagrams'
+        fa_dir = diagrams / 'fa'
+        _write_folder_xml(fa_dir, 'functional_areas')
+        domain_dir = fa_dir / 'channels_dir'
+        _write_folder_xml(domain_dir, 'Channels')
+        # Valid diagram — should be counted
+        _write_diagram_with_components(
+            domain_dir / 'ArchimateDiagramModel_v1.xml',
+            'Channels view', component_ids=['sys-1'],
+        )
+        # Trash subfolder inside the domain — should be skipped
+        trash = domain_dir / 'old_stuff'
+        _write_folder_xml(trash, 'Trash')
+        _write_diagram_with_components(
+            trash / 'ArchimateDiagramModel_v2.xml',
+            'Deleted view', component_ids=['sys-deleted'],
+        )
+        result = parse_domain_mapping(tmp_path)
+        assert len(result) == 1
+        assert 'sys-1' in result[0].archi_ids
+        assert 'sys-deleted' not in result[0].archi_ids
+
     def test_empty_domain_name_skipped(self, tmp_path):
         diagrams = tmp_path / 'diagrams'
         fa_dir = diagrams / 'fa'
