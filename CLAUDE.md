@@ -1,16 +1,46 @@
-# CLAUDE.md — Developer Guide for archi2likec4
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Overview
 
 **archi2likec4** converts coArchi XML (ArchiMate) repositories to LikeC4 `.c4` files.
 Zero runtime dependencies — PyYAML and Flask are optional extras.
 
+## Development Setup
+
+```bash
+python3 -m venv .venv && source .venv/bin/activate
+pip install -e ".[dev]"
+```
+
+## Commands
+
+```bash
+# Run converter
+archi2likec4                          # default: model in architectural_repository/model/, output in output/
+archi2likec4 /path/to/model /path/to/output --config .archi2likec4.yaml
+archi2likec4 --dry-run                # validate only, no file generation
+python -m archi2likec4                # alternative entry point
+
+# Test (1100+ tests, coverage gate 85%)
+python -m pytest tests/ -v --tb=short
+python -m pytest tests/test_builders_systems.py -v           # single file
+python -m pytest tests/test_builders_systems.py::TestName -v # single class
+python -m pytest tests/test_builders_systems.py::TestName::test_method -v  # single test
+
+# Lint & type check
+ruff check archi2likec4/ tests/
+ruff check --fix archi2likec4/ tests/   # autofix
+mypy archi2likec4/ --ignore-missing-imports
+```
+
 ## Architecture
 
-4-phase pipeline with NamedTuple data flow:
+4-phase pipeline with NamedTuple data flow (no global state):
 
 ```
-parse  →  build  →  validate  →  generate
+parse → build → validate → generate
 ```
 
 | Phase    | Entry point       | Output         |
@@ -20,59 +50,37 @@ parse  →  build  →  validate  →  generate
 | validate | `_validate()`     | warnings/errors|
 | generate | `_generate()`     | `.c4` files    |
 
-## Key Files
+All phases live in `pipeline.py`. `ParseResult` (pipeline.py) and `BuildResult` (builders/_result.py) are typed NamedTuples — data contracts between phases.
 
-| Path | Purpose |
-|------|---------|
-| `archi2likec4/pipeline.py` | Orchestration — `convert()`, `ConvertResult`, `main()`, `ParseResult`, `SolutionViewInfo`, `_parse/build/validate/generate` |
-| `archi2likec4/config.py` | YAML config loading — `ConvertConfig`, `load_config()` |
-| `archi2likec4/models.py` | Dataclasses — `AppComponent`, `System`, `Integration`, etc. |
-| `archi2likec4/parsers.py` | XML parsing — `parse_systems()`, `parse_subdomains()`, `parse_integrations()`, `parse_deployment()`, etc. |
-| `archi2likec4/builders/systems.py` | System hierarchy, subsystem extraction, function attachment; exports `SystemBuildConfig` |
-| `archi2likec4/builders/domains.py` | Domain + subdomain assignment (multi-pass) |
-| `archi2likec4/builders/integrations.py` | Integration building and interface path resolution |
-| `archi2likec4/builders/data.py` | Data entities and dataStore detection |
-| `archi2likec4/builders/deployment.py` | Deployment topology and node mapping; exports `DeploymentMappingContext` |
-| `archi2likec4/builders/_paths.py` | Path utilities for deployment tree traversal |
-| `archi2likec4/builders/_result.py` | `BuildResult` NamedTuple and `BuildDiagnostics` dataclass — data contracts between build and generate phases |
-| `archi2likec4/generators/_common.py` | Shared helpers — `truncate_desc()`, `render_metadata()` |
-| `archi2likec4/generators/spec.py` | LikeC4 spec file (kinds, tags) |
-| `archi2likec4/generators/domains.py` | Domain and subdomain `.c4` files |
-| `archi2likec4/generators/systems.py` | System detail `.c4` files |
-| `archi2likec4/generators/entities.py` | Data entity `.c4` files |
-| `archi2likec4/generators/deployment.py` | Deployment view `.c4` files |
-| `archi2likec4/generators/views.py` | Solution and system views; exports `ViewContext`, `build_view_context()` |
-| `archi2likec4/generators/claude_md.py` | Generated `CLAUDE.md` for output repo |
-| `archi2likec4/generators/audit.py` | `MATURITY.md` quality report |
-| `archi2likec4/maturity/` | GAP-based maturity auditor — `gaps.py`, `detectors.py`, `scoring.py`, `scaffold.py`, `reporters.py` |
-| `archi2likec4/templates/` | Jinja2 HTML templates for Flask web UI |
-| `archi2likec4/exceptions.py` | Domain exceptions — `Archi2LikeC4Error`, `ConfigError`, `ParseError`, `ValidationError` |
-| `archi2likec4/audit_data.py` | Legacy QA incident computation (used by web UI) |
-| `archi2likec4/web.py` | Flask app orchestrator — CSRF, error handlers, blueprint registration (optional) |
-| `archi2likec4/web_routes.py` | Flask Blueprint with audit dashboard route handlers |
-| `archi2likec4/utils.py` | Shared utilities — `make_id()`, `transliterate()`, `escape_str()` |
-| `archi2likec4/i18n.py` | ru/en message catalog |
-| `tests/helpers.py` | Shared test mocks — `MockConfig`, `MockBuilt` |
+### Package layout
 
-## Element Hierarchy
+- `models.py` — dataclasses: `System`, `Integration`, `DeploymentNode`, etc.
+- `config.py` — `ConvertConfig`, YAML loading
+- `parsers.py` — coArchi XML → dataclasses
+- `builders/` — system hierarchy, domains, integrations, deployment, data entities
+- `generators/` — dataclasses → `.c4` content + `MATURITY.md`
+- `maturity/` — GAP-based maturity auditor (10 detectors, penalty scoring)
+- `web.py` / `web_routes.py` — optional Flask dashboard (`pip install "archi2likec4[web]"`)
+- `i18n.py` — ru/en message catalog
 
-archi2likec4 builds a 5-level element hierarchy in LikeC4:
+### Element Hierarchy (5 levels)
 
-1. **Domain** (L1) — functional business area (from `functional_areas/{domain}/` folder)
-2. **Subdomain** (L2, optional) — nested functional group (from `functional_areas/{domain}/{subdomain}/`)
-3. **System** (L3) — application system (ArchiMate ApplicationComponent)
-4. **Subsystem** (L4) — component of system (dot notation: `SystemName.SubsystemName`)
-5. **Function** (L5) — application function (ArchiMate ApplicationFunction)
+1. **Domain** (L1) — from `functional_areas/{domain}/` folder
+2. **Subdomain** (L2, optional) — from `functional_areas/{domain}/{subdomain}/`
+3. **System** (L3) — ArchiMate ApplicationComponent
+4. **Subsystem** (L4) — dot notation: `SystemName.SubsystemName`
+5. **Function** (L5) — ArchiMate ApplicationFunction
 
-Systems without subdomains skip L2; their path is `domain.system`.
+## Coding Standards
 
-## Validation Commands
-
-```bash
-ruff check archi2likec4/ tests/
-python -m pytest tests/ -v --tb=short
-mypy archi2likec4/ --ignore-missing-imports
-```
+- **Line length**: 120 characters (ruff). Max complexity: 15.
+- **Logging**: always `logging.getLogger(__name__)` — never hardcode logger names.
+- **Exceptions**: use domain exceptions from `archi2likec4.exceptions`:
+  - Config issues → `ConfigError`
+  - XML parse failures → `ParseError`
+  - Validation gate failures → `ValidationError`
+- **Typing**: `disallow_untyped_defs = true` for all modules except `web.py`, `web_routes.py`, `parsers.py`, `scripts/federate_template.py`.
+- **IDs**: `make_id()` (utils.py) produces only `[a-z][a-z0-9_]*` — no hyphens (LikeC4 parses them as minus operator).
 
 ## Test Conventions
 
@@ -80,13 +88,34 @@ mypy archi2likec4/ --ignore-missing-imports
 - Integration tests (e2e) in `tests/test_pipeline_e2e.py` use real XML fixtures.
 - Coverage gate: 85% (`pytest --cov-fail-under=85`).
 
-## Coding Standards
+## Behavioral Guidelines
 
-- **Logging**: always `logging.getLogger(__name__)` — never hardcode `'archi2likec4'`.
-- **Exceptions**: raise domain exceptions from `archi2likec4.exceptions`:
-  - Config issues → `ConfigError`
-  - XML parse failures → `ParseError`
-  - Validation gate failures → `ValidationError`
-- **Line length**: 120 characters (ruff).
-- **Typing**: `disallow_untyped_defs = true` for all modules except `web.py`, `web_routes.py`, `parsers.py`, and `scripts/federate_template.py`.
-- **NamedTuples**: `ParseResult` (pipeline.py) and `BuildResult` (_result.py) are the data contracts between phases — all fields must be fully typed.
+### Think Before Coding
+
+- State assumptions explicitly. If uncertain, ask.
+- If multiple interpretations exist, present them — don't pick silently.
+- If a simpler approach exists, say so. Push back when warranted.
+
+### Simplicity First
+
+- No features beyond what was asked. No abstractions for single-use code.
+- No "flexibility" or "configurability" that wasn't requested.
+- No error handling for impossible scenarios.
+- If 200 lines could be 50, rewrite it.
+
+### Surgical Changes
+
+- Don't "improve" adjacent code, comments, or formatting.
+- Don't refactor things that aren't broken. Match existing style.
+- If you notice unrelated dead code, mention it — don't delete it.
+- Remove imports/variables/functions that YOUR changes made unused. Don't remove pre-existing dead code unless asked.
+- Every changed line should trace directly to the user's request.
+
+### Goal-Driven Execution
+
+Transform tasks into verifiable goals:
+- "Add validation" → write tests for invalid inputs, then make them pass
+- "Fix the bug" → write a test that reproduces it, then make it pass
+- "Refactor X" → ensure tests pass before and after
+
+For multi-step tasks, state a brief plan with verification steps.
